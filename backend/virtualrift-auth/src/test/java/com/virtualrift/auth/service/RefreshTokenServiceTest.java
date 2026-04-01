@@ -3,6 +3,7 @@ package com.virtualrift.auth.service;
 import com.virtualrift.auth.model.RefreshToken;
 import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.exception.ExpiredTokenException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,55 +15,85 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RefreshTokenService Tests")
 class RefreshTokenServiceTest {
 
+    @Mock
+    private RefreshTokenRepository repository;
+
+    @Mock
+    private TokenDenylist denylist;
+
+    private RefreshTokenService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new RefreshTokenService(repository, denylist);
+    }
+
     @Nested
     @DisplayName("Generate refresh token")
     class GenerateRefreshToken {
 
+        private final UUID userId = UUID.randomUUID();
+        private final UUID tenantId = UUID.randomUUID();
+
         @Test
         @DisplayName("should generate refresh token")
         void generateRefreshToken_quandoUserValido_retornaToken() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken token = service.generate(userId, tenantId);
+
+            assertNotNull(token);
+            assertNotNull(token.token());
+            assertEquals(userId, token.userId());
+            assertEquals(tenantId, token.tenantId());
         }
 
         @Test
         @DisplayName("should include userId in token")
         void generateRefreshToken_contemUserId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken token = service.generate(userId, tenantId);
+
+            assertEquals(userId, token.userId());
         }
 
         @Test
         @DisplayName("should include tenantId in token")
         void generateRefreshToken_contemTenantId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken token = service.generate(userId, tenantId);
+
+            assertEquals(tenantId, token.tenantId());
         }
 
         @Test
         @DisplayName("should set expiration to 7 days")
         void generateRefreshToken_expiracao7Dias() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            Instant before = Instant.now();
+            RefreshToken token = service.generate(userId, tenantId);
+            Instant after = Instant.now();
+
+            assertNotNull(token.expiration());
+            long expectedDays = 7;
+            long actualDays = java.time.Duration.between(before, token.expiration()).toDays();
+
+            assertTrue(actualDays >= expectedDays - 1 && actualDays <= expectedDays + 1);
         }
 
         @Test
         @DisplayName("should store token in repository")
         void generateRefreshToken_quandoGerado_salvaNoRepositorio() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken token = service.generate(userId, tenantId);
+
+            verify(repository).save(argThat(t -> t.token().equals(token.token())));
         }
 
         @Test
         @DisplayName("should throw when userId is null")
         void generateRefreshToken_quandoUserIdNulo_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(IllegalArgumentException.class, () -> service.generate(null, tenantId));
         }
     }
 
@@ -70,46 +101,66 @@ class RefreshTokenServiceTest {
     @DisplayName("Validate refresh token")
     class ValidateRefreshToken {
 
+        private final UUID userId = UUID.randomUUID();
+        private final UUID tenantId = UUID.randomUUID();
+        private RefreshToken validToken;
+
+        @BeforeEach
+        void setUp() {
+            validToken = service.generate(userId, tenantId);
+            lenient().when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            lenient().when(denylist.isRevoked(validToken.token())).thenReturn(false);
+        }
+
         @Test
         @DisplayName("should return userId when token is valid")
         void validateRefreshToken_quandoValido_retornaUserId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            UUID result = service.validate(validToken.token());
+
+            assertEquals(userId, result);
         }
 
         @Test
         @DisplayName("should throw when token is expired")
         void validateRefreshToken_quandoExpirado_lancaExpiredTokenException() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken expiredToken = new RefreshToken(
+                    "expired-token",
+                    userId,
+                    tenantId,
+                    Instant.now().minusSeconds(60)
+            );
+            when(repository.findByToken("expired-token")).thenReturn(java.util.Optional.of(expiredToken));
+
+            assertThrows(ExpiredTokenException.class, () -> service.validate("expired-token"));
         }
 
         @Test
         @DisplayName("should throw when token is not found")
         void validateRefreshToken_quandoNaoEncontrado_lancaInvalidTokenException() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(repository.findByToken("unknown-token")).thenReturn(java.util.Optional.empty());
+
+            assertThrows(InvalidTokenException.class, () -> service.validate("unknown-token"));
         }
 
         @Test
         @DisplayName("should throw when token is revoked")
         void validateRefreshToken_quandoRevogado_lancaInvalidTokenException() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(denylist.isRevoked(validToken.token())).thenReturn(true);
+
+            assertThrows(InvalidTokenException.class, () -> service.validate(validToken.token()));
         }
 
         @Test
         @DisplayName("should throw when token format is invalid")
         void validateRefreshToken_quandoFormatoInvalido_lancaInvalidTokenException() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidTokenException.class, () -> service.validate("invalid-format"));
+            assertThrows(InvalidTokenException.class, () -> service.validate(""));
         }
 
         @Test
         @DisplayName("should throw when token is null")
         void validateRefreshToken_quandoNulo_lancaInvalidTokenException() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidTokenException.class, () -> service.validate(null));
         }
     }
 
@@ -117,32 +168,50 @@ class RefreshTokenServiceTest {
     @DisplayName("Revoke refresh token")
     class RevokeRefreshToken {
 
+        private final UUID userId = UUID.randomUUID();
+        private final UUID tenantId = UUID.randomUUID();
+        private RefreshToken validToken;
+
+        @BeforeEach
+        void setUp() {
+            validToken = service.generate(userId, tenantId);
+            lenient().when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            lenient().when(denylist.isRevoked(validToken.token())).thenReturn(false);
+        }
+
         @Test
         @DisplayName("should revoke token")
         void revokeRefreshToken_quandoValido_revoga() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            service.revoke(validToken.token());
+
+            verify(denylist).add(eq(validToken.token()), any(Instant.class));
         }
 
         @Test
         @DisplayName("should add to denylist")
         void revokeRefreshToken_quandoRevogado_adicionaNaDenylist() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            service.revoke(validToken.token());
+
+            verify(denylist).add(eq(validToken.token()), any(Instant.class));
         }
 
         @Test
         @DisplayName("should throw when token does not exist")
         void revokeRefreshToken_quandoNaoExiste_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(repository.findByToken("unknown-token")).thenReturn(java.util.Optional.empty());
+
+            assertThrows(InvalidTokenException.class, () -> service.revoke("unknown-token"));
         }
 
         @Test
         @DisplayName("should be idempotent")
         void revokeRefreshToken_quandoJaRevogado_naoLancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(denylist.isRevoked(validToken.token())).thenReturn(true);
+
+            assertDoesNotThrow(() -> {
+                service.revoke(validToken.token());
+                service.revoke(validToken.token()); // Second call should not throw
+            });
         }
     }
 
@@ -150,32 +219,56 @@ class RefreshTokenServiceTest {
     @DisplayName("Rotate refresh token")
     class RotateRefreshToken {
 
+        private final UUID userId = UUID.randomUUID();
+        private final UUID tenantId = UUID.randomUUID();
+        private RefreshToken validToken;
+
+        @BeforeEach
+        void setUp() {
+            validToken = service.generate(userId, tenantId);
+            lenient().when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            lenient().when(denylist.isRevoked(validToken.token())).thenReturn(false);
+        }
+
         @Test
         @DisplayName("should generate new token and revoke old")
         void rotateRefreshToken_quandoValido_geraNovoERevogaAntigo() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken newToken = service.rotate(validToken.token());
+
+            assertNotNull(newToken);
+            assertNotEquals(validToken.token(), newToken.token());
+            verify(denylist).add(eq(validToken.token()), any(Instant.class));
         }
 
         @Test
         @DisplayName("should preserve userId and tenantId")
         void rotateRefreshToken_preservaUserIdETenantId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken newToken = service.rotate(validToken.token());
+
+            assertEquals(userId, newToken.userId());
+            assertEquals(tenantId, newToken.tenantId());
         }
 
         @Test
         @DisplayName("should throw when old token is invalid")
         void rotateRefreshToken_quantoInvalido_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(repository.findByToken("unknown-token")).thenReturn(java.util.Optional.empty());
+
+            assertThrows(InvalidTokenException.class, () -> service.rotate("unknown-token"));
         }
 
         @Test
         @DisplayName("should throw when old token is expired")
         void rotateRefreshToken_quandoExpirado_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            RefreshToken expiredToken = new RefreshToken(
+                    "expired-token",
+                    userId,
+                    tenantId,
+                    Instant.now().minusSeconds(60)
+            );
+            when(repository.findByToken("expired-token")).thenReturn(java.util.Optional.of(expiredToken));
+
+            assertThrows(ExpiredTokenException.class, () -> service.rotate("expired-token"));
         }
     }
 
@@ -186,22 +279,32 @@ class RefreshTokenServiceTest {
         @Test
         @DisplayName("should delete expired tokens")
         void cleanupExpiredTokens_quandoChamado_deletaExpirados() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            service.cleanupExpired();
+
+            verify(repository).deleteByExpirationBefore(any(Instant.class));
         }
 
         @Test
-        @DisplayName("should keep valid tokens")
-        void cleanupExpiredTokens_quandoChamado_mantemValidos() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+        @DisplayName("should use current time as cutoff")
+        void cleanupExpiredTokens_quandoChamado_usaTempoAtual() {
+            Instant beforeCleanup = Instant.now();
+            service.cleanupExpired();
+            Instant afterCleanup = Instant.now();
+
+            verify(repository).deleteByExpirationBefore(argThat(cutoff ->
+                    cutoff.isAfter(beforeCleanup.minusSeconds(1)) &&
+                    cutoff.isBefore(afterCleanup.plusSeconds(1))
+            ));
         }
 
         @Test
         @DisplayName("should return count of deleted tokens")
         void cleanupExpiredTokens_quandoChamado_retornaContagem() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            when(repository.deleteByExpirationBefore(any(Instant.class))).thenReturn(42L);
+
+            long count = service.cleanupExpired();
+
+            assertEquals(42L, count);
         }
     }
 }

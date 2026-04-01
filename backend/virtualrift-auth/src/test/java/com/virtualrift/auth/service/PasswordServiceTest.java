@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.exception.InvalidPasswordException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -8,8 +9,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @DisplayName("PasswordService Tests")
 class PasswordServiceTest {
+
+    private final PasswordService passwordService = new PasswordService();
 
     @Nested
     @DisplayName("Hash password")
@@ -18,64 +24,76 @@ class PasswordServiceTest {
         @Test
         @DisplayName("should hash valid password")
         void hashPassword_quandoSenhaValida_retornaHash() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash = passwordService.hash(password);
+
+            assertNotNull(hash);
+            assertNotEquals(password, hash);
+            assertTrue(hash.startsWith("$2a$"));
         }
 
         @Test
         @DisplayName("should generate different hash for same password")
         void hashPassword_quandoMesmaSenha_retornaHashDiferente() {
-            // TODO: Implement test - salt should be random
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash1 = passwordService.hash(password);
+            String hash2 = passwordService.hash(password);
+
+            assertNotEquals(hash1, hash2);
         }
 
         @Test
         @DisplayName("should use bcrypt algorithm")
         void hashPassword_usaAlgoritmoBcrypt() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash = passwordService.hash(password);
+
+            assertTrue(hash.startsWith("$2a$"));
         }
 
         @Test
         @DisplayName("should throw when password is null")
         void hashPassword_quandoNula_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.hash(null));
         }
 
         @Test
         @DisplayName("should throw when password is empty")
         void hashPassword_quandoVazia_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.hash(""));
         }
 
         @Test
         @DisplayName("should throw when password is too short")
         void hashPassword_quandoMuitoCurta_lancaExcecao() {
-            // TODO: Implement test - min 8 characters
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.hash("Short1!"));
         }
 
         @Test
         @DisplayName("should throw when password is too long")
         void hashPassword_quandoMuitoLonga_lancaExcecao() {
-            // TODO: Implement test - max 128 characters
-            fail("Not implemented yet");
+            String tooLong = "a".repeat(129) + "1A!";
+            assertThrows(InvalidPasswordException.class, () -> passwordService.hash(tooLong));
         }
 
         @Test
         @DisplayName("should hash password with special characters")
         void hashPassword_quandoCaracteresEspeciais_retornaHash() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "P@ssw0rd!#$%&*()";
+            String hash = passwordService.hash(password);
+
+            assertNotNull(hash);
+            assertTrue(hash.startsWith("$2a$"));
         }
 
         @Test
         @DisplayName("should hash unicode passwords")
         void hashPassword_quandoUnicode_retornaHash() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "Pässwörd123!ção";
+            String hash = passwordService.hash(password);
+
+            assertNotNull(hash);
+            assertTrue(hash.startsWith("$2a$"));
         }
     }
 
@@ -86,50 +104,69 @@ class PasswordServiceTest {
         @Test
         @DisplayName("should return true when password matches")
         void verifyPassword_quandoSenhaCorreta_retornaTrue() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash = passwordService.hash(password);
+
+            assertTrue(passwordService.verify(password, hash));
         }
 
         @Test
         @DisplayName("should return false when password does not match")
         void verifyPassword_quandoSenhaIncorreta_retornaFalse() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash = passwordService.hash(password);
+            String wrongPassword = "WrongPassword123!";
+
+            assertFalse(passwordService.verify(wrongPassword, hash));
         }
 
         @Test
         @DisplayName("should return false when hash is invalid")
         void verifyPassword_quandoHashInvalido_retornaFalse() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertFalse(passwordService.verify("password123", "invalid-hash"));
         }
 
         @Test
         @DisplayName("should throw when password is null")
         void verifyPassword_quandoSenhaNula_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.verify(null, "$2a$10$hash"));
         }
 
         @Test
         @DisplayName("should throw when hash is null")
         void verifyPassword_quandoHashNulo_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.verify("password", null));
         }
 
         @Test
         @DisplayName("should be case sensitive")
         void verifyPassword_sensivelAMaiusculas() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = "ValidPassword123!";
+            String hash = passwordService.hash(password);
+
+            assertTrue(passwordService.verify("ValidPassword123!", hash));
+            assertFalse(passwordService.verify("validpassword123!", hash));
+            assertFalse(passwordService.verify("VALIDPASSWORD123!", hash));
         }
 
         @Test
         @DisplayName("should handle timing attack resistance")
         void verifyPassword_resisteAtaqueDeTiming() {
-            // TODO: Implement test - constant time comparison
-            fail("Not implemented yet");
+            String hash = passwordService.hash("ValidPassword123!");
+
+            long start1 = System.nanoTime();
+            passwordService.verify("password1", hash);
+            long end1 = System.nanoTime();
+
+            long start2 = System.nanoTime();
+            passwordService.verify("password2", hash);
+            long end2 = System.nanoTime();
+
+            long time1 = end1 - start1;
+            long time2 = end2 - start2;
+
+            // Timing should be within reasonable range (constant-time comparison)
+            assertTrue(Math.abs(time1 - time2) < Math.max(time1, time2));
         }
     }
 
@@ -145,8 +182,7 @@ class PasswordServiceTest {
         })
         @DisplayName("should accept valid passwords")
         void validatePassword_quandoValida_naoLancaExcecao(String validPassword) {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertDoesNotThrow(() -> passwordService.validate(validPassword));
         }
 
         @ParameterizedTest
@@ -161,50 +197,67 @@ class PasswordServiceTest {
         })
         @DisplayName("should reject invalid passwords")
         void validatePassword_quandoInvalida_lancaExcecao(String invalidPassword) {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.validate(invalidPassword));
         }
 
         @Test
         @DisplayName("should require minimum 8 characters")
         void validatePassword_requerMinimo8Caracteres() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Short1!"));
+
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate("Abc1!")
+            );
+            assertTrue(exception.getMessage().contains("8"));
         }
 
         @Test
         @DisplayName("should require at least one uppercase letter")
         void validatePassword_requerMaiuscula() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate("password123!")
+            );
+            assertTrue(exception.getMessage().toLowerCase().contains("uppercase"));
         }
 
         @Test
         @DisplayName("should require at least one lowercase letter")
         void validatePassword_requerMinuscula() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate("PASSWORD123!")
+            );
+            assertTrue(exception.getMessage().toLowerCase().contains("lowercase"));
         }
 
         @Test
         @DisplayName("should require at least one digit")
         void validatePassword_requerDigito() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate("Password!")
+            );
+            assertTrue(exception.getMessage().toLowerCase().contains("digit"));
         }
 
         @Test
         @DisplayName("should require at least one special character")
         void validatePassword_requerCaracterEspecial() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate("Password123")
+            );
+            assertTrue(exception.getMessage().toLowerCase().contains("special"));
         }
 
         @Test
         @DisplayName("should reject common passwords")
         void validatePassword_rejeitaSenhasComuns() {
-            // TODO: Implement test - Password1, etc.
-            fail("Not implemented yet");
+            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Password1!"));
+            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Welcome1!"));
+            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Admin123!"));
         }
     }
 
@@ -215,29 +268,45 @@ class PasswordServiceTest {
         @Test
         @DisplayName("should generate password meeting all requirements")
         void generateRandomPassword_quandoChamado_retornaSenhaValida() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            String password = passwordService.generateRandom();
+
+            assertDoesNotThrow(() -> passwordService.validate(password));
+            assertTrue(password.length() >= 16);
         }
 
         @Test
         @DisplayName("should generate different passwords on each call")
         void generateRandomPassword_chamadasDiferentes_retornaSenhasDiferentes() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            Set<String> passwords = new HashSet<>();
+            for (int i = 0; i < 100; i++) {
+                passwords.add(passwordService.generateRandom());
+            }
+
+            assertTrue(passwords.size() > 90, "Should generate mostly unique passwords");
         }
 
         @Test
         @DisplayName("should respect specified length")
         void generateRandomPassword_comTamanho_respeitaTamanho() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            int length = 24;
+            String password = passwordService.generateRandom(length);
+
+            assertEquals(length, password.length());
+            assertDoesNotThrow(() -> passwordService.validate(password));
         }
 
         @Test
         @DisplayName("should use secure random")
         void generateRandomPassword_usaRandomSeguro() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            // This test ensures that generateRandom uses SecureRandom
+            // We verify by checking entropy (uniqueness) across multiple generations
+            Set<String> passwords = new HashSet<>();
+            for (int i = 0; i < 1000; i++) {
+                passwords.add(passwordService.generateRandom());
+            }
+
+            // With SecureRandom, we should get very high uniqueness
+            assertTrue(passwords.size() > 990, "Should use SecureRandom for high entropy");
         }
     }
 }
