@@ -18,22 +18,33 @@ class TenantIdTest {
         @Test
         @DisplayName("should create TenantId from valid UUID")
         void fromUUID_quandoValido_retornaTenantId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            UUID uuid = UUID.randomUUID();
+            TenantId tenantId = TenantId.of(uuid);
+
+            assertNotNull(tenantId);
+            assertEquals(uuid, tenantId.value());
         }
 
         @Test
         @DisplayName("should generate random TenantId")
         void generate_quandoChamado_retornaNovoTenantId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            TenantId tenantId1 = TenantId.generate();
+            TenantId tenantId2 = TenantId.generate();
+
+            assertNotNull(tenantId1);
+            assertNotNull(tenantId2);
+            assertNotEquals(tenantId1, tenantId2);
         }
 
         @Test
         @DisplayName("should throw when UUID is null")
         void fromUUID_quandoNulo_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            IllegalArgumentException exception = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> TenantId.of(null)
+            );
+
+            assertEquals("tenantId cannot be null", exception.getMessage());
         }
     }
 
@@ -44,15 +55,21 @@ class TenantIdTest {
         @Test
         @DisplayName("should be equal when UUIDs match")
         void equals_quandoMesmoUuid_retornaTrue() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            UUID uuid = UUID.randomUUID();
+            TenantId tenantId1 = TenantId.of(uuid);
+            TenantId tenantId2 = TenantId.of(uuid);
+
+            assertEquals(tenantId1, tenantId2);
+            assertEquals(tenantId1.hashCode(), tenantId2.hashCode());
         }
 
         @Test
         @DisplayName("should not be equal when UUIDs differ")
         void equals_quandoUuidDiferente_retornaFalse() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            TenantId tenantId1 = TenantId.generate();
+            TenantId tenantId2 = TenantId.generate();
+
+            assertNotEquals(tenantId1, tenantId2);
         }
     }
 
@@ -63,22 +80,34 @@ class TenantIdTest {
         @Test
         @DisplayName("should serialize to UUID string")
         void toString_quandoChamado_retornaUuidString() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            UUID uuid = UUID.randomUUID();
+            TenantId tenantId = TenantId.of(uuid);
+
+            String result = tenantId.toString();
+
+            assertEquals(uuid.toString(), result);
         }
 
         @Test
         @DisplayName("should deserialize from UUID string")
         void fromString_quandoValido_retornaTenantId() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            UUID uuid = UUID.randomUUID();
+            String uuidString = uuid.toString();
+
+            TenantId tenantId = TenantId.fromString(uuidString);
+
+            assertEquals(uuid, tenantId.value());
         }
 
         @Test
         @DisplayName("should throw when string is not valid UUID")
         void fromString_quandoInvalido_lancaExcecao() {
-            // TODO: Implement test
-            fail("Not implemented yet");
+            IllegalArgumentException exception = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> TenantId.fromString("not-a-uuid")
+            );
+
+            assertTrue(exception.getMessage().contains("Invalid UUID"));
         }
     }
 }
