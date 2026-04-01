@@ -1,0 +1,14 @@
+{
+  "name": "virtualrift-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter virtualrift-dashboard dev",
+    "build": "pnpm --filter virtualrift-dashboard build",
+    "test": "pnpm --filter '*' test",
+    "lint": "pnpm --filter '*' lint"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

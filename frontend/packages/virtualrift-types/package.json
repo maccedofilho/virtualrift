@@ -1,0 +1,11 @@
+{
+  "name": "@virtualrift/types",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "echo \"No tests configured for @virtualrift/types\"",
+    "lint": "echo \"No lint configured for @virtualrift/types\""
+  }
+}

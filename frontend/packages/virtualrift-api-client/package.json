@@ -1,0 +1,11 @@
+{
+  "name": "@virtualrift/api-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "echo \"No tests configured for @virtualrift/api-client\"",
+    "lint": "echo \"No lint configured for @virtualrift/api-client\""
+  }
+}
