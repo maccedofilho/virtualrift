@@ -2,90 +2,123 @@ package com.virtualrift.webscanner.engine;
 
 import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.VulnerabilityFinding;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("XssDetector Tests")
 class XssDetectorTest {
+
+    @Mock
+    private HttpClient httpClient;
+
+    private XssDetector detector;
+
+    private static final String TARGET_URL = "https://example.com";
+    private static final UUID SCAN_ID = UUID.randomUUID();
+
+    @BeforeEach
+    void setUp() {
+        detector = new XssDetector(httpClient);
+    }
 
     @Nested
     @DisplayName("Reflected XSS detection")
     class ReflectedXssDetection {
 
         @Test
-        @DisplayName("should detect reflected XSS in query parameter")
-        void detectReflectedXss_quandoRefletidoEmQueryParam_retornaFinding() {
-            fail("Not implemented yet");
+        @DisplayName("should detect reflected XSS via script tag in query parameter")
+        void detectReflectedXss_quandoScriptTagQueryParam_retornaFinding() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "search", payload);
+
+            assertFalse(findings.isEmpty());
+            VulnerabilityFinding finding = findings.get(0);
+            assertEquals(Severity.HIGH, finding.severity());
+            assertTrue(finding.description().contains("XSS"));
+            assertTrue(finding.location().contains("search"));
         }
 
         @Test
-        @DisplayName("should detect reflected XSS in path parameter")
-        void detectReflectedXss_quandoRefletidoEmPathParam_retornaFinding() {
-            fail("Not implemented yet");
+        @DisplayName("should detect reflected XSS via onerror attribute")
+        void detectReflectedXss_quandoOnerror_retornaFinding() {
+            String payload = "<img src=x onerror=alert('XSS')>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertFalse(findings.isEmpty());
+            assertEquals(Severity.HIGH, findings.get(0).severity());
         }
 
         @Test
-        @DisplayName("should detect reflected XSS in form input")
-        void detectReflectedXss_quandoRefletidoEmForm_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should not report false positive when encoded")
-        void detectReflectedXss_quandoCodificado_naoRetornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should detect XSS with script tag")
-        void detectReflectedXss_quandoScriptTag_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should detect XSS with on* event handlers")
-        void detectReflectedXss_quandoEventHandler_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should detect XSS with javascript: protocol")
+        @DisplayName("should detect reflected XSS via javascript: protocol")
         void detectReflectedXss_quandoJavascriptProtocol_retornaFinding() {
-            fail("Not implemented yet");
-        }
-    }
+            String payload = "javascript:alert('XSS')";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
 
-    @Nested
-    @DisplayName("Stored XSS detection")
-    class StoredXssDetection {
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "redirect", payload);
 
-        @Test
-        @DisplayName("should detect stored XSS in comment")
-        void detectStoredXss_quandoEmComentario_retornaFinding() {
-            fail("Not implemented yet");
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().toLowerCase().contains("javascript"));
         }
 
         @Test
-        @DisplayName("should detect stored XSS in user profile")
-        void detectStoredXss_quandoEmPerfil_retornaFinding() {
-            fail("Not implemented yet");
+        @DisplayName("should detect reflected XSS via onload event")
+        void detectReflectedXss_quandoOnload_retornaFinding() {
+            String payload = "<body onload=alert('XSS')>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "content", payload);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("onload"));
         }
 
         @Test
-        @DisplayName("should detect stored XSS in database")
-        void detectStoredXss_quandoEmDatabase_retornaFinding() {
-            fail("Not implemented yet");
+        @DisplayName("should NOT report when output is HTML encoded")
+        void detectReflectedXss_quandoCodificado_naoRetornaFinding() {
+            String payload = "<script>alert('XSS')</script>";
+            String encodedResponse = "&lt;script&gt;alert('XSS')&lt;/script&gt;";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(encodedResponse));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "search", payload);
+
+            assertTrue(findings.isEmpty());
         }
 
         @Test
-        @DisplayName("should verify stored XSS is reflected on subsequent page load")
-        void detectStoredXss_verificaRefletimentoEmPaginaSeguinte() {
-            fail("Not implemented yet");
+        @DisplayName("should NOT report when output is URL encoded")
+        void detectReflectedXss_quandoUrlCodificado_naoRetornaFinding() {
+            String payload = "<script>alert('XSS')</script>";
+            String encodedResponse = "%3Cscript%3Ealert%28%27XSS%27%29%3C%2Fscript%3E";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(encodedResponse));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertTrue(findings.isEmpty());
         }
     }
 
@@ -94,39 +127,82 @@ class XssDetectorTest {
     class DomBasedXssDetection {
 
         @Test
-        @DisplayName("should detect XSS via innerHTML")
+        @DisplayName("should detect XSS via innerHTML sink")
         void detectDomBasedXss_quandoInnerHTML_retornaFinding() {
-            fail("Not implemented yet");
+            String vulnerableJs = "element.innerHTML = unescape(location.hash);";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(vulnerableJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("innerHTML"));
+            assertTrue(findings.get(0).description().contains("DOM"));
         }
 
         @Test
-        @DisplayName("should detect XSS via outerHTML")
-        void detectDomBasedXss_quandoOuterHTML_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should detect XSS via document.write")
-        void detectDomBasedXss_quandoDocumentWrite_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
-        @DisplayName("should detect XSS via location.hash")
+        @DisplayName("should detect XSS via location.hash source")
         void detectDomBasedXss_quandoLocationHash_retornaFinding() {
-            fail("Not implemented yet");
+            String vulnerableJs = "var data = location.hash.substring(1);";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(vulnerableJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("location.hash"));
         }
 
         @Test
-        @DisplayName("should detect XSS via eval()")
+        @DisplayName("should detect XSS via document.write sink")
+        void detectDomBasedXss_quandoDocumentWrite_retornaFinding() {
+            String vulnerableJs = "document.write(location.search);";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(vulnerableJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("document.write"));
+        }
+
+        @Test
+        @DisplayName("should detect XSS via eval sink")
         void detectDomBasedXss_quandoEval_retornaFinding() {
-            fail("Not implemented yet");
+            String vulnerableJs = "eval(unescape(window.name));";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(vulnerableJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("eval"));
+            assertEquals(Severity.CRITICAL, findings.get(0).severity());
         }
 
         @Test
-        @DisplayName("should detect XSS via setTimeout")
+        @DisplayName("should detect XSS via setTimeout sink")
         void detectDomBasedXss_quandoSetTimeout_retornaFinding() {
-            fail("Not implemented yet");
+            String vulnerableJs = "setTimeout('alert(' + location.hash + ')', 100);";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(vulnerableJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().contains("setTimeout"));
+        }
+
+        @Test
+        @DisplayName("should NOT report when input is sanitized")
+        void detectDomBasedXss_quandoSanitizado_naoRetornaFinding() {
+            String sanitizedJs = "element.textContent = userInput;";
+            when(httpClient.fetchJavaScript(anyString()))
+                    .thenReturn(List.of(sanitizedJs));
+
+            List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
+
+            assertTrue(findings.isEmpty());
         }
     }
 
@@ -135,62 +211,134 @@ class XssDetectorTest {
     class ContextAwareAnalysis {
 
         @Test
-        @DisplayName("should detect XSS in HTML body context")
-        void detectXss_quandoContextoHtmlBody_retornaFinding() {
-            fail("Not implemented yet");
-        }
-
-        @Test
         @DisplayName("should detect XSS in HTML attribute context")
-        void detectXss_quandoContextoHtmlAttribute_retornaFinding() {
-            fail("Not implemented yet");
+        void detectXss_quandoContextoAtributo_retornaFinding() {
+            String payload = "\" onmouseover=alert('XSS') \"";
+            String response = "<input value=\"" + payload + "\">";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(response));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "name", payload);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().toLowerCase().contains("attribute"));
         }
 
         @Test
-        @DisplayName("should detect XSS in JavaScript context")
-        void detectXss_quandoContextoJavascript_retornaFinding() {
-            fail("Not implemented yet");
-        }
+        @DisplayName("should detect XSS in JavaScript string context")
+        void detectXss_quandoContextoJavaScriptString_retornaFinding() {
+            String payload = "';alert('XSS');//";
+            String response = "<script>var x = '" + payload + "';</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(response));
 
-        @Test
-        @DisplayName("should detect XSS in CSS context")
-        void detectXss_quandoContextoCss_retornaFinding() {
-            fail("Not implemented yet");
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "param", payload);
+
+            assertFalse(findings.isEmpty());
+            assertEquals(Severity.CRITICAL, findings.get(0).severity());
         }
 
         @Test
         @DisplayName("should detect XSS in URL context")
         void detectXss_quandoContextoUrl_retornaFinding() {
-            fail("Not implemented yet");
+            String payload = "//evil.com/xss.js";
+            String response = "<script src=\"" + payload + "\"></script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(response));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "callback", payload);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().toLowerCase().contains("url"));
         }
     }
 
     @Nested
-    @DisplayName("Payload variants")
-    class PayloadVariants {
+    @DisplayName("Stored XSS detection")
+    class StoredXssDetection {
 
         @Test
-        @DisplayName("should test with polyglot payloads")
-        void detectXss_comPayloadPolyglot_detecta() {
-            fail("Not implemented yet");
+        @DisplayName("should detect stored XSS reflected on different page")
+        void detectStoredXss_quandoArmazenadoERefletivo_retornaFinding() {
+            String payload = "<script>alert('Stored XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of("")); // First request - submit payload
+            when(httpClient.getPage(anyString()))
+                    .thenReturn(Optional.of(payload)); // Second page - payload reflected
+
+            List<VulnerabilityFinding> findings = detector.scanStored(TARGET_URL, "/comment", "/view", payload);
+
+            assertFalse(findings.isEmpty());
+            assertEquals(Severity.CRITICAL, findings.get(0).severity());
+            assertTrue(findings.get(0).description().contains("Stored XSS"));
         }
 
         @Test
-        @DisplayName("should test with encoded payloads")
-        void detectXss_comPayloadCodificado_detecta() {
-            fail("Not implemented yet");
+        @DisplayName("should verify stored XSS in profile field")
+        void detectStoredXss_quandoEmPerfil_retornaFinding() {
+            String payload = "<img src=x onerror=alert('XSS')>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of("")); // Submit to profile
+            when(httpClient.getPage(anyString()))
+                    .thenReturn(Optional.of(payload)); // View profile
+
+            List<VulnerabilityFinding> findings = detector.scanStored(TARGET_URL, "/profile/update", "/profile/view", payload);
+
+            assertFalse(findings.isEmpty());
+            assertTrue(findings.get(0).description().toLowerCase().contains("profile"));
+        }
+    }
+
+    @Nested
+    @DisplayName("WAF bypass detection")
+    class WafBypassTesting {
+
+        @Test
+        @DisplayName("should detect XSS with comment-based bypass")
+        void detectXss_comBypassComentario_detecta() {
+            String payload = "<script/*!*/alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertFalse(findings.isEmpty());
         }
 
         @Test
-        @DisplayName("should test with uppercase variants")
-        void detectXss_comPayloadMaiusculo_detecta() {
-            fail("Not implemented yet");
+        @DisplayName("should detect XSS with tab-based bypass")
+        void detectXss_comBypassTab_detecta() {
+            String payload = "<img\tsrc\tx=x\tonerror=alert('XSS')>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertFalse(findings.isEmpty());
         }
 
         @Test
-        @DisplayName("should test with mixed encoding")
-        void detectXss_comEncodingMisto_detecta() {
-            fail("Not implemented yet");
+        @DisplayName("should detect XSS with mixed case")
+        void detectXss_comCaseMisto_detecta() {
+            String payload = "<ScRiPt>AlErT('XSS')</sCrIpT>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertFalse(findings.isEmpty());
+        }
+
+        @Test
+        @DisplayName("should detect XSS with double encoding")
+        void detectXss_comEncodingDuplo_detecta() {
+            String payload = "%253Cscript%253Ealert('XSS')%253C/script%253E";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertFalse(findings.isEmpty());
         }
     }
 
@@ -199,50 +347,120 @@ class XssDetectorTest {
     class SeverityAssessment {
 
         @Test
+        @DisplayName("should assign CRITICAL severity for exploitable XSS with session access")
+        void assessSeverity_quandoExploravelComSession_critical() {
+            String payload = "<script>fetch('/api/steal?cookie='+document.cookie)</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertEquals(Severity.CRITICAL, findings.get(0).severity());
+        }
+
+        @Test
         @DisplayName("should assign HIGH severity for exploitable XSS")
-        void detectXss_quandoExploravel_severidadeHigh() {
-            fail("Not implemented yet");
+        void assessSeverity_quandoExploravel_high() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertEquals(Severity.HIGH, findings.get(0).severity());
         }
 
         @Test
-        @DisplayName("should assign MEDIUM severity for potential XSS")
-        void detectXss_quandoPotencial_severidadeMedium() {
-            fail("Not implemented yet");
-        }
+        @DisplayName("should assign MEDIUM severity for potential XSS with encoding")
+        void assessSeverity_quandoPotencialComEncoding_medium() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of("<div>" + payload.substring(0, 10) + "...</div>"));
 
-        @Test
-        @DisplayName("should include evidence in finding")
-        void detectXss_quandoDetectado_incluiEvidencia() {
-            fail("Not implemented yet");
-        }
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
 
-        @Test
-        @DisplayName("should include location in finding")
-        void detectXss_quandoDetectado_incluiLocalizacao() {
-            fail("Not implemented yet");
+            assertEquals(Severity.MEDIUM, findings.get(0).severity());
         }
     }
 
     @Nested
-    @DisplayName("WAF bypass testing")
-    class WafBypassTesting {
+    @DisplayName("Finding details")
+    class FindingDetails {
 
         @Test
-        @DisplayName("should test with comment-based bypass")
-        void detectXss_comBypassComentario_tentaBypass() {
-            fail("Not implemented yet");
+        @DisplayName("should include payload in finding evidence")
+        void detectXss_quandoDetectado_incluiPayloadNaEvidencia() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertTrue(findings.get(0).evidence().contains(payload));
         }
 
         @Test
-        @DisplayName("should test with tab-based bypass")
-        void detectXss_comBypassTab_tentaBypass() {
-            fail("Not implemented yet");
+        @DisplayName("should include parameter name in location")
+        void detectXss_quandoDetectado_incluiNomeParametro() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "search", payload);
+
+            assertTrue(findings.get(0).location().contains("search"));
         }
 
         @Test
-        @DisplayName("should test with newline-based bypass")
-        void detectXss_comBypassNewline_tentaBypass() {
-            fail("Not implemented yet");
+        @DisplayName("should include URL in finding")
+        void detectXss_quandoDetectado_incluiUrl() {
+            String payload = "<script>alert('XSS')</script>";
+            when(httpClient.sendRequest(anyString(), anyString()))
+                    .thenReturn(Optional.of(payload));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
+
+            assertTrue(findings.get(0).location().contains(TARGET_URL));
+        }
+    }
+
+    @Nested
+    @DisplayName("Request validation")
+    class RequestValidation {
+
+        @Test
+        @DisplayName("should throw when target URL is null")
+        void scan_quandoUrlNula_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    detector.scan(null, "q", "payload"));
+        }
+
+        @Test
+        @DisplayName("should throw when target URL is empty")
+        void scan_quandoUrlVazia_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    detector.scan("", "q", "payload"));
+        }
+
+        @Test
+        @DisplayName("should throw when parameter name is null")
+        void scan_quandoParametroNulo_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    detector.scan(TARGET_URL, null, "payload"));
+        }
+
+        @Test
+        @DisplayName("should block internal IP targets (SSRF protection)")
+        void scan_quandoTargetIpInterno_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    detector.scan("http://192.168.1.1", "q", "payload"));
+        }
+
+        @Test
+        @DisplayName("should block localhost targets (SSRF protection)")
+        void scan_quandoTargetLocalhost_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () ->
+                    detector.scan("http://localhost:8080", "q", "payload"));
         }
     }
 }
