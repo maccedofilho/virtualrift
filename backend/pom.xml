@@ -17,6 +17,7 @@
     <name>virtualrift-parent</name>
 
     <modules>
+        <module>virtualrift-common</module>
         <module>virtualrift-gateway</module>
         <module>virtualrift-auth</module>
         <module>virtualrift-tenant</module>
