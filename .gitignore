@@ -63,3 +63,7 @@ temp/
 *.swp
 *.swo
 *~
+
+# TODO / improvements documentation
+TODO/
+
