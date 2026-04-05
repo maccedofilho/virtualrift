@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 
-import java.nio.charset.StandardCharsets;
 
 @Configuration
 public class FilterConfig {
@@ -24,13 +23,13 @@ public class FilterConfig {
     }
 
     @Bean
-    public RateLimitFilter rateLimitFilter(ProxyManager<String> proxyManager,
+    public RateLimitFilter rateLimitFilter(ProxyManager<byte[]> proxyManager,
                                            GatewayConfig gatewayConfig) {
         return new RateLimitFilter(proxyManager, gatewayConfig);
     }
 
     @Bean
-    public ProxyManager<String> proxyManager(LettuceConnectionFactory connectionFactory) {
+    public ProxyManager<byte[]> proxyManager(LettuceConnectionFactory connectionFactory) {
         RedisClient redisClient = RedisClient.create(
                 RedisURI.create(
                         connectionFactory.getStandaloneConfiguration().getHostName(),
@@ -39,7 +38,6 @@ public class FilterConfig {
         );
 
         return LettuceBasedProxyManager.builderFor(redisClient)
-                .withKeyMapper(key -> key.getBytes(StandardCharsets.UTF_8))
                 .build();
     }
 }

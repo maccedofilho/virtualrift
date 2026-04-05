@@ -2,11 +2,12 @@ package com.virtualrift.orchestrator.service;
 
 import com.virtualrift.common.dto.ScanRequest;
 import com.virtualrift.common.events.ScanRequestedEvent;
-import com.virtualrift.common.model.Plan;
+import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.TenantId;
 import com.virtualrift.orchestrator.dto.CreateScanRequest;
 import com.virtualrift.orchestrator.dto.ScanResponse;
+import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
@@ -14,10 +15,11 @@ import com.virtualrift.orchestrator.repository.ScanRepository;
 import com.virtualrift.tenant.client.TenantClient;
 import com.virtualrift.tenant.model.TenantQuota;
 import org.slf4j.Logger;
-import org.slf4jj.LoggerFactory;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -111,8 +113,8 @@ public class ScanOrchestratorService {
     }
 
     private void validateDailyQuota(UUID tenantId) {
-        long todayCount = scanRepository.countByTenantIdSince(tenantId, Instant.now().minusDays(1));
-        int dailyLimit = tenantClient.getQuota(tenantId).maxScansPerDay();
+        long todayCount = scanRepository.countByTenantIdSince(tenantId, Instant.now().minus(Duration.ofDays(1)));
+        int dailyLimit = tenantClient.getQuota(tenantId).getMaxScansPerDay();
 
         if (dailyLimit > 0 && todayCount >= dailyLimit) {
             throw new ScanQuotaExceededException("Daily scan quota exceeded");
@@ -124,7 +126,7 @@ public class ScanOrchestratorService {
                 tenantId, com.virtualrift.common.model.ScanStatus.RUNNING
         );
 
-        if (runningCount >= quota.maxConcurrentScans()) {
+        if (runningCount >= quota.getMaxConcurrentScans()) {
             throw new ScanQuotaExceededException("Maximum concurrent scans limit reached");
         }
     }

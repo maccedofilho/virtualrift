@@ -42,10 +42,10 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     private static final String X_RATE_LIMIT_RESET = "X-RateLimit-Reset";
     private static final String RETRY_AFTER = "Retry-After";
 
-    private final ProxyManager<String> proxyManager;
+    private final ProxyManager<byte[]> proxyManager;
     private final GatewayConfig gatewayConfig;
 
-    public RateLimitFilter(ProxyManager<String> proxyManager, GatewayConfig gatewayConfig) {
+    public RateLimitFilter(ProxyManager<byte[]> proxyManager, GatewayConfig gatewayConfig) {
         this.proxyManager = proxyManager;
         this.gatewayConfig = gatewayConfig;
     }
@@ -68,7 +68,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         int limit = getLimitForEndpoint(path);
 
         Supplier<BucketConfiguration> configSupplier = getConfigSupplier(limit);
-        Bucket bucket = proxyManager.builder().build(key, configSupplier);
+        Bucket bucket = proxyManager.builder().build(key.getBytes(), configSupplier);
 
         boolean consumed = bucket.tryConsume(1);
 
@@ -142,16 +142,13 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
     private ServerWebExchange addRateLimitHeaders(ServerWebExchange exchange, int limit,
                                                    int remaining, long resetTime) {
-        return exchange.mutate()
-                .response(r -> {
-                    r.getHeaders().add(X_RATE_LIMIT_LIMIT, String.valueOf(limit));
-                    r.getHeaders().add(X_RATE_LIMIT_REMAINING, String.valueOf(remaining));
-                    if (resetTime > 0) {
-                        r.getHeaders().add(X_RATE_LIMIT_RESET,
-                                String.valueOf(System.currentTimeMillis() / 1000 + resetTime));
-                    }
-                })
-                .build();
+        exchange.getResponse().getHeaders().add(X_RATE_LIMIT_LIMIT, String.valueOf(limit));
+        exchange.getResponse().getHeaders().add(X_RATE_LIMIT_REMAINING, String.valueOf(remaining));
+        if (resetTime > 0) {
+            exchange.getResponse().getHeaders().add(X_RATE_LIMIT_RESET,
+                    String.valueOf(System.currentTimeMillis() / 1000 + resetTime));
+        }
+        return exchange;
     }
 
     private String extractClientIp(ServerWebExchange exchange) {
