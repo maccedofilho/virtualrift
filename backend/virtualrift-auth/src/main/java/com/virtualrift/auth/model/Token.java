@@ -1,5 +1,6 @@
 package com.virtualrift.auth.model;
 
+import java.time.Instant;
 public record Token(
         String accessToken,
         String refreshToken,

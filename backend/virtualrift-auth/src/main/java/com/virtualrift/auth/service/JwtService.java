@@ -18,6 +18,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class JwtService {
@@ -72,7 +73,7 @@ public class JwtService {
                 .withSubject(userId.toString())
                 .withClaim("tenant_id", tenantId.toString())
                 .withClaim("user_id", userId.toString())
-                .withClaim("roles", roles)
+                .withClaim("roles", new ArrayList<>(roles))
                 .withIssuedAt(now)
                 .withExpiresAt(expiration)
                 .sign(algorithm);
