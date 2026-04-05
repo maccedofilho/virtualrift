@@ -1,3 +1,143 @@
 spring:
   application:
     name: virtualrift-gateway
+
+  cloud:
+    gateway:
+      routes:
+        # Auth Service
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=0
+
+        # Tenant Service
+        - id: tenant-service
+          uri: ${TENANT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/tenants/**
+          filters:
+            - StripPrefix=0
+
+        # Orchestrator Service
+        - id: orchestrator-service
+          uri: ${ORCHESTRATOR_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/scans/**, /api/v1/scan-results/**
+          filters:
+            - StripPrefix=0
+
+        # Reports Service
+        - id: reports-service
+          uri: ${REPORTS_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/reports/**
+          filters:
+            - StripPrefix=0
+
+        # Web Scanner Service
+        - id: web-scanner-service
+          uri: ${WEB_SCANNER_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/scanners/web/**
+          filters:
+            - StripPrefix=2
+
+        # API Scanner Service
+        - id: api-scanner-service
+          uri: ${API_SCANNER_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/scanners/api/**
+          filters:
+            - StripPrefix=2
+
+        # Network Scanner Service
+        - id: network-scanner-service
+          uri: ${NETWORK_SCANNER_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/scanners/network/**
+          filters:
+            - StripPrefix=2
+
+        # SAST Service
+        - id: sast-service
+          uri: ${SAST_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/scanners/sast/**
+          filters:
+            - StripPrefix=2
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+# JWT Configuration
+auth:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY}
+
+# Gateway Configuration
+gateway:
+  security:
+    # Public paths that don't require authentication
+    public-paths:
+      - /health
+      - /actuator/**
+      - /api/v1/auth/token
+      - /api/v1/auth/register
+      - /api/v1/auth/forgot-password
+      - /api/v1/auth/reset-password
+
+    # Token denylist cache TTL (seconds)
+    token-cache-ttl: 300
+
+    # Token denylist key prefix in Redis
+    denylist-key-prefix: "denylist:"
+
+  rate-limit:
+    # Default rate limit (requests per minute)
+    default-limit: 1000
+
+    # Rate limit for scan endpoints (requests per minute)
+    scan-limit: 100
+
+    # Burst capacity
+    burst-capacity: 10
+
+    # Token refill rate (tokens per second)
+    refill-rate: 1
+
+    # Time window for rate limiting (seconds)
+    window-duration: 60
+
+    # Redis key prefix
+    redis-key-prefix: "ratelimit:"
+
+    # Enable rate limiting (set to false for development)
+    enabled: true
+
+# Server configuration
+server:
+  port: 8080
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
