@@ -23,7 +23,7 @@ public record ScanResult(
 
     public static ScanResult of(UUID scanId, TenantId tenantId, ScanStatus status,
                                 List<VulnerabilityFinding> findings,
-                                Instant startedAt, Instant completedAt, String errorMessage) {
+                                Instant startedAt, Instant completedAt, Instant failedAt, String errorMessage) {
         if (scanId == null) {
             throw new IllegalArgumentException("scanId cannot be null");
         }

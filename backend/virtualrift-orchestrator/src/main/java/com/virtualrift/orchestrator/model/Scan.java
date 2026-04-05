@@ -6,6 +6,7 @@ import com.virtualrift.common.model.ScanType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.EnumType;

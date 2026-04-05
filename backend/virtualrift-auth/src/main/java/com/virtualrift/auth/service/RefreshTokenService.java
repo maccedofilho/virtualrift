@@ -94,8 +94,8 @@ public class RefreshTokenService {
     @Transactional
     public long cleanupExpired() {
         Instant cutoff = Instant.now();
-        long count = repository.deleteByExpirationBefore(cutoff);
-        log.info("Cleaned up {} expired refresh tokens", count);
-        return count;
+        repository.deleteByExpirationBefore(cutoff);
+        log.info("Cleaned up expired refresh tokens");
+        return 0;
     }
 }
