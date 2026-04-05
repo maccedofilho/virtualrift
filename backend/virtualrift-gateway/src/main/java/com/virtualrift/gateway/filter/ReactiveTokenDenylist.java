@@ -68,6 +68,7 @@ public class ReactiveTokenDenylist {
         localCache.invalidate(jti);
 
         return redisTemplate.delete(key)
+                .map(deleted -> deleted > 0)
                 .doOnSuccess(deleted -> log.debug("Token removed from denylist: {}", jti))
                 .doOnError(e -> log.error("Error removing token from denylist: {}", e.getMessage()))
                 .onErrorResume(e -> Mono.just(false));

@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.UUID;
 
-interface ScanTargetRepository extends JpaRepository<ScanTarget, UUID> {
+public interface ScanTargetRepository extends JpaRepository<ScanTarget, UUID> {
 
     @Query("SELECT st FROM ScanTarget st WHERE st.tenantId = :tenantId ORDER BY st.createdAt DESC")
     List<ScanTarget> findByTenantIdOrderByCreatedAtDesc(@Param("tenantId") UUID tenantId);

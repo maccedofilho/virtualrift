@@ -2,16 +2,8 @@ package com.virtualrift.gateway.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-import java.time.Instant;
 import java.util.Map;
 
- @param type       
- @param title     
- @param status     
- @param detail     
- @param instance   
- @param tenantId   
- @param errors     
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProblemDetail(
