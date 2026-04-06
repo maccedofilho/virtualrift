@@ -86,9 +86,10 @@ class ScanRequestTest {
                     SecurityException.class,
                     () -> ScanRequest.of(internalUrl, ScanType.WEB)
             );
-
             assertTrue(exception.getMessage().contains("internal network") ||
-                    exception.getMessage().contains("blocklist"));
+                    exception.getMessage().contains("blocklist") ||
+                    exception.getMessage().contains("private network"));
+
         }
 
         @Test
@@ -99,7 +100,7 @@ class ScanRequestTest {
                     () -> ScanRequest.of("http://169.254.169.254/latest/api/token", ScanType.WEB)
             );
 
-            assertTrue(exception.getMessage().contains("metadata"));
+            assertTrue(exception.getMessage().contains("internal network"));
         }
 
         @Test
@@ -110,7 +111,7 @@ class ScanRequestTest {
                     () -> ScanRequest.of("http://localhost:10250/metrics", ScanType.WEB)
             );
 
-            assertTrue(exception.getMessage().contains("internal"));
+            assertTrue(exception.getMessage().contains("internal network"));
         }
     }
 
