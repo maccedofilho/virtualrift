@@ -1,5 +1,8 @@
 package com.virtualrift.common.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 import java.util.UUID;
 
 public record TenantId(UUID value) {
@@ -15,6 +18,7 @@ public record TenantId(UUID value) {
         return new TenantId(UUID.randomUUID());
     }
 
+    @JsonCreator
     public static TenantId fromString(String value) {
         if (value == null) {
             throw new IllegalArgumentException("tenantId cannot be null");
@@ -26,6 +30,7 @@ public record TenantId(UUID value) {
         }
     }
 
+    @JsonValue
     @Override
     public String toString() {
         return value.toString();
