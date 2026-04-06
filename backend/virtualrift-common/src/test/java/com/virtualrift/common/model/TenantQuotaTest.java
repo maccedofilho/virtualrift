@@ -34,10 +34,10 @@ class TenantQuotaTest {
         void create_quandoMaxScansPerDayNegativo_lancaExcecao() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> TenantQuota.of(-1, 10, 1000, 30, Set.of())
+                    () -> TenantQuota.of(-2, 10, 1000, 30, Set.of())
             );
 
-            assertEquals("maxScansPerDay cannot be negative", exception.getMessage());
+            assertEquals("maxScansPerDay cannot be negative (use -1 for unlimited)", exception.getMessage());
         }
 
         @Test
@@ -45,10 +45,10 @@ class TenantQuotaTest {
         void create_quandoMaxConcurrentScansNegativo_lancaExcecao() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> TenantQuota.of(100, -1, 1000, 30, Set.of())
+                    () -> TenantQuota.of(100, -2, 1000, 30, Set.of())
             );
 
-            assertEquals("maxConcurrentScans cannot be negative", exception.getMessage());
+            assertEquals("maxConcurrentScans cannot be negative (use -1 for unlimited)", exception.getMessage());
         }
 
         @Test
@@ -56,10 +56,10 @@ class TenantQuotaTest {
         void create_quandoMaxScanTargetsNegativo_lancaExcecao() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> TenantQuota.of(100, 10, -1, 30, Set.of())
+                    () -> TenantQuota.of(100, 10, -2, 30, Set.of())
             );
 
-            assertEquals("maxScanTargets cannot be negative", exception.getMessage());
+            assertEquals("maxScanTargets cannot be negative (use -1 for unlimited)", exception.getMessage());
         }
 
         @Test
@@ -67,7 +67,7 @@ class TenantQuotaTest {
         void create_quandoReportRetentionDaysNegativo_lancaExcecao() {
             IllegalArgumentException exception = assertThrows(
                     IllegalArgumentException.class,
-                    () -> TenantQuota.of(100, 10, 1000, -1, Set.of())
+                    () -> TenantQuota.of(100, 10, 1000, -2, Set.of())
             );
 
             assertEquals("reportRetentionDays cannot be negative", exception.getMessage());

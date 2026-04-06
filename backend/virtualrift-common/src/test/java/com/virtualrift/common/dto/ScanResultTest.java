@@ -38,7 +38,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, startedAt, completedAt, null
+                    findings, startedAt, completedAt, null, null
             );
 
             assertNotNull(result);
@@ -57,7 +57,7 @@ class ScanResultTest {
                     IllegalArgumentException.class,
                     () -> ScanResult.of(
                             null, TenantId.generate(), ScanStatus.COMPLETED,
-                            List.of(), Instant.now(), Instant.now(), null
+                            List.of(), Instant.now(), Instant.now(), null, null
                     )
             );
 
@@ -71,7 +71,7 @@ class ScanResultTest {
                     IllegalArgumentException.class,
                     () -> ScanResult.of(
                             UUID.randomUUID(), TenantId.generate(), null,
-                            List.of(), Instant.now(), Instant.now(), null
+                            List.of(), Instant.now(), Instant.now(), null, null
                     )
             );
 
@@ -85,7 +85,7 @@ class ScanResultTest {
                     IllegalArgumentException.class,
                     () -> ScanResult.of(
                             UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                            null, Instant.now(), Instant.now(), null
+                            null, Instant.now(), Instant.now(), null, null
                     )
             );
 
@@ -97,7 +97,7 @@ class ScanResultTest {
         void create_quandoFindingsVazio_retornaResultado() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), Instant.now(), null
+                    List.of(), Instant.now(), Instant.now(), null, null
             );
 
             assertTrue(result.findings().isEmpty());
@@ -110,7 +110,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), null, null
+                    List.of(), Instant.now(), null, null, null
             );
 
             Instant after = Instant.now().plusSeconds(1);
@@ -127,7 +127,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.FAILED,
-                    List.of(), Instant.now(), null, "Connection timeout"
+                    List.of(), Instant.now(), null, null, "Connection timeout"
             );
 
             Instant after = Instant.now().plusSeconds(1);
@@ -159,7 +159,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(2, result.countBySeverity(Severity.CRITICAL));
@@ -183,7 +183,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(2, result.criticalCount());
@@ -203,7 +203,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(2, result.highCount());
@@ -222,7 +222,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(2, result.mediumCount());
@@ -241,7 +241,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(2, result.lowCount());
@@ -252,7 +252,7 @@ class ScanResultTest {
         void countBySeverity_quandoFindingsVazio_retornaZero() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), Instant.now(), null
+                    List.of(), Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(0, result.criticalCount());
@@ -275,7 +275,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(3, result.totalFindings());
@@ -301,11 +301,11 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
-            // 2 * 100 + 1 * 75 + 1 * 50 = 325
-            assertEquals(325, result.riskScore());
+            // (2 * 100 + 1 * 75 + 1 * 50) / 5 = 65
+            assertEquals(65, result.riskScore());
         }
 
         @Test
@@ -313,7 +313,7 @@ class ScanResultTest {
         void riskScore_quandoSemFindings_retornaZero() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), Instant.now(), null
+                    List.of(), Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(0, result.riskScore());
@@ -335,7 +335,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             assertEquals(100, result.riskScore());
@@ -344,7 +344,7 @@ class ScanResultTest {
 
     @Nested
     @DisplayName("Duration calculation")
-    class Duration {
+    class DurationCalculation {
 
         @Test
         @DisplayName("should calculate duration between startedAt and completedAt")
@@ -354,10 +354,10 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), startedAt, completedAt, null
+                    List.of(), startedAt, completedAt, null, null
             );
 
-            assertEquals(Duration.ofSeconds(90), result.duration());
+            assertEquals(java.time.Duration.ofSeconds(90), result.duration());
         }
 
         @Test
@@ -365,7 +365,7 @@ class ScanResultTest {
         void duration_quandoNaoCompletado_retornaNulo() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.RUNNING,
-                    List.of(), Instant.now(), null, null
+                    List.of(), Instant.now(), null, null, null
             );
 
             assertNull(result.duration());
@@ -376,7 +376,7 @@ class ScanResultTest {
         void duration_quandoStartedAtNulo_retornaNulo() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), null, Instant.now(), null
+                    List.of(), null, Instant.now(), null, null
             );
 
             assertNull(result.duration());
@@ -400,7 +400,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             ScanResult masked = result.withMaskedFindings();
@@ -421,7 +421,7 @@ class ScanResultTest {
 
             ScanResult result = ScanResult.of(
                     scanId, tenantId, ScanStatus.COMPLETED,
-                    findings, Instant.now(), Instant.now(), null
+                    findings, Instant.now(), Instant.now(), null, null
             );
 
             result.withMaskedFindings();
@@ -439,7 +439,7 @@ class ScanResultTest {
         void isSuccessful_quandoCompleted_retornaTrue() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), Instant.now(), null
+                    List.of(), Instant.now(), Instant.now(), null, null
             );
 
             assertTrue(result.isSuccessful());
@@ -450,7 +450,7 @@ class ScanResultTest {
         void isSuccessful_quandoFailed_retornaFalse() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.FAILED,
-                    List.of(), Instant.now(), null, "Error"
+                    List.of(), Instant.now(), null, null, "Error"
             );
 
             assertFalse(result.isSuccessful());
@@ -461,7 +461,7 @@ class ScanResultTest {
         void isSuccessful_quandoCancelled_retornaFalse() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.CANCELLED,
-                    List.of(), Instant.now(), null, null
+                    List.of(), Instant.now(), null, null, null
             );
 
             assertFalse(result.isSuccessful());
@@ -472,7 +472,7 @@ class ScanResultTest {
         void isSuccessful_quandoRunning_retornaFalse() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.RUNNING,
-                    List.of(), Instant.now(), null, null
+                    List.of(), Instant.now(), null, null, null
             );
 
             assertFalse(result.isSuccessful());
@@ -483,7 +483,7 @@ class ScanResultTest {
         void isSuccessful_quandoPending_retornaFalse() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.PENDING,
-                    List.of(), null, null, null
+                    List.of(), null, null, null, null
             );
 
             assertFalse(result.isSuccessful());
@@ -500,7 +500,7 @@ class ScanResultTest {
             String errorMsg = "Connection timeout after 30 seconds";
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.FAILED,
-                    List.of(), Instant.now(), null, errorMsg
+                    List.of(), Instant.now(), null, null, errorMsg
             );
 
             assertEquals(errorMsg, result.errorMessage());
@@ -511,7 +511,7 @@ class ScanResultTest {
         void errorMessage_quandoNaoFalhou_retornaNulo() {
             ScanResult result = ScanResult.of(
                     UUID.randomUUID(), TenantId.generate(), ScanStatus.COMPLETED,
-                    List.of(), Instant.now(), Instant.now(), null
+                    List.of(), Instant.now(), Instant.now(), null, null
             );
 
             assertNull(result.errorMessage());
