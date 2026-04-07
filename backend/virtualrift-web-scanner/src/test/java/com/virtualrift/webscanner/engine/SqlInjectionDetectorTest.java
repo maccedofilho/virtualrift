@@ -52,7 +52,7 @@ class SqlInjectionDetectorTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("sql"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("sql"));
         }
 
         @Test
@@ -170,7 +170,7 @@ class SqlInjectionDetectorTest {
             List<VulnerabilityFinding> findings = detector.scanTimeBased(TARGET_URL, "id", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("waitfor"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("waitfor"));
         }
 
         @Test
@@ -181,7 +181,7 @@ class SqlInjectionDetectorTest {
             List<VulnerabilityFinding> findings = detector.scanTimeBased(TARGET_URL, "id", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("pg_sleep"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("pg_sleep"));
         }
     }
 
@@ -199,7 +199,7 @@ class SqlInjectionDetectorTest {
             List<VulnerabilityFinding> findings = detector.scanUnion(TARGET_URL, "id", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("union"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("union"));
         }
 
         @Test
@@ -232,7 +232,7 @@ class SqlInjectionDetectorTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("second-order"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("second-order"));
         }
     }
 
