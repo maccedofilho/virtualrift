@@ -52,7 +52,7 @@ class XssDetectorTest {
             assertFalse(findings.isEmpty());
             VulnerabilityFinding finding = findings.get(0);
             assertEquals(Severity.HIGH, finding.severity());
-            assertTrue(finding.description().contains("XSS"));
+            assertTrue(finding.title().contains("XSS"));
             assertTrue(finding.location().contains("search"));
         }
 
@@ -79,7 +79,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "redirect", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("javascript"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("javascript"));
         }
 
         @Test
@@ -92,7 +92,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "content", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("onload"));
+            assertTrue(findings.get(0).title().contains("onload"));
         }
 
         @Test
@@ -136,8 +136,8 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("innerHTML"));
-            assertTrue(findings.get(0).description().contains("DOM"));
+            assertTrue(findings.get(0).title().contains("innerHTML"));
+            assertTrue(findings.get(0).title().contains("DOM"));
         }
 
         @Test
@@ -150,7 +150,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("location.hash"));
+            assertTrue(findings.get(0).title().contains("location.hash"));
         }
 
         @Test
@@ -163,7 +163,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("document.write"));
+            assertTrue(findings.get(0).title().contains("document.write"));
         }
 
         @Test
@@ -176,7 +176,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("eval"));
+            assertTrue(findings.get(0).title().contains("eval"));
             assertEquals(Severity.CRITICAL, findings.get(0).severity());
         }
 
@@ -190,7 +190,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.analyzeJavaScript(TARGET_URL);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().contains("setTimeout"));
+            assertTrue(findings.get(0).title().contains("setTimeout"));
         }
 
         @Test
@@ -221,7 +221,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "name", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("attribute"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("attribute"));
         }
 
         @Test
@@ -249,7 +249,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "callback", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("url"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("url"));
         }
     }
 
@@ -270,7 +270,7 @@ class XssDetectorTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).description().contains("Stored XSS"));
+            assertTrue(findings.get(0).title().contains("Stored XSS"));
         }
 
         @Test
@@ -285,7 +285,7 @@ class XssDetectorTest {
             List<VulnerabilityFinding> findings = detector.scanStored(TARGET_URL, "/profile/update", "/profile/view", payload);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("profile"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("profile"));
         }
     }
 
