@@ -4,9 +4,11 @@ import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.VulnerabilityFinding;
 
 import java.security.cert.X509Certificate;
+import java.util.Date;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -289,7 +291,7 @@ public class TlsAnalyzer {
         Instant now = Instant.now();
 
         try {
-            cert.checkValidity(now.toDate());
+            cert.checkValidity(Date.from(now));
         } catch (Exception e) {
             findings.add(createFinding(
                     host + ":" + port,
