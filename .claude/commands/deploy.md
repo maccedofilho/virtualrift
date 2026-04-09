@@ -1,47 +1,54 @@
 # Deploy Command
 
-Invoke this command with `/project:deploy`.
+Invoke with `/project:deploy`.
 
-Guides a safe deployment of VirtualRift services to the target environment.
+Use this command to guide a safe deployment, not to blindly print `helm upgrade`.
 
-## What happens
-1. Asks for the target environment: `staging` or `production`
-2. Asks which services are being deployed: all or a specific list of modules
-3. Runs the pre-deployment checklist
-4. Generates the deployment commands for Helm and kubectl
-5. Provides the post-deployment validation steps
+## Inputs to collect
 
-## Pre-deployment Checklist
-Before generating any deployment command, verify:
-- [ ] All tests are passing on the target branch
-- [ ] The Docker image has been built and pushed with a versioned tag — never `latest`
-- [ ] The image has been scanned for CVEs via Trivy — no `CRITICAL` findings
-- [ ] The `security-auditor` agent has reviewed any infrastructure changes
-- [ ] Database migrations have been reviewed and are backward compatible
-- [ ] Secrets in Vault are up to date for the target environment
-- [ ] Rollback plan is defined before proceeding
+1. target environment: `staging` or `production`
+2. modules or services being deployed
+3. image or artifact version
+4. whether database or contract changes are included
+5. whether infra or security-sensitive config changed
 
-## Deployment Commands
-Generate Helm upgrade commands in this format:
-```bash
-helm upgrade --install virtualrift-{service} ./infra/helm/virtualrift \
-  --namespace virtualrift \
-  --set image.tag={version} \
-  --set environment={environment} \
-  --values ./infra/helm/values-{environment}.yaml \
-  --atomic \
-  --timeout 5m
-```
+## Pre-deployment gates
 
-## Post-deployment Validation
-After deployment, verify:
-- [ ] All pods are running: `kubectl get pods -n virtualrift`
-- [ ] Health endpoints return 200: `/actuator/health`
-- [ ] No error spikes in Grafana dashboards
-- [ ] A smoke test scan completes successfully end-to-end
+Do not generate deployment steps until all required gates are answered:
+
+- [ ] Backend and frontend tests relevant to the change are green
+- [ ] Security-sensitive diffs were reviewed with `security-auditor`
+- [ ] Images use immutable, versioned tags and not `latest`
+- [ ] Dependency and image scans have no unresolved `CRITICAL` findings
+- [ ] Secrets and config references were reviewed for the target environment
+- [ ] Rollback plan exists and names the concrete rollback artifact or prior release
+- [ ] Smoke validation criteria are defined in advance
+
+## Deployment guidance
+
+When the repo contains the necessary infra assets, generate commands that:
+
+- use explicit versioned image tags
+- include atomic rollback flags where supported
+- point to the correct environment values files
+- avoid inline secrets
+- are accompanied by a rollback command
+
+If the required Helm or manifest files do not exist in the repository, say so explicitly and output a deployment plan instead of fake commands.
+
+## Post-deployment validation
+
+Always include:
+
+- pod or workload health checks
+- health endpoint checks for changed services
+- log or dashboard checks for error spikes
+- one user-level smoke path for the changed feature
+- one security-relevant smoke path when auth, tenant isolation or scanners changed
 
 ## Rules
-- Never deploy directly to production without deploying to staging first
-- Never use `latest` image tags in any environment
-- Always use `--atomic` flag — rolls back automatically on failure
-- Production deployments require explicit confirmation before generating commands
+
+- Production requires an explicit confirmation step.
+- Do not skip staging if production depends on the same artifact path.
+- Do not present undocumented infra as if it already exists in the repo.
+- If rollback is undefined, deployment is not ready.

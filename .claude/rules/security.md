@@ -1,101 +1,168 @@
 # Security Rules
 
-These rules are mandatory for all VirtualRift services. Security is a first-class concern — every contributor is responsible for enforcing these standards.
+These rules are mandatory for every VirtualRift change. They cover both universal application security risks and platform-specific risks for a multi-tenant scanning SaaS.
+
+Use this file as the baseline for:
+
+- code reviews
+- architecture decisions
+- build and deployment gates
+- scanner design
+- incident handling
 
 ---
 
-## Authentication and Authorization
+## Threat model baseline
 
-- Every endpoint must verify the JWT signature before processing any request — no exceptions
-- Always extract `tenant_id`, `user_id` and `roles` from the validated token — never from request body or query params
-- Role checks must happen at the service layer, not only at the controller layer
-- Use Spring Security's `@PreAuthorize` for method-level authorization
-- Tokens must have a maximum expiry of 15 minutes — refresh tokens max 7 days
-- Invalidated tokens must be added to a Redis denylist immediately on logout
+Every change must be evaluated against these risk classes:
 
----
+- authentication and session weaknesses
+- authorization failures, including BOLA/IDOR and privilege escalation
+- tenant isolation failures and lateral movement
+- injection classes: SQL, NoSQL, LDAP, template, command, path traversal and insecure deserialization
+- web and API flaws: XSS, CSRF, SSRF, open redirect, CORS mistakes, mass assignment and unsafe file upload
+- secrets exposure and weak cryptography
+- sensitive data leakage through logs, reports or telemetry
+- denial of service, abusive automation and quota bypass
+- dependency, build and supply-chain compromise
+- container, Kubernetes, cloud and CI/CD misconfiguration
+- scanner abuse, including targeting internal VirtualRift infrastructure
 
-## Multi-Tenancy Isolation
-
-- Every database query must include `tenant_id` as a mandatory filter — no exceptions
-- Row-Level Security (RLS) must be enabled in PostgreSQL for all tenant-scoped tables
-- Tenants must never share scan workers — each scan job runs in an isolated container
-- Never log or expose `tenant_id` from one tenant in a context where another tenant could read it
-- Cross-tenant data access must be treated as a critical security incident
-
----
-
-## Input Validation
-
-- All inputs must be validated at the controller layer using Bean Validation (`@Valid`)
-- Never trust user-supplied URLs for scanning — validate format, schema (`http/https` only) and against a blocklist
-- Blocklist must include: `localhost`, `127.0.0.1`, `0.0.0.0`, `169.254.0.0/16` (AWS metadata), `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
-- Never pass user input directly to shell commands, SQL queries or file paths
-- File uploads must be validated by MIME type and size — never trust the file extension alone
+If a change introduces or expands one of these classes, the change is security-sensitive by default.
 
 ---
 
-## Secrets Management
+## Identity, sessions and tokens
 
-- No secrets in source code, ever — no API keys, passwords, tokens or credentials in any file
-- No secrets in environment variables checked into git — use `.env.example` with placeholders only
-- All secrets must be stored in HashiCorp Vault and injected at runtime via Kubernetes secrets
-- Rotate all secrets every 90 days — rotation must not require a redeployment
-- Database passwords must be unique per environment (dev, staging, production)
-
----
-
-## Scan Engine Isolation
-
-- Each scan engine runs in its own container with a read-only filesystem
-- Network access for scan containers is restricted to the target only — no access to internal VirtualRift services
-- Scan containers must run as non-root with a dedicated service account
-- Scan results are written to S3/MinIO only — scan containers have no direct database access
-- CPU and memory limits must be enforced on every scan container via Kubernetes resource quotas
-- Maximum scan duration must be enforced — kill any scan exceeding the configured timeout
+- Every non-public endpoint must verify JWT signature, expiry and intended algorithm before processing the request.
+- Public routes must be explicitly listed; there is no implicit public access.
+- Always extract `tenant_id`, `user_id` and `roles` from the validated token, never from request body, path or query parameters.
+- Role checks must exist at the service layer for sensitive actions; controller-only protection is not enough.
+- Access tokens must be short lived. Refresh tokens must be rotatable, revocable and invalidated on logout or compromise.
+- Token identifiers used for logout or revocation must be added to the denylist immediately.
+- Never log raw tokens, password reset links, session identifiers or one-time codes.
+- Frontend code must not persist bearer tokens in `localStorage` or `sessionStorage`.
 
 ---
 
-## Sensitive Data Handling
+## Authorization and tenant isolation
 
-- Never log passwords, tokens, secrets, full credit card numbers or PII
-- Mask sensitive fields in logs: show only the last 4 characters of tokens and IDs when needed for debugging
-- Vulnerability findings that include credentials or secrets must be encrypted at rest using AES-256
-- Reports containing sensitive findings must be accessible only to users with the `REPORT_READ` role within the same tenant
-- Scan targets (URLs, IPs) must be treated as sensitive data — do not expose them in error messages or public logs
-
----
-
-## Dependencies
-
-- Run `OWASP Dependency Check` on every pull request — fail the build if a CRITICAL CVE is found
-- No dependency may be added without a known, maintained source and an open-source license compatible with the project
-- Keep all dependencies up to date — review and update monthly
-- Never use a dependency that has been abandoned for more than 12 months without explicit team approval
-- Lock all dependency versions — no open ranges (`latest`, `^`, `~` are forbidden in production dependencies)
+- Every tenant-scoped read and write must be constrained by `tenant_id`.
+- Cross-tenant access is always a `CRITICAL` defect unless the code is a deliberate admin-only control with explicit audit logging.
+- Repository and query methods must never default to unrestricted `findAll()` semantics for tenant data.
+- RLS is required for tenant-scoped PostgreSQL tables where the architecture depends on database isolation.
+- Kafka messages and async jobs must preserve tenant context and validate it before processing.
+- Reports, scan findings, quotas, targets and tokens must never be readable across tenants.
+- Do not expose another tenant's identifiers, targets, URLs, IPs or scan metadata in logs, metrics, error messages or UI.
 
 ---
 
-## Code Review Security Checklist
+## Input validation and injection defense
 
-Every pull request touching security-sensitive areas must be reviewed against this checklist:
-
-- [ ] No secrets or credentials in the diff
-- [ ] All new endpoints are authenticated and authorized
-- [ ] User inputs are validated and sanitized
-- [ ] No direct SQL string concatenation
-- [ ] No shell command execution with user input
-- [ ] Tenant isolation is preserved in all new queries
-- [ ] Error responses do not expose internal details
-- [ ] New dependencies have been checked for known CVEs
-- [ ] Scan engine changes preserve container isolation
+- Validate all external input at the boundary using the framework's validation primitives and domain checks.
+- Never concatenate user input into SQL, shell commands, file paths, URLs or templates.
+- Treat file paths, archive extraction and upload destinations as hostile input.
+- File uploads must validate MIME type, size and destination handling server-side; extension checks alone are not sufficient.
+- Reject unsafe deserialization formats and untrusted object graphs.
+- Never use `Runtime.exec`, `ProcessBuilder` or external tools with raw user-controlled arguments.
+- Command execution that cannot be avoided must use a strict allowlist mapping from safe options to concrete arguments.
+- Escape or sanitize user-controlled output rendered in HTML, Markdown, PDF or reports.
 
 ---
 
-## Incident Response
+## Web, API and frontend security
 
-- Any suspected security breach must be reported immediately to the security channel
-- Affected tenant must be notified within 24 hours of a confirmed breach
-- Compromised tokens must be invalidated within 5 minutes of detection
-- All security incidents must be documented with timeline, impact and remediation steps
-- Post-mortems are mandatory for any incident rated HIGH or CRITICAL
+- All APIs must follow explicit authentication, authorization and rate-limiting rules.
+- Error responses must not leak stack traces, filesystem paths, SQL errors, internal hostnames or cloud metadata.
+- Validation failures must be explicit and machine-readable without exposing internal implementation details.
+- CORS must be allowlist-based; never use wildcard origins with credentials.
+- CSRF defenses are required whenever cookie-based or browser-automated credentials are in scope.
+- Do not render untrusted HTML with `dangerouslySetInnerHTML` unless content is sanitized and the exception is documented.
+- All frontend API traffic must go through the shared API client layer when one exists; do not hand-roll auth headers in feature code.
+- Avoid mass assignment by mapping request DTOs to explicit command objects instead of binding directly to privileged models.
+
+---
+
+## Scanner-specific security controls
+
+- A scanner must never target internal VirtualRift services, metadata endpoints or RFC1918/private ranges unless there is explicit, controlled product support for that exact case.
+- Scan target validation must block at least: `localhost`, `127.0.0.0/8`, `0.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, link-local IPv6, cloud metadata endpoints and internal service DNS names.
+- Target authorization must be checked before any outbound connection or scan scheduling occurs.
+- Each scan job must run with least privilege, bounded CPU and memory, read-only filesystem where possible and enforced timeouts.
+- Scanner output must be treated as hostile data until normalized, masked and classified.
+- Findings containing secrets, credentials or customer source snippets must be redacted or encrypted before persistence and reporting.
+- Scanners must fail closed when target validation, authorization or sandbox guarantees cannot be established.
+
+---
+
+## Secrets, crypto and sensitive data
+
+- No secrets, credentials, API keys or private certificates may be committed to git, including examples with live values.
+- Sensitive configuration must come from Vault or the platform secret manager, not inline literals in `application.yml`, manifests or scripts.
+- Use modern, maintained cryptographic libraries only. Do not invent custom crypto.
+- Passwords must be hashed with a dedicated password hashing algorithm; never with general-purpose hashing alone.
+- Random values for tokens, keys or passwords must come from cryptographically secure sources.
+- Logs, traces and reports must mask secrets, tokens, email addresses and target details unless there is a documented operational reason not to.
+- Reports must include only the minimum evidence needed to prove a finding.
+
+---
+
+## Dependencies, build and supply chain
+
+- Every new dependency needs a maintained source, a compatible license and an explicit reason to exist.
+- Production dependencies, container images and scanner tools must be pinned to an auditable version; do not use `latest`.
+- Java and JS dependency updates must be reviewed for known CVEs before merge.
+- Commit lockfiles for package-managed workspaces so installations are reproducible.
+- Declare the workspace package manager explicitly when the ecosystem supports it.
+- Generated backup artifacts such as `*.bak`, `*.orig` and ad-hoc copies must not be committed.
+- CI must fail on `CRITICAL` vulnerabilities and should fail on `HIGH` unless there is an approved exception.
+
+---
+
+## Containers, Kubernetes, cloud and deployment
+
+- Containers must run as non-root unless there is a documented exception approved by security.
+- Use read-only filesystems, minimal base images and multi-stage builds whenever possible.
+- Do not inject secrets as plain environment variables when mounted secrets or runtime retrieval is available.
+- Resource requests and limits are mandatory for scan workloads and long-running services.
+- Network policies and security groups must follow least privilege; avoid `0.0.0.0/0` except where externally exposed ingress is explicitly required.
+- Storage and databases must encrypt data at rest and avoid public exposure by default.
+- Deployment plans must include rollback, smoke validation and security regression checks.
+
+---
+
+## Logging, observability and incident response
+
+- Log security-relevant events with enough context to investigate without exposing secrets.
+- Authentication failures, denylist events, permission denials, scan target rejections and cross-tenant access attempts must be observable.
+- Any suspected cross-tenant exposure, auth bypass, secret leak or scanner escape is an immediate incident.
+- Compromised tokens must be revoked quickly and incident timelines must be documented.
+- High-severity incidents require a post-mortem with root cause and preventive action items.
+
+---
+
+## Mandatory security review checklist
+
+Every security-sensitive change must pass this checklist:
+
+- [ ] No secrets, credentials or private data appear in the diff.
+- [ ] New or changed endpoints have explicit authn and authz behavior.
+- [ ] Tenant isolation is preserved in sync and async paths.
+- [ ] Inputs are validated and never reach dangerous sinks unsafely.
+- [ ] Scanner changes cannot reach internal VirtualRift infrastructure.
+- [ ] Error handling and reporting do not leak sensitive implementation details.
+- [ ] Dependencies, images and tooling were checked for CVEs and version drift.
+- [ ] Tests cover the security behavior introduced or modified by the change.
+
+---
+
+## Automatic blockers
+
+Stop and escalate immediately if you find any of the following:
+
+- committed secrets or live credentials
+- unauthenticated access to tenant or report data
+- cross-tenant read or write paths
+- a scanner path that can reach internal infrastructure or cloud metadata
+- unsafe command execution with user input
+- a `CRITICAL` dependency or image vulnerability in active use

@@ -64,5 +64,5 @@ temp/
 *.swo
 *~
 
-# TODO / improvements documentation
-TODO/
+# Local repair plan (optional; remove from ignore if you want it versioned)
+PLANO_REPARO_COMPLETO.md
