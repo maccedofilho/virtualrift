@@ -1,18 +1,31 @@
 # Add Scanner Command
 
-Invoke this command with `/project:add-scanner`.
+Invoke with `/project:add-scanner`.
 
-Triggers the `skills/new-scanner/SKILL.md` workflow to create a new scan engine from scratch.
+Use this command to create or extend scanner capability through the workflow in `skills/new-scanner/SKILL.md`.
 
-## What happens
-1. Collects the six required inputs: name, target type, vulnerability category, detection strategy, expected duration and known false positive scenarios
-2. Validates the scope against existing scanner modules
-3. Generates the full module structure under `backend/virtualrift-{name}-scanner/`
-4. Generates detection rules, Kafka integration, Dockerfile, `application.yml` and test skeletons
-5. Registers the new scanner in the parent `pom.xml` and the orchestrator
-6. Runs the validation checklist from the skill before declaring the scanner ready
+## What this command must do
 
-## Rules
-- Follow `agents/scanner-builder.md` throughout the entire execution
-- Never skip the isolation step — every scanner must run as non-root with a read-only filesystem
-- Never proceed without a known vulnerable target identified for integration testing
+1. collect the required inputs for scope, target type, strategy and false-positive profile
+2. confirm the scanner does not duplicate an existing module or rule set
+3. validate safety constraints before code generation
+4. generate only the files justified by the chosen design
+5. require tests, target validation and isolation before calling the scanner ready
+
+## Safety gates
+
+- Follow `agents/scanner-builder.md` throughout the workflow.
+- Follow `.claude/rules/security.md` and `.claude/rules/testing.md`.
+- Never accept raw tenant-controlled command flags.
+- Never skip internal-target blocking or authorization checks.
+- Never finish without a vulnerable-case test and a clean-case test strategy.
+
+## Output expectations
+
+The final result must state:
+
+- which files were created or updated
+- how target validation is enforced
+- how execution is isolated
+- what tests were added
+- what still remains for production readiness, if anything

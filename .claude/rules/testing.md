@@ -1,107 +1,115 @@
 # Testing
 
-All VirtualRift services must maintain high test quality. Tests are not optional — untested code is not considered done.
+Tests are part of the product. Placeholder tests, empty suites and fake `test` scripts are treated as defects, not temporary shortcuts.
 
 ---
 
-## Coverage Requirements
+## Core principles
 
-- Minimum 80% line coverage on all backend service classes
-- Minimum 70% line coverage on all frontend packages under `packages/`
-- Coverage is enforced on every pull request — builds fail below the threshold
-- Controllers, DTOs and configuration classes are excluded from coverage requirements
-- Coverage reports are generated automatically via JaCoCo (Java) and Vitest (TypeScript)
-
----
-
-## Java Testing
-
-### Structure
-- Unit tests live in `src/test/java/unit/`
-- Integration tests live in `src/test/java/integration/`
-- Test class names must mirror the class under test: `ScanService` → `ScanServiceTest`
-- Each test method must follow the pattern: `methodName_scenario_expectedResult`
-```java
-@Test
-void triggerScan_whenTenantQuotaExceeded_throwsTenantQuotaExceededException() {}
-
-@Test
-void triggerScan_whenValidRequest_publishesScanStartedEvent() {}
-```
-
-### Unit Tests
-- Use JUnit 5 and Mockito — no other testing frameworks
-- Mock all external dependencies — no real database, no real HTTP calls, no real Kafka
-- One assertion focus per test — test one behavior at a time
-- Never use `Thread.sleep()` in tests — use `Awaitility` for async assertions
-- Test the service layer thoroughly — controllers and repositories get lighter coverage
-
-### Integration Tests
-- Use `@SpringBootTest` with `@Testcontainers` for real database and Kafka instances
-- Each integration test must clean up its data after execution — use `@Transactional` or explicit cleanup
-- Integration tests must not depend on execution order
-- Use `WireMock` for mocking external HTTP services
-- Integration tests are slower — keep them focused on critical paths only
-
-### Scan Engine Tests
-- Every scanner must include at least one test against a known vulnerable target
-- Use `DVWA` (Damn Vulnerable Web Application) or `Juice Shop` as controlled targets in tests
-- Scanner tests must assert both detection (finds known vulnerabilities) and precision (no false positives on clean targets)
-- Network scanner tests must run in an isolated Docker network
+- If code contains business logic, auth rules, validation, orchestration or scan logic, it needs automated tests.
+- A test command must run real tests. `echo "No tests configured"` is not an acceptable steady state for active modules.
+- Prefer a small number of trustworthy tests over large brittle suites.
+- New behavior must come with tests in the same change unless the module is explicitly documented as a placeholder.
+- Missing tests on security-sensitive code are review blockers.
 
 ---
 
-## React + TypeScript Testing
+## Repository-aligned conventions
 
-### Structure
-- Test files live alongside the component: `ScanResultCard.tsx` → `ScanResultCard.test.tsx`
-- Hook tests live in `__tests__/` inside the hook's folder
-- Use Vitest as the test runner and React Testing Library for component tests
+### Backend
 
-### Component Tests
-- Test behavior, not implementation — never assert on internal state or private methods
-- Always query elements by accessible roles: `getByRole`, `getByLabelText` — avoid `getByTestId`
-- Every component with user interaction must have at least one test covering that interaction
-- Never snapshot test entire pages — snapshots are only acceptable for small, stable UI components
-```typescript
-it('should display error message when scan fails', async () => {
-  render(<ScanResultCard status="FAILED" errorMessage="Target unreachable" />)
-  expect(screen.getByRole('alert')).toHaveTextContent('Target unreachable')
-})
-```
+- Use JUnit 5 and Mockito by default.
+- Mirror the production package under `src/test/java/com/virtualrift/...` unless there is a strong reason not to.
+- Prefer `@Nested` and `@DisplayName` for readability when a class has multiple behaviors.
+- Test method names should follow `method_scenario_expectedResult`.
+- Keep helper builders and fixtures inside the test package or dedicated test utilities.
 
-### Hook Tests
-- Use `renderHook` from React Testing Library to test custom hooks in isolation
-- Mock all API calls using `msw` (Mock Service Worker) — never mock `fetch` or `axios` directly
-- Test loading, success and error states for every hook that fetches data
+### Frontend
+
+- Use Vitest for unit and package tests.
+- Use React Testing Library for component behavior.
+- Use `msw` for network mocking instead of stubbing `fetch` ad hoc.
+- Place component tests next to the component or under a nearby `__tests__/` folder.
+- Shared packages under `frontend/packages/` must expose real `test` scripts once they contain source code.
 
 ---
 
-## What Must Always Be Tested
+## Hardening rules
 
-Regardless of coverage thresholds, these scenarios are always mandatory:
-
-- Every authentication and authorization rule
-- Every tenant isolation boundary — assert that tenant A cannot access tenant B's data
-- Every scan engine's detection capability against a known vulnerable target
-- Every error response format — assert RFC 7807 compliance
-- Every rate limiting rule — assert `429` is returned when the limit is exceeded
-- Every Kafka event — assert the correct event is published with the correct payload
-
----
-
-## What Should Never Be Tested
-
-- Framework internals (Spring Boot auto-configuration, JPA internals)
-- Trivial getters and setters generated by Lombok or records
-- Third-party library behavior
-- Database migrations directly — test the resulting schema behavior instead
+- Cover both happy path and negative path for each critical behavior.
+- Assert observable behavior and side effects, not implementation trivia.
+- Prefer explicit exception types, HTTP status codes, event payloads and state transitions over vague `assertNotNull(...)` only.
+- Use `verify(...)` for important side effects such as denylist writes, quota checks, event publication and notification dispatch.
+- Avoid `Thread.sleep()`; use deterministic async coordination.
+- Avoid Mockito leniency by default. If `lenient()` or `Strictness.LENIENT` is required, document why in the test.
+- Do not leave empty test files, TODO-only tests or `expect(true).toBe(false)` placeholders in the repository.
 
 ---
 
-## Pull Request Rules
+## What must always be tested
 
-- No pull request may be merged with failing tests
-- No pull request may reduce the overall coverage below the minimum threshold
-- Flaky tests must be fixed or removed immediately — a flaky test is worse than no test
-- Tests added in a PR must cover the new code introduced in that same PR
+Regardless of coverage tooling, these scenarios are mandatory:
+
+- authentication, authorization and token lifecycle rules
+- tenant isolation boundaries and cross-tenant rejection paths
+- scan target validation, especially internal network and metadata blocking
+- rate limiting behavior, including `429` and `Retry-After`
+- RFC 7807 error formatting for public APIs
+- Kafka or async event publication for orchestrated flows
+- scanner detection and false-positive resistance
+- report and evidence masking when sensitive output is involved
+
+---
+
+## Recommended test mix by module type
+
+### Services and domain logic
+
+- Unit tests for validation, branching logic and edge cases
+- Focused integration tests where persistence, Redis, Kafka or HTTP contracts matter
+
+### Gateway and security boundaries
+
+- Unit tests for filters, token parsing and deny/allow decisions
+- Integration tests for auth chains, rate limiting and error shaping where practical
+
+### Scanners
+
+- Rule-level tests for vulnerable and clean inputs
+- Regression tests for known payloads and precision cases
+- Integration tests against controlled targets where the cost is justified
+- Explicit tests that internal targets are rejected before any outbound action
+
+### Frontend packages
+
+- API client tests for auth headers, retries, RFC 7807 parsing and error mapping
+- Shared types or helpers tested as real runtime helpers when logic exists
+- Component tests only when the module contains actual UI behavior
+
+---
+
+## Integration test guidance
+
+- Use `@SpringBootTest` only for boundaries that need the framework wiring.
+- Use Testcontainers for database, Redis, Kafka or service dependencies when contract fidelity matters.
+- Use WireMock or `msw` for external HTTP systems.
+- Keep integration tests focused on one contract or flow each.
+- Integration tests must clean up after themselves and must not depend on order.
+
+---
+
+## What not to spend time testing
+
+- framework internals
+- Lombok-generated accessors or trivial records
+- third-party library behavior already guaranteed upstream
+- static configuration classes with no conditional logic
+
+---
+
+## Pull request gates
+
+- No pull request may merge with failing or placeholder tests.
+- New code in active modules must be covered by tests appropriate to its risk.
+- If an active module has no real test runner configured, adding one is part of the work.
+- Coverage thresholds are useful only when the instrumentation is real; do not claim enforced coverage until CI actually enforces it.

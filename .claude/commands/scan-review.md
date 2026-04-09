@@ -1,86 +1,76 @@
 # Scan Review Command
 
-Invoke this command with `/project:scan-review`.
+Invoke with `/project:scan-review`.
 
-Reviews a completed scan result and produces a prioritized remediation plan for the tenant.
-
-## What happens
-1. Asks for the scan ID or the raw scan result JSON
-2. Identifies the scan type: WEB, API, NETWORK or SAST
-3. Deduplicates and groups findings by category and severity
-4. Produces a prioritized remediation plan
-5. Generates a summary suitable for a non-technical stakeholder
+Review a completed scan result and turn it into an actionable remediation plan without losing accuracy, tenant context or evidence discipline.
 
 ## Inputs
-Before starting, collect:
-- **Scan ID or result** — the completed scan output to review
-- **Audience** — `technical` (developers) or `executive` (stakeholders)
-- **Context** — is this a first scan or a re-scan after remediation?
 
-## Review Steps
+Collect:
 
-### Step 1 — Triage findings
-Group all findings by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`.
-Deduplicate findings that share the same root cause — report them as one finding with multiple affected locations.
+- scan ID or raw result payload
+- scan type: `WEB`, `API`, `NETWORK`, `SAST` or mixed
+- audience: `technical` or `executive`
+- whether this is a first scan or a re-scan
+- any known accepted risks or compensating controls
 
-### Step 2 — Prioritize by exploitability
-Within each severity level, rank findings by:
-1. Is it remotely exploitable without authentication?
-2. Does it affect tenant data isolation?
-3. Does it expose credentials or secrets?
-4. Is a public exploit available for this vulnerability?
+## Workflow
 
-### Step 3 — Generate remediation plan
-For each finding produce:
-- **What** — what the vulnerability is and where it was found
-- **Why it matters** — real-world impact if exploited
-- **How to fix** — specific, actionable remediation steps
-- **Effort estimate** — `LOW` (< 1 hour), `MEDIUM` (1 day), `HIGH` (> 1 day)
-- **Verification** — how to confirm the fix was applied correctly
+### 1. Normalize and triage
 
-### Step 4 — Produce the output
+- group by severity and root cause
+- deduplicate repeated manifestations of the same issue
+- note confidence if the scanner could produce false positives
 
-**Technical output format:**
-```
-## Scan Review — {scan_id}
-Target: {target}
-Date: {date}
-Total findings: {count} (CRITICAL: x, HIGH: x, MEDIUM: x, LOW: x)
+### 2. Prioritize by exploitability
 
-## Immediate Action Required (CRITICAL + HIGH)
-### 1. {Finding title}
-Location: ...
-Impact: ...
-Fix: ...
-Verify: ...
+Within a severity bucket, prioritize:
 
-## Should Fix Soon (MEDIUM)
-...
+1. unauthenticated remote exposure
+2. cross-tenant or credential impact
+3. public exploit availability
+4. blast radius and ease of abuse
 
-## Low Priority (LOW + INFO)
-...
+### 3. Produce remediation guidance
 
-## Re-scan Recommendation
-Run `/project:scan-review` again after fixes are applied to verify remediation.
-```
+For each important finding include:
 
-**Executive output format:**
-```
-## Security Scan Summary — {date}
-Overall risk level: CRITICAL / HIGH / MEDIUM / LOW
+- what it is
+- where it was found
+- why it matters in real terms
+- the safest likely fix
+- how to verify the fix
+- whether a re-scan alone is enough or a code/config review is also required
 
-{2-3 sentence plain English summary of the risk}
+### 4. Handle sensitivity correctly
 
-## Top 3 Issues to Fix
-1. ...
-2. ...
-3. ...
+- mask credentials, tokens and excessive source snippets
+- keep only the minimum evidence needed to support the conclusion
+- call out when a finding could indicate a platform issue rather than only a tenant issue
 
-## Recommended Next Steps
-...
-```
+## Output modes
+
+### Technical
+
+Include:
+
+- scope and target
+- counts by severity
+- immediate actions
+- grouped remediation plan
+- verification and re-scan guidance
+
+### Executive
+
+Include:
+
+- overall risk level
+- top issues in plain language
+- likely business impact
+- recommended next steps and owner groups
 
 ## Rules
-- Never minimize a `CRITICAL` finding — always recommend immediate action
-- Always provide a verification step — remediation without verification is incomplete
-- When reviewing a re-scan, explicitly compare against the previous scan and confirm which findings were resolved
+
+- Never downplay `CRITICAL` or `HIGH` findings.
+- Always include a verification step.
+- Re-scan reviews must explicitly say what improved, what regressed and what remains unresolved.

@@ -1,145 +1,120 @@
 # Code Style
 
-All VirtualRift contributors must follow these standards. Consistency across the codebase is non-negotiable.
+Consistency is important, but so is correctness. These standards favor readable, testable and security-aware code.
+
+---
+
+## General rules
+
+- Prefer clarity over cleverness.
+- Use one source of truth for versions and shared configuration where the toolchain allows it.
+- Do not commit backup files such as `*.bak`, `*.tmp`, `*.orig` or copied source snapshots.
+- If a module is only a placeholder, document it as such instead of pretending it is production-ready.
+- If a script says `test` or `lint`, it must execute the real tool, not a placeholder echo.
 
 ---
 
 ## Java
 
 ### Naming
-- Classes: `PascalCase` — `ScanOrchestrator`, `VulnerabilityReport`
-- Methods and variables: `camelCase` — `findByTenantId()`, `scanResult`
-- Constants: `UPPER_SNAKE_CASE` — `MAX_SCAN_TIMEOUT`
-- Packages: lowercase, no underscores — `com.virtualrift.scanner.web`
-- No abbreviations — `vulnerability` not `vuln`, `scanner` not `scnr`
+
+- Classes and records: `PascalCase`
+- Methods, fields and local variables: `camelCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Packages: lowercase and stable, following the module naming already used in the repository
+- Avoid abbreviations unless they are well-known domain terms such as `JWT`, `URL` or `API`
 
 ### Structure
-- One class per file, always
-- Class member order: constants → fields → constructors → public methods → private methods
-- Maximum 1 level of nesting inside lambdas and streams — extract to a named method if deeper
-- Services must never call other services directly — communicate via events (Kafka) or the orchestrator
-- Never use `@Autowired` on fields — always constructor injection
 
-### Best Practices
-- All public methods in service classes must have a corresponding unit test
-- Never catch `Exception` or `Throwable` — catch specific exceptions only
-- Never swallow exceptions with an empty catch block
-- Use `Optional` instead of returning `null`
-- Prefer records for DTOs: `public record ScanResultDto(UUID id, String status) {}`
-- No business logic in controllers — controllers only validate input and delegate to services
+- One top-level class or record per file
+- Prefer constructor injection; do not use field injection
+- Keep member order predictable: constants, fields, constructors, public methods, private helpers
+- Keep orchestration logic out of controllers
+- Cross-module communication should be explicit through APIs, events or orchestrator flows, not hidden service coupling
 
----
+### Defensive coding
 
-## React + TypeScript
-
-### Components
-- One component per file, filename matches the component name: `ScanResultCard.tsx`
-- Use functional components only — no class components
-- Props must always be typed with an explicit interface: `interface ScanResultCardProps {}`
-- Never use `any` — if the type is unknown, use `unknown` and narrow it
-- Component files live in `src/components/` grouped by feature, not by type
-
-### Hooks
-- Custom hooks must start with `use`: `useScanResults`, `useTenantContext`
-- One responsibility per hook — if it's doing too much, split it
-- Never fetch data directly inside components — always use a custom hook or React Query
-
-### Types
-- Shared types live in `packages/virtualrift-types`
-- Prefer `type` over `interface` for unions and intersections
-- Enums must be string enums: `enum ScanStatus { PENDING = 'PENDING', RUNNING = 'RUNNING' }`
-- Never use non-null assertion (`!`) — handle the nullability explicitly
+- Catch specific exceptions only; do not catch `Exception` or `Throwable` unless you immediately wrap and preserve context at a boundary
+- Never swallow exceptions silently
+- Prefer value objects, records and explicit domain types over loose `Map<String, Object>` structures
+- Prefer `Optional` over returning `null` from repository-like APIs when it improves clarity
+- Validate external input before it reaches domain logic or dangerous sinks
 
 ---
 
-## Formatting
+## React and TypeScript
 
-- Indentation: 2 spaces for TypeScript/React, 4 spaces for Java
-- Maximum line length: 120 characters (Java), 100 characters (TypeScript)
-- Always use trailing commas in TypeScript multiline structures
-- No trailing whitespace, no blank lines at end of file
-- Java: opening brace on the same line, never on a new line
-- Formatting is enforced automatically — Java via Checkstyle, TypeScript via ESLint + Prettier
+### Components and hooks
+
+- Use functional components only
+- Type props explicitly
+- Avoid `any`; use `unknown` and narrow
+- Do not fetch directly inside presentation components when a shared API client or hook is appropriate
+- Keep hooks focused on one responsibility
+
+### Shared boundaries
+
+- Shared runtime types belong in `packages/virtualrift-types`
+- Shared API access belongs in `packages/virtualrift-api-client`
+- Do not import from one app directly into another app
+- Do not store auth tokens in browser storage as a convenience shortcut
 
 ---
 
-## Imports and Dependencies
+## Formatting and imports
 
-### Java
-- No wildcard imports (`import com.virtualrift.*` is forbidden)
-- Import order: Java standard library → third-party → internal (`com.virtualrift`)
-- Never add a dependency without discussing with the team first
-- Each module must declare only the dependencies it directly uses — no transitive dependency abuse
+- Use 4 spaces in Java and 2 spaces in TypeScript/TSX
+- Keep lines readable; break long expressions instead of compressing them
+- No wildcard imports in Java
+- Group imports consistently: standard library, third-party, internal
+- Do not leave trailing whitespace or malformed formatting for later
 
-### TypeScript
-- Absolute imports only using path aliases: `@virtualrift/ui`, `@/components/ScanCard`
-- No relative imports that go more than 1 level up: `../../utils` is forbidden
-- Never import from another app directly — use the shared packages only
+---
+
+## Tests and fixtures
+
+- Test code should be readable production code, not a dumping ground
+- Prefer explicit fixtures over deeply nested mock setup
+- Avoid Mockito leniency unless the test documents why strict stubbing is not practical
+- Keep helper methods close to the tests that use them
+- Empty test files and failing placeholder assertions are style violations as well as quality defects
 
 ---
 
 ## Documentation
 
-### Javadoc
-- Required on all public classes and public methods in `service/` and `domain/` layers
-- Must describe **what** and **why**, not **how**
-- Include `@param`, `@return` and `@throws` when applicable
-- Controllers do not need Javadoc — they are documented via OpenAPI annotations
-```java
-/**
- * Triggers a new vulnerability scan for the given target.
- * Publishes a scan.started event to Kafka after persisting the scan record.
- *
- * @param request scan configuration including target URL and scan type
- * @param tenantId extracted from the JWT, used for isolation
- * @return the created scan with its initial status
- * @throws TenantQuotaExceededException if the tenant has reached their scan limit
- */
-public ScanResponse triggerScan(ScanRequest request, UUID tenantId) {}
-```
+- Add Javadoc or JSDoc when the public contract is not obvious from the name and types
+- Document invariants, side effects and security-relevant assumptions
+- Keep comments focused on intent and constraints, not on narrating syntax
+- If README, commands or skills become inaccurate after a change, update them in the same workstream
 
-### JSDoc
-- Required on all exported functions and hooks in shared packages
-- Components do not need JSDoc if the props interface is well named and typed
-- Keep it short — one line is enough if the name is self-explanatory
-```typescript
-/**
- * Fetches paginated scan results for the current tenant.
- * Automatically re-fetches when a scan.completed event is received.
- */
-export function useScanResults(filters: ScanFilters): ScanResultsQuery {}
-```
+---
+
+## Dependencies and manifests
+
+- Prefer centrally managed versions for shared Java dependencies
+- Use lockfiles for JS workspaces and declare the package manager explicitly
+- Open version ranges require justification; reproducibility beats convenience
+- Add only the dependencies a module directly uses
 
 ---
 
 ## Commits
 
-VirtualRift uses Conventional Commits. Every commit message must follow this format:
-```
+VirtualRift uses Conventional Commits:
+
+```text
 <type>(scope): short description
-
-optional body explaining the why
 ```
 
-### Types
-| Type | When to use |
-|---|---|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `refactor` | Code change with no feature or fix |
-| `test` | Adding or fixing tests |
-| `docs` | Documentation only |
-| `chore` | Build, deps, config changes |
-| `security` | Security-related fix or hardening |
+Preferred types:
 
-### Examples
-```
-feat(web-scanner): add XSS detection via DOM-based analysis
-fix(auth): prevent token reuse after logout
-security(gateway): enforce rate limiting per tenant on scan endpoints
-refactor(orchestrator): extract scan partitioner into dedicated class
-```
+- `feat`
+- `fix`
+- `refactor`
+- `test`
+- `docs`
+- `chore`
+- `security`
 
-- Subject line: max 72 characters, imperative mood, no period at the end
-- Breaking changes must include `BREAKING CHANGE:` in the commit body
-- Reference issues when applicable: `closes #142`
+Commit messages should explain the reason for the change, not just list touched files.

@@ -24,6 +24,17 @@ Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
 - Cohesive with a clear aesthetic point-of-view
 - Meticulously refined in every detail
 
+## VirtualRift Platform Constraints
+
+When applying this skill inside VirtualRift, also respect these non-negotiable constraints:
+
+- Route API access through the shared client package when one exists; do not scatter raw auth headers through UI code.
+- Do not persist bearer tokens or other secrets in browser storage as a design shortcut.
+- Do not render untrusted HTML without sanitization.
+- Error states must be user-friendly but must not leak internal API or stack details.
+- Prefer shared types from the workspace packages instead of redefining contract shapes ad hoc.
+- If the repository does not yet contain the supporting UI infrastructure, produce the best realistic increment instead of implying the app is fully built.
+
 ## Frontend Aesthetics Guidelines
 
 Focus on:
