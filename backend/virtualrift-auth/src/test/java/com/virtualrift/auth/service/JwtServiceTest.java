@@ -2,59 +2,37 @@ package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.model.Token;
 import com.virtualrift.auth.model.TokenClaims;
-import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.exception.ExpiredTokenException;
+import com.virtualrift.auth.exception.InvalidTokenException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 @DisplayName("JwtService Tests")
 class JwtServiceTest {
-
-    private static final String TEST_PRIVATE_KEY = """
-            MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC+VxTJsHk4kRlPL
-            FLpMYnxPZjX3jLwYpNhCVLgxEUgMSbCqBHpY5EYPVXS0FZvvLxk0MqL1ZDNCLxFk5
-            QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2
-            L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0F
-            wIDAQABAoIBAFGmRk5qYnVxTJsHk4kRlPLFLpMYnxPZjX3jLwYpNhCVLgxEUgMSbCq
-            BHpY5EYPVXS0FZvvLxk0MqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj
-            0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJ
-            JTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX
-            4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1Z
-            DNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5
-            kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0w
-            vJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxF
-            k5QvwJJTj0R5kHq9fNH2L5sX4e0L0wvJxLxj0FqL1ZDNCLxFk5QvwJJTj0R5kHq9fN
-            """;
-
-    private static final String TEST_PUBLIC_KEY = """
-            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvlcUybB5OJEZTyxSaTJ
-            8T2Y194y8GKTQlS4MRFIDEkwqgR6WORGD1V0tBWb7y8ZNDKi9WQzQisRZOUL8CSU
-            49EeZB6vXzR9i+bF+HtC9MLycS8Y9Bai9WQzQisRZOUL8CSU49EeZB6vXzR9i+bF
-            +HtC9MLycS8Y9Bai9WQzQisRZOUL8CSU49EeZB6vXzR9i+bF+HtC9MLycS8Y9Bai9
-            WQzQisRZOUL8CSU49EeZB6vXzR9i+bF+HtC9MLycS8Y9Bai9WQzQisRZOUL8CSU4
-            9EeZB6vXzR9i+bF+HtC9MLycS8Y9Bai9WQzQisRZOUL8CSU49EeZB6vXzR9i+bF+
-            HtC9MLycS8Y9Bai9WQzQisRZOUL8CSU49EeZB6vXzR9i+bF+HtC9MLycS8Y9BwID
-            AQAB
-            """;
 
     private JwtService jwtService;
 
     @BeforeEach
-    void setUp() {
-        jwtService = new JwtService(TEST_PRIVATE_KEY, TEST_PUBLIC_KEY);
+    void setUp() throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+
+        String privateKeyPem = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+        String publicKeyPem = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+
+        jwtService = new JwtService(privateKeyPem, publicKeyPem);
     }
 
     @Nested
