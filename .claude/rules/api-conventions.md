@@ -1,76 +1,73 @@
 # API Conventions
 
-All VirtualRift services must follow these conventions to ensure consistency across the platform.
+All VirtualRift APIs must be predictable, tenant-safe and explicit about failures.
 
 ---
 
-## Versioning
+## Versioning and lifecycle
 
-- All endpoints must be prefixed with the API version: `/api/v1/`, `/api/v2/`
-- A new version must be created when a breaking change is introduced
-- Old versions must remain functional for at least 6 months after deprecation
-- Deprecation must be communicated via the `Deprecation` and `Sunset` response headers
-
----
-
-## Authentication
-
-- All endpoints (except `/health` and `/auth/token`) require a Bearer token
-- Token must be sent in the `Authorization` header: `Authorization: Bearer <token>`
-- Tokens are JWT signed with RS256 and include `tenant_id`, `user_id`, `roles` and `exp`
-- Services must never trust user-supplied `tenant_id` from the request body — always extract from the token
+- Prefix public APIs with `/api/v{n}/`.
+- Introduce a new version only for breaking contract changes.
+- Deprecated APIs must communicate that status explicitly and document the migration path.
+- Health and actuator routes are operational exceptions and must remain intentionally scoped.
 
 ---
 
-## Naming Conventions
+## Authentication and tenant scope
 
-- URLs must use **kebab-case** and **plural nouns**: `/api/v1/scan-results`, `/api/v1/vulnerability-reports`
-- No verbs in URLs — use HTTP methods to express the action
-- Nested resources are allowed up to 2 levels: `/api/v1/tenants/{tenantId}/scans`
-- Query parameters must use **camelCase**: `?pageSize=10&sortBy=createdAt`
-- Response body fields must use **camelCase**
-
-### HTTP Methods
-| Action | Method |
-|---|---|
-| List | GET |
-| Get one | GET /{id} |
-| Create | POST |
-| Full update | PUT /{id} |
-| Partial update | PATCH /{id} |
-| Delete | DELETE /{id} |
+- All non-public endpoints require a bearer token.
+- The token is carried in `Authorization: Bearer <token>`.
+- Tenant context comes from the validated token, never from request body or query string.
+- Avoid putting `tenantId` in public API paths unless the endpoint is an explicit admin capability with stronger authorization and audit requirements.
+- Public auth endpoints must still validate input aggressively and avoid leaking whether an account exists.
 
 ---
 
-## Error Format (RFC 7807)
+## Resource design
 
-All error responses must follow the Problem Details standard:
+- Prefer plural nouns and kebab-case for resource paths.
+- Action-style endpoints are acceptable only for protocol actions such as auth or export workflows where a pure resource model would be misleading.
+- Keep nesting shallow. If a route needs more than two resource levels, reconsider the design.
+- Query parameters should use camelCase and remain stable over time.
+- Response bodies should use camelCase consistently.
+
+---
+
+## Request and response rules
+
+- Use explicit request DTOs; do not bind arbitrary payloads into privileged models.
+- For create and update flows, validate every writable field and reject unknown or unsupported input where the framework allows it.
+- Mutation endpoints that may be retried by clients should support idempotency when duplicate execution is harmful.
+- Include correlation metadata such as `X-Request-Id` when tracing across services is important.
+
+---
+
+## Error format
+
+Use RFC 7807 for non-success responses:
+
 ```json
 {
   "type": "https://virtualrift.io/errors/scan-not-found",
   "title": "Scan not found",
   "status": 404,
-  "detail": "No scan found with id 3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "instance": "/api/v1/scans/3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "tenantId": "acme-corp"
+  "detail": "No scan found with the supplied identifier.",
+  "instance": "/api/v1/scans/3fa85f64-5717-4562-b3fc-2c963f66afa6"
 }
 ```
 
-- `type` must be a stable URI identifying the error category
-- `detail` must be human-readable and actionable
-- Never expose stack traces, internal paths or database errors in responses
-- Validation errors must list all invalid fields in an `errors` array
+- `type` must be stable and machine-meaningful.
+- `title` should be short and human-readable.
+- `detail` must help the caller fix the request without exposing internals.
+- Never include stack traces, SQL fragments, filesystem paths, hostnames or sensitive tenant data.
+- Validation errors should include an `errors` array with field-level issues.
 
 ---
 
-## Pagination and Filters
+## Pagination, filtering and sorting
 
-All list endpoints must support pagination via query parameters:
-```
-GET /api/v1/scans?page=0&pageSize=20&sortBy=createdAt&sortDir=desc
-```
+List endpoints should support a predictable envelope:
 
-Response envelope:
 ```json
 {
   "data": [],
@@ -83,21 +80,40 @@ Response envelope:
 }
 ```
 
-- Default `pageSize` is 20, maximum is 100
-- Filters must use query parameters: `?status=completed&severity=HIGH`
-- Date filters must use ISO 8601: `?createdAfter=2024-01-01T00:00:00Z`
+- Default `pageSize` should be conservative and capped.
+- Filters belong in query parameters.
+- Date and time filters must use ISO 8601.
+- Sorting should be explicit, stable and limited to approved fields.
 
 ---
 
-## Rate Limiting
+## Rate limiting and abuse controls
 
-All responses must include rate limit headers:
-```
+- Rate limits apply per tenant and, where needed, per action type.
+- When a limit is exceeded, return `429 Too Many Requests` with `Retry-After`.
+- Expose standard rate-limit headers when practical:
+
+```text
 X-RateLimit-Limit: 1000
 X-RateLimit-Remaining: 743
 X-RateLimit-Reset: 1714521600
 ```
 
-- Limits are applied per `tenant_id`
-- When the limit is exceeded, respond with `429 Too Many Requests` and a `Retry-After` header
-- Scan trigger endpoints (`POST /scans`) have a separate lower limit defined per plan
+- Scan-triggering endpoints should use stricter limits than read-only endpoints.
+
+---
+
+## Scan-specific API rules
+
+- Scan target input must be normalized and validated before scheduling.
+- Reject internal, metadata or disallowed network targets before any outbound work starts.
+- Do not accept raw scanner flags or raw shell arguments from API consumers.
+- Scan findings and reports returned by APIs must be tenant-scoped and masked where sensitive evidence exists.
+
+---
+
+## Frontend contract expectations
+
+- Frontend clients should consume the shared API client package instead of duplicating retry and auth behavior.
+- Public APIs should remain stable enough to support typed clients and shared contract tests.
+- Changes to auth headers, pagination envelopes, problem details or scan payloads require coordinated test updates.
