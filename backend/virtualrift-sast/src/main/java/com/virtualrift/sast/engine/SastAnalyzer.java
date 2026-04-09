@@ -16,7 +16,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class SastAnalyzer {
+
+    private static final Logger log = LoggerFactory.getLogger(SastAnalyzer.class);
 
     private enum Language {
         JAVA, PYTHON, JAVASCRIPT, TYPESCRIPT, GO, RUBY, PHP, CSHARP, RUST, CPP, UNKNOWN
@@ -167,6 +172,7 @@ public class SastAnalyzer {
             findings.addAll(scanForSecurityIssues(content, filePath.toString(), fileName, language));
 
         } catch (IOException e) {
+            log.warn("Failed to read file: {}", filePath, e);
         }
 
         return findings;
@@ -185,6 +191,7 @@ public class SastAnalyzer {
                 .forEach(p -> findings.addAll(analyzeFile(p)));
 
         } catch (IOException e) {
+            log.warn("Failed to walk directory: {}", directoryPath, e);
         }
 
         return findings;

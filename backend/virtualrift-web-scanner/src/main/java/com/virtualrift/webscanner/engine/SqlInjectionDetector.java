@@ -201,9 +201,6 @@ public class SqlInjectionDetector {
 
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
-        String baselineUrl = targetUrl + "?" + paramName + "=test";
-        long baselineTime = httpClient.measureResponseTime(baselineUrl);
-
         for (int i = 0; i < BOOLEAN_PAYLOADS.size(); i += 2) {
             String truePayload = BOOLEAN_PAYLOADS.get(i);
             String falsePayload = BOOLEAN_PAYLOADS.get(i + 1);
@@ -531,7 +528,7 @@ public class SqlInjectionDetector {
 
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
-        Optional<String> response = httpClient.sendRequestWithCookie(targetUrl, payload);
+        Optional<String> response = httpClient.sendRequestWithCookie(targetUrl, "", cookieName, payload);
 
         if (response.isPresent() && isErrorBasedSqli(response.get())) {
             findings.add(createFinding(
@@ -558,7 +555,7 @@ public class SqlInjectionDetector {
 
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
-        Optional<String> response = httpClient.sendRequestWithHeader(targetUrl, payload);
+        Optional<String> response = httpClient.sendRequestWithHeader(targetUrl, "", headerName, payload);
 
         if (response.isPresent() && isErrorBasedSqli(response.get())) {
             findings.add(createFinding(

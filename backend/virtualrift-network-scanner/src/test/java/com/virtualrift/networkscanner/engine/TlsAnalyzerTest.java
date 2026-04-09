@@ -66,7 +66,7 @@ class TlsAnalyzerTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("expired"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("expired"));
         }
 
         @Test
@@ -79,7 +79,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCertificate(TARGET_HOST, TARGET_PORT);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("not yet valid"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("not yet valid"));
         }
 
         @Test
@@ -93,7 +93,7 @@ class TlsAnalyzerTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.HIGH, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("self-signed"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("self-signed"));
         }
 
         @Test
@@ -107,7 +107,7 @@ class TlsAnalyzerTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.HIGH, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("expiring"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("expiring"));
         }
 
         @Test
@@ -159,7 +159,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeProtocols(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL && f.description().toLowerCase().contains("ssl")));
+                    f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("ssl")));
         }
 
         @Test
@@ -171,7 +171,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeProtocols(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("tls 1.0")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("tls 1.0")));
         }
 
         @Test
@@ -183,7 +183,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeProtocols(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("tls 1.1")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("tls 1.1")));
         }
     }
 
@@ -213,7 +213,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL && f.description().toLowerCase().contains("null")));
+                    f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("null")));
         }
 
         @Test
@@ -225,7 +225,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("anonymous")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("anonymous")));
         }
 
         @Test
@@ -237,7 +237,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("export")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("export")));
         }
 
         @Test
@@ -249,7 +249,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("rc4")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("rc4")));
         }
 
         @Test
@@ -261,7 +261,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.description().toLowerCase().contains("des")));
+                    f.severity() == Severity.HIGH && f.title().toLowerCase().contains("des")));
         }
 
         @Test
@@ -273,7 +273,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeCiphers(TARGET_HOST, TARGET_PORT);
 
             assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.MEDIUM && f.description().toLowerCase().contains("md5")));
+                    f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("md5")));
         }
     }
 
@@ -312,7 +312,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeKeyExchange(TARGET_HOST, TARGET_PORT);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("no forward secrecy"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("no forward secrecy"));
         }
 
         @Test
@@ -354,7 +354,7 @@ class TlsAnalyzerTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.HIGH, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("hostname mismatch"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("hostname mismatch"));
         }
 
         @Test
@@ -379,7 +379,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeHostname("evil.com", TARGET_PORT);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("wildcard"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("wildcard"));
         }
     }
 
@@ -408,7 +408,7 @@ class TlsAnalyzerTest {
 
             assertFalse(findings.isEmpty());
             assertEquals(Severity.MEDIUM, findings.get(0).severity());
-            assertTrue(findings.get(0).description().toLowerCase().contains("hsts"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("hsts"));
         }
 
         @Test
@@ -420,7 +420,7 @@ class TlsAnalyzerTest {
             List<VulnerabilityFinding> findings = analyzer.analyzeHsts(TARGET_HOST, 443);
 
             assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).description().toLowerCase().contains("max-age"));
+            assertTrue(findings.get(0).title().toLowerCase().contains("max-age"));
         }
     }
 
