@@ -12,7 +12,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class XssDetector {
+
+    private static final Logger log = LoggerFactory.getLogger(XssDetector.class);
 
     private static final Set<String> INTERNAL_PATTERNS = Set.of(
             "localhost", "127.0.0.1", "0.0.0.0", "::1",
@@ -234,7 +239,8 @@ public class XssDetector {
     private String decodePayload(String payload) {
         try {
             return java.net.URLDecoder.decode(payload, "UTF-8");
-        } catch (Exception e) {
+        } catch (java.io.UnsupportedEncodingException e) {
+            log.debug("Failed to decode payload (should not happen with UTF-8): {}", payload, e);
             return payload;
         }
     }
