@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "test": "echo \"No tests configured for @virtualrift/ui\"",
+    "test": "corepack pnpm --dir ../.. exec vitest run packages/virtualrift-ui/src/__tests__/ui.test.ts",
     "lint": "echo \"No lint configured for @virtualrift/ui\""
   }
 }

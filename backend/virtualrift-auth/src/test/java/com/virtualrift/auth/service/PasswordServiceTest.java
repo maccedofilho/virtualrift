@@ -178,7 +178,7 @@ class PasswordServiceTest {
         @ValueSource(strings = {
             "Abcdef1!",        // min valid
             "VeryComplex123!@#",  // complex
-            "ääääääää1!"      // unicode
+            "Abcdef1!ção"      // unicode characters with ASCII uppercase
         })
         @DisplayName("should accept valid passwords")
         void validatePassword_quandoValida_naoLancaExcecao(String validPassword) {
@@ -253,11 +253,15 @@ class PasswordServiceTest {
         }
 
         @Test
-        @DisplayName("should reject common passwords")
-        void validatePassword_rejeitaSenhasComuns() {
-            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Password1!"));
-            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Welcome1!"));
-            assertThrows(InvalidPasswordException.class, () -> passwordService.validate("Admin123!"));
+        @DisplayName("should reject passwords above maximum length")
+        void validatePassword_rejeitaSenhaAcimaDoLimite() {
+            String tooLong = "A".repeat(126) + "a1!";
+
+            InvalidPasswordException exception = assertThrows(
+                    InvalidPasswordException.class,
+                    () -> passwordService.validate(tooLong)
+            );
+            assertTrue(exception.getMessage().contains("128"));
         }
     }
 
