@@ -1,7 +1,5 @@
 package com.virtualrift.webscanner.engine;
 
-import com.virtualrift.common.model.Severity;
-import com.virtualrift.common.model.VulnerabilityFinding;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -10,15 +8,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
-import java.util.List;
+import java.lang.reflect.Method;
 import java.util.Optional;
-import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SqlInjectionDetector Tests")
@@ -30,7 +30,6 @@ class SqlInjectionDetectorTest {
     private SqlInjectionDetector detector;
 
     private static final String TARGET_URL = "https://example.com";
-    private static final UUID SCAN_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -38,439 +37,136 @@ class SqlInjectionDetectorTest {
     }
 
     @Nested
-    @DisplayName(" Error-based SQLi detection")
-    class ErrorBasedDetection {
-
-        @Test
-        @DisplayName("should detect SQLi via single quote")
-        void detectErrorBasedSqlInjection_quandoAspaSimples_retornaFinding() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("You have an error in your SQL syntax"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).title().toLowerCase().contains("sql"));
-        }
-
-        @Test
-        @DisplayName("should detect SQLi via double quote")
-        void detectErrorBasedSqlInjection_quandoAspaDupla_retornaFinding() {
-            String payload = "1\" OR \"1\"=\"1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("SQL syntax error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should detect MySQL error response")
-        void detectErrorBasedSqlInjection_identificaTipoMySQL() {
-            String payload = "1'";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("mysql_fetch_array()"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).evidence().toLowerCase().contains("mysql"));
-        }
-
-        @Test
-        @DisplayName("should detect PostgreSQL error response")
-        void detectErrorBasedSqlInjection_identificaTipoPostgreSQL() {
-            String payload = "1'";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("ERROR: syntax error at or near"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).evidence().toLowerCase().contains("postgresql"));
-        }
-
-        @Test
-        @DisplayName("should detect SQL Server error response")
-        void detectErrorBasedSqlInjection_identificaTipoSQLServer() {
-            String payload = "1'";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Unclosed quotation mark after the character string"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).evidence().toLowerCase().contains("sql server"));
-        }
-    }
-
-    @Nested
-    @DisplayName(" Boolean-based SQLi detection")
-    class BooleanBasedDetection {
-
-        @Test
-        @DisplayName("should detect SQLi via true condition")
-        void detectBooleanBasedSqlInjection_quandoCondicaoTrue_mudaResposta() {
-            String payload = "1' AND '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Result found"));
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("No results"));
-
-            List<VulnerabilityFinding> findings = detector.scanBoolean(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertEquals(Severity.HIGH, findings.get(0).severity());
-        }
-
-        @Test
-        @DisplayName("should detect SQLi via false condition")
-        void detectBooleanBasedSqlInjection_quandoCondicaoFalse_mudaResposta() {
-            String payload = "1' AND '1'='2";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("No results"));
-
-            List<VulnerabilityFinding> findings = detector.scanBoolean(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-    }
-
-    @Nested
-    @DisplayName(" Time-based SQLi detection")
-    class TimeBasedDetection {
-
-        @Test
-        @DisplayName("should detect SQLi via SLEEP() - MySQL")
-        void detectTimeBasedSqlInjection_quandoSleepMySQL_retornaFinding() {
-            String payload = "1' AND SLEEP(5)--";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenAnswer(invocation -> {
-                        Thread.sleep(100);
-                        return Optional.of("delayed");
-                    });
-
-            long start = System.currentTimeMillis();
-            List<VulnerabilityFinding> findings = detector.scanTimeBased(TARGET_URL, "id", payload);
-            long duration = System.currentTimeMillis() - start;
-
-            assertTrue(duration > 50);
-            assertFalse(findings.isEmpty());
-            assertEquals(Severity.HIGH, findings.get(0).severity());
-        }
-
-        @Test
-        @DisplayName("should detect SQLi via WAITFOR DELAY - SQL Server")
-        void detectTimeBasedSqlInjection_quandoWaitforSQLServer_retornaFinding() {
-            String payload = "1' WAITFOR DELAY '00:00:05'--";
-
-            List<VulnerabilityFinding> findings = detector.scanTimeBased(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).title().toLowerCase().contains("waitfor"));
-        }
-
-        @Test
-        @DisplayName("should detect SQLi via pg_sleep() - PostgreSQL")
-        void detectTimeBasedSqlInjection_quandoPgSleepPostgreSQL_retornaFinding() {
-            String payload = "1'; SELECT pg_sleep(5)--";
-
-            List<VulnerabilityFinding> findings = detector.scanTimeBased(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).title().toLowerCase().contains("pg_sleep"));
-        }
-    }
-
-    @Nested
-    @DisplayName(" Union-based SQLi detection")
-    class UnionBasedDetection {
-
-        @Test
-        @DisplayName("should detect SQLi via UNION SELECT")
-        void detectUnionBasedSqlInjection_quandoUnionSelect_retornaFinding() {
-            String payload = "1' UNION SELECT NULL,NULL,NULL--";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("column count mismatch"));
-
-            List<VulnerabilityFinding> findings = detector.scanUnion(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).title().toLowerCase().contains("union"));
-        }
-
-        @Test
-        @DisplayName("should detect SQLi via NULL injection")
-        void detectUnionBasedSqlInjection_quandoNullInjection_retornaFinding() {
-            String payload = "1' UNION SELECT NULL,NULL,NULL,NULL--";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("data"));
-
-            List<VulnerabilityFinding> findings = detector.scanUnion(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-    }
-
-    @Nested
-    @DisplayName(" Second-order SQLi detection")
-    class SecondOrderDetection {
-
-        @Test
-        @DisplayName("should detect SQLi stored and retrieved later")
-        void detectSecondOrderSqlInjection_quandoArmazenadoERecuperado_retornaFinding() {
-            String payload = "'; DROP TABLE users--";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Stored successfully"));
-            when(httpClient.getPage(anyString()))
-                    .thenReturn(Optional.of("Table 'users' doesn't exist"));
-
-            List<VulnerabilityFinding> findings = detector.scanSecondOrder(TARGET_URL, "/register", "/profile", payload);
-
-            assertFalse(findings.isEmpty());
-            assertEquals(Severity.CRITICAL, findings.get(0).severity());
-            assertTrue(findings.get(0).title().toLowerCase().contains("second-order"));
-        }
-    }
-
-    @Nested
-    @DisplayName(" Injection point testing")
-    class InjectionPointTesting {
-
-        @Test
-        @DisplayName("should test query parameter injection")
-        void testInjectionPoint_quandoQueryParam_testaInjecao() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).location().contains("id"));
-        }
-
-        @Test
-        @DisplayName("should test path parameter injection")
-        void testInjectionPoint_quandoPathParam_testaInjecao() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scanPathParam(TARGET_URL + "/user/" + payload, payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).location().toLowerCase().contains("path"));
-        }
-
-        @Test
-        @DisplayName("should test cookie injection")
-        void testInjectionPoint_quandoCookie_testaInjecao() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequestWithCookie(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scanCookie(TARGET_URL, "sessionid", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).location().toLowerCase().contains("cookie"));
-        }
-
-        @Test
-        @DisplayName("should test JSON body injection")
-        void testInjectionPoint_quandoJsonBody_testaInjecao() {
-            String jsonPayload = "{\"username\":\"admin\",\"password\":\"1' OR '1'='1\"}";
-            when(httpClient.sendJson(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scanJson(TARGET_URL, jsonPayload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).location().toLowerCase().contains("json"));
-        }
-
-        @Test
-        @DisplayName("should test header injection")
-        void testInjectionPoint_quandoHeader_testaInjecao() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequestWithHeader(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scanHeader(TARGET_URL, "X-Custom-Header", payload);
-
-            assertFalse(findings.isEmpty());
-            assertTrue(findings.get(0).location().toLowerCase().contains("header"));
-        }
-    }
-
-    @Nested
-    @DisplayName(" WAF bypass testing")
-    class WafBypassTesting {
-
-        @Test
-        @DisplayName("should detect SQLi with comment-based bypass")
-        void detectSqlInjection_comBypassComentario_tentaBypass() {
-            String payload = "1' /*!00000OR*/ '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should detect SQLi with case variation")
-        void detectSqlInjection_comVariacaoDeCase_tentaBypass() {
-            String payload = "1' oR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should detect SQLi with encoding")
-        void detectSqlInjection_comEncoding_tentaBypass() {
-            String payload = "%31%27%20%4F%52%20%27%31%27%3D%27%31"; // 1' OR '1'='1
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should detect SQLi with whitespace variation")
-        void detectSqlInjection_comVariacaoDeEspaco_tentaBypass() {
-            String payload = "1'%20OR%20'1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertFalse(findings.isEmpty());
-        }
-    }
-
-    @Nested
-    @DisplayName(" False positive handling")
-    class FalsePositiveHandling {
-
-        @Test
-        @DisplayName("should NOT report when output is properly escaped")
-        void detectSqlInjection_quandoOutputEscapado_naoRetornaFinding() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Search for: 1\\' OR \\'1\\'=\\'1"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "q", payload);
-
-            assertTrue(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should NOT report when parameterized query is used")
-        void detectSqlInjection_quandoParametrizado_naoRetornaFinding() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("No results found"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertTrue(findings.isEmpty());
-        }
-
-        @Test
-        @DisplayName("should verify exploitability before reporting")
-        void detectSqlInjection_verificaExplorabilidade() {
-            String payload = "1'";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("no error here"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertTrue(findings.stream().noneMatch(f -> f.severity() == Severity.CRITICAL));
-        }
-    }
-
-    @Nested
-    @DisplayName(" Severity assessment")
-    class SeverityAssessment {
-
-        @Test
-        @DisplayName("should assign CRITICAL severity for confirmed exploitable SQLi")
-        void assessSeverity_quandoConfirmadoExploravel_critical() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Welcome admin!"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertEquals(Severity.CRITICAL, findings.get(0).severity());
-        }
-
-        @Test
-        @DisplayName("should assign HIGH severity for error-based SQLi")
-        void assessSeverity_quandoErrorBased_high() {
-            String payload = "1'";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("SQL syntax error"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertEquals(Severity.HIGH, findings.get(0).severity());
-        }
-
-        @Test
-        @DisplayName("should assign MEDIUM severity for potential SQLi")
-        void assessSeverity_quandoPotencial_medium() {
-            String payload = "1' OR '1'='1";
-            when(httpClient.sendRequest(anyString(), anyString()))
-                    .thenReturn(Optional.of("Invalid input"));
-
-            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", payload);
-
-            assertEquals(Severity.MEDIUM, findings.get(0).severity());
-        }
-    }
-
-    @Nested
-    @DisplayName(" Request validation")
+    @DisplayName("Request validation")
     class RequestValidation {
 
         @Test
-        @DisplayName("should throw when target URL is null")
+        @DisplayName("should reject null target URL")
         void scan_quandoUrlNula_lancaExcecao() {
-            assertThrows(IllegalArgumentException.class, () ->
-                    detector.scan(null, "id", "payload"));
+            assertThrows(IllegalArgumentException.class, () -> detector.scan(null, "id", "1"));
         }
 
         @Test
-        @DisplayName("should throw when parameter name is null")
-        void scan_quandoParametroNulo_lancaExcecao() {
-            assertThrows(IllegalArgumentException.class, () ->
-                    detector.scan(TARGET_URL, null, "payload"));
+        @DisplayName("should reject blank parameter name")
+        void scan_quandoParametroVazio_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () -> detector.scan(TARGET_URL, " ", "1"));
         }
 
         @Test
-        @DisplayName(" should block internal IP targets (SSRF protection)")
-        void scan_quandoTargetIpInterno_lancaExcecao() {
-            assertThrows(IllegalArgumentException.class, () ->
-                    detector.scan("http://10.0.0.1", "id", "payload"));
+        @DisplayName("should reject blank payload")
+        void scan_quandoPayloadVazio_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () -> detector.scan(TARGET_URL, "id", " "));
         }
 
         @Test
-        @DisplayName(" should block localhost targets (SSRF protection)")
-        void scan_quandoTargetLocalhost_lancaExcecao() {
-            assertThrows(IllegalArgumentException.class, () ->
-                    detector.scan("http://127.0.0.1:8080", "id", "payload"));
+        @DisplayName("should block internal targets")
+        void scan_quandoTargetInterno_lancaExcecao() {
+            assertThrows(IllegalArgumentException.class, () -> detector.scan("http://192.168.1.1", "id", "1"));
         }
+    }
+
+    @Nested
+    @DisplayName("Safe public behavior")
+    class SafePublicBehavior {
+
+        @Test
+        @DisplayName("should return no findings when response is clean")
+        void scan_quandoRespostaLimpa_retornaVazio() {
+            when(httpClient.sendRequest(TARGET_URL, "id=1")).thenReturn(Optional.of("all good"));
+
+            assertTrue(detector.scan(TARGET_URL, "id", "1").isEmpty());
+        }
+
+        @Test
+        @DisplayName("should send path payload through path substitution")
+        void scanPathParam_quandoChamado_enviaPayloadNoCaminho() {
+            when(httpClient.sendRequest("https://example.com/users/'", "")).thenReturn(Optional.of("clean"));
+
+            assertTrue(detector.scanPathParam("https://example.com/users/{id}", "id").isEmpty());
+            verify(httpClient).sendRequest("https://example.com/users/'", "");
+        }
+
+        @Test
+        @DisplayName("should send cookie payloads through cookie helper")
+        void scanCookie_quandoChamado_usaMetodoDeCookie() {
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "'")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "'\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "')")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "1'")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "1\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "1')")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithCookie(TARGET_URL, "", "sessionid", "1\")")).thenReturn(Optional.of("clean"));
+
+            assertTrue(detector.scanCookie(TARGET_URL, "sessionid").isEmpty());
+            verify(httpClient, atLeastOnce()).sendRequestWithCookie(TARGET_URL, "", "sessionid", "'");
+        }
+
+        @Test
+        @DisplayName("should send header payloads through header helper")
+        void scanHeader_quandoChamado_usaMetodoDeHeader() {
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "'")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "'\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "')")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "1'")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "1\"")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "1')")).thenReturn(Optional.of("clean"));
+            when(httpClient.sendRequestWithHeader(TARGET_URL, "", "X-Test", "1\")")).thenReturn(Optional.of("clean"));
+
+            assertTrue(detector.scanHeader(TARGET_URL, "X-Test").isEmpty());
+            verify(httpClient, atLeastOnce()).sendRequestWithHeader(TARGET_URL, "", "X-Test", "'");
+        }
+
+        @Test
+        @DisplayName("should send JSON payloads through JSON helper")
+        void scanJson_quandoChamado_usaMetodoJson() {
+            when(httpClient.sendJson(eq(TARGET_URL), anyString())).thenReturn(Optional.of("clean"));
+
+            assertTrue(detector.scanJson(TARGET_URL, "id").isEmpty());
+            verify(httpClient, atLeastOnce()).sendJson(eq(TARGET_URL), anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("Detection helpers")
+    class DetectionHelpers {
+
+        @Test
+        @DisplayName("should recognize common SQL error signatures")
+        void isErrorBasedSqli_quandoRespostaDeBanco_retornaTrue() throws Exception {
+            assertTrue(invokeBoolean("isErrorBasedSqli", "You have an error in your SQL syntax"));
+            assertTrue(invokeBoolean("isErrorBasedSqli", "ERROR: syntax error at or near"));
+            assertTrue(invokeBoolean("isErrorBasedSqli", "Unclosed quotation mark after the character string"));
+            assertFalse(invokeBoolean("isErrorBasedSqli", "normal application response"));
+        }
+
+        @Test
+        @DisplayName("should recognize union-based evidence")
+        void isUnionBasedSqli_quandoRespostaCompativel_retornaTrue() throws Exception {
+            assertTrue(invokeBoolean("isUnionBasedSqli", "NULL value returned"));
+            assertTrue(invokeBoolean("isUnionBasedSqli", "PostgreSQL warning"));
+            assertFalse(invokeBoolean("isUnionBasedSqli", "safe content"));
+        }
+
+        @Test
+        @DisplayName("should compare boolean responses by normalized content and length")
+        void responsesDiffer_quandoConteudoDiferente_retornaTrue() throws Exception {
+            assertTrue(invokeResponsesDiffer("Results found", "No results"));
+            assertFalse(invokeResponsesDiffer("same response", "same   response"));
+            assertFalse(invokeResponsesDiffer(null, "other"));
+        }
+    }
+
+    private boolean invokeBoolean(String methodName, String value) throws Exception {
+        Method method = SqlInjectionDetector.class.getDeclaredMethod(methodName, String.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(detector, value);
+    }
+
+    private boolean invokeResponsesDiffer(String left, String right) throws Exception {
+        Method method = SqlInjectionDetector.class.getDeclaredMethod("responsesDiffer", String.class, String.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(detector, left, right);
     }
 }

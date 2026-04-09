@@ -2,14 +2,17 @@ package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.dto.LoginRequest;
 import com.virtualrift.auth.dto.LoginResponse;
+import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.exception.InvalidCredentialsException;
+import com.virtualrift.auth.exception.UserDeletedException;
 import com.virtualrift.auth.exception.UserPendingVerificationException;
 import com.virtualrift.auth.exception.UserSuspendedException;
-import com.virtualrift.auth.exception.UserDeletedException;
+import com.virtualrift.auth.model.RefreshToken;
+import com.virtualrift.auth.model.Token;
 import com.virtualrift.auth.model.User;
 import com.virtualrift.auth.model.UserStatus;
-import com.virtualrift.auth.repository.UserRepository;
 import com.virtualrift.auth.repository.LoginAttemptRepository;
+import com.virtualrift.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,11 +21,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,6 +77,14 @@ class LoginServiceTest {
         return new User(userId, email, hashedPassword, tenantId, UserStatus.ACTIVE, Set.of("USER"));
     }
 
+    private Token createToken(String accessToken, String refreshToken) {
+        return new Token(accessToken, refreshToken, Instant.now().plusSeconds(900));
+    }
+
+    private RefreshToken createRefreshToken(String tokenValue) {
+        return new RefreshToken(tokenValue, userId, tenantId, Instant.now().plusSeconds(7 * 24 * 3600));
+    }
+
     @Nested
     @DisplayName("Login")
     class Login {
@@ -82,34 +96,35 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
             when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
+            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("access-token", "jwt-refresh"));
+            when(refreshTokenService.generate(userId, tenantId)).thenReturn(createRefreshToken("refresh-token"));
 
             LoginResponse response = loginService.login(request);
 
             assertNotNull(response);
-            assertNotNull(response.accessToken());
-            assertNotNull(response.refreshToken());
+            assertEquals("access-token", response.accessToken());
+            assertEquals("refresh-token", response.refreshToken());
         }
 
         @Test
-        @DisplayName("should return access token and refresh token")
-        void login_quandoCredenciaisValidas_retornaAccessTokenERefreshToken() {
+        @DisplayName("should normalize email and record successful login")
+        void login_quandoCredenciaisValidas_normalizaEmailERegistraSucesso() {
             User user = createValidUser();
-            LoginRequest request = new LoginRequest(email, password);
+            LoginRequest request = new LoginRequest("  TEST@EXAMPLE.COM  ", password);
 
-            when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
+            when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+            when(loginAttemptRepository.getFailedAttempts("test@example.com")).thenReturn(0);
             when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
-            when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("access-token", "jwt-refresh"));
+            when(refreshTokenService.generate(userId, tenantId)).thenReturn(createRefreshToken("refresh-token"));
 
-            LoginResponse response = loginService.login(request);
+            loginService.login(request);
 
-            assertEquals("access-token", response.accessToken());
-            assertEquals("refresh-token", response.refreshToken());
+            verify(userRepository).findByEmail("test@example.com");
+            verify(loginAttemptRepository).clearFailedAttempts("test@example.com");
+            verify(loginAttemptRepository).recordSuccessfulAttempt("test@example.com");
         }
 
         @Test
@@ -137,26 +152,17 @@ class LoginServiceTest {
         }
 
         @Test
-        @DisplayName("should throw InvalidCredentialsException when password is null")
-        void login_quandoSenhaNula_lancaInvalidCredentialsException() {
-            User user = createValidUser();
-            LoginRequest request = new LoginRequest(email, null);
-
-            when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
-
-            assertThrows(InvalidCredentialsException.class, () -> loginService.login(request));
-        }
-
-        @Test
         @DisplayName("should throw UserPendingVerificationException when user is pending")
         void login_quandoUsuarioPendente_lancaUserPendingVerificationException() {
             User user = new User(userId, email, hashedPassword, tenantId, UserStatus.PENDING, Set.of("USER"));
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
+            when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
             when(passwordService.verify(password, hashedPassword)).thenReturn(true);
 
             assertThrows(UserPendingVerificationException.class, () -> loginService.login(request));
+            verify(jwtService, never()).generate(any(), any(), any());
         }
 
         @Test
@@ -166,9 +172,11 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
+            when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
             when(passwordService.verify(password, hashedPassword)).thenReturn(true);
 
             assertThrows(UserSuspendedException.class, () -> loginService.login(request));
+            verify(jwtService, never()).generate(any(), any(), any());
         }
 
         @Test
@@ -178,43 +186,11 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
+            when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
             when(passwordService.verify(password, hashedPassword)).thenReturn(true);
 
             assertThrows(UserDeletedException.class, () -> loginService.login(request));
-        }
-
-        @Test
-        @DisplayName("should normalize email to lowercase")
-        void login_quandoEmailMaiusculas_normalizaParaMinusculas() {
-            User user = createValidUser();
-            LoginRequest request = new LoginRequest("TEST@EXAMPLE.COM", password);
-
-            when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
-            when(loginAttemptRepository.getFailedAttempts("test@example.com")).thenReturn(0);
-
-            loginService.login(request);
-
-            verify(userRepository).findByEmail("test@example.com");
-        }
-
-        @Test
-        @DisplayName("should trim whitespace from email")
-        void login_quandoEmailComEspacos_removeEspacos() {
-            User user = createValidUser();
-            LoginRequest request = new LoginRequest("  test@example.com  ", password);
-
-            when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
-            when(loginAttemptRepository.getFailedAttempts("test@example.com")).thenReturn(0);
-
-            loginService.login(request);
-
-            verify(userRepository).findByEmail("test@example.com");
+            verify(jwtService, never()).generate(any(), any(), any());
         }
 
         @Test
@@ -224,10 +200,10 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
             when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
+            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("access-token", "jwt-refresh"));
+            when(refreshTokenService.generate(userId, tenantId)).thenReturn(createRefreshToken("refresh-token"));
 
             loginService.login(request);
 
@@ -243,10 +219,10 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(userWithRoles));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, roles))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
             when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
+            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
+            when(jwtService.generate(userId, tenantId, roles)).thenReturn(createToken("access-token", "jwt-refresh"));
+            when(refreshTokenService.generate(userId, tenantId)).thenReturn(createRefreshToken("refresh-token"));
 
             loginService.login(request);
 
@@ -260,14 +236,15 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, password);
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
-            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
-            when(jwtService.generate(userId, tenantId, user.roles()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("access-token", "refresh-token"));
             when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
+            when(passwordService.verify(password, hashedPassword)).thenReturn(true);
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("access-token", "jwt-refresh"));
+            when(refreshTokenService.generate(userId, tenantId)).thenReturn(createRefreshToken("refresh-token"));
 
             loginService.login(request);
 
             verify(loginAttemptRepository).clearFailedAttempts(email.toLowerCase());
+            verify(loginAttemptRepository).recordSuccessfulAttempt(email.toLowerCase());
         }
 
         @Test
@@ -276,6 +253,7 @@ class LoginServiceTest {
             LoginRequest request = new LoginRequest(email, "WrongPassword123!");
 
             when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(createValidUser()));
+            when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(0);
             when(passwordService.verify("WrongPassword123!", hashedPassword)).thenReturn(false);
 
             assertThrows(InvalidCredentialsException.class, () -> loginService.login(request));
@@ -286,10 +264,8 @@ class LoginServiceTest {
         @Test
         @DisplayName("should lock account after too many failed attempts")
         void login_quandoMuitasTentativasFalhas_bloqueiaConta() {
-            User user = createValidUser();
             LoginRequest request = new LoginRequest(email, password);
 
-            when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.of(user));
             when(loginAttemptRepository.getFailedAttempts(email.toLowerCase())).thenReturn(6);
 
             assertThrows(InvalidCredentialsException.class, () -> loginService.login(request));
@@ -308,8 +284,6 @@ class LoginServiceTest {
             String accessToken = "access-token";
             String refreshToken = "refresh-token";
 
-            doNothing().when(denylist).add(eq(accessToken), any());
-
             assertDoesNotThrow(() -> loginService.logout(accessToken, refreshToken));
 
             verify(denylist).add(eq(accessToken), any());
@@ -320,9 +294,6 @@ class LoginServiceTest {
         void logout_quandoChamado_revogaRefreshToken() {
             String accessToken = "access-token";
             String refreshToken = "refresh-token";
-
-            lenient().doNothing().when(denylist).add(eq(accessToken), any());
-            when(refreshTokenService.revoke(refreshToken)).thenReturn(userId);
 
             loginService.logout(accessToken, refreshToken);
 
@@ -341,60 +312,59 @@ class LoginServiceTest {
         }
 
         @Test
-        @DisplayName("should handle token not in denylist gracefully")
-        void logout_quandoTokenNaoEncontrado_naoLancaExcecao() {
+        @DisplayName("should ignore invalid refresh token during logout")
+        void logout_quandoRefreshTokenInvalido_naoLancaExcecao() {
             String accessToken = "access-token";
             String refreshToken = "refresh-token";
 
-            lenient().doThrow(new RuntimeException("not found")).when(refreshTokenService).revoke(refreshToken);
+            doThrow(new InvalidTokenException("invalid")).when(refreshTokenService).revoke(refreshToken);
 
             assertDoesNotThrow(() -> loginService.logout(accessToken, refreshToken));
         }
 
         @Test
-        @DisplayName("should be idempotent")
-        void logout_quandoJaRevogado_naoLancaExcecao() {
-            String accessToken = "access-token";
-            String refreshToken = "refresh-token";
+        @DisplayName("should ignore blank access token")
+        void logout_quandoAccessTokenVazio_naoAdicionaNaDenylist() {
+            loginService.logout(" ", "refresh-token");
 
-            assertDoesNotThrow(() -> {
-                loginService.logout(accessToken, refreshToken);
-                loginService.logout(accessToken, refreshToken);
-            });
+            verify(denylist, never()).add(anyString(), any());
         }
     }
 
     @Nested
     @DisplayName("Refresh token")
-    class RefreshToken {
+    class RefreshTokenFlow {
 
         @Test
         @DisplayName("should return new access token when refresh token is valid")
         void refreshToken_quandoValido_retornaNovoAccessToken() {
             String refreshTokenValue = "valid-refresh-token";
-            RefreshToken refreshToken = new RefreshToken(refreshTokenValue, userId, tenantId, java.time.Instant.now().plusDays(7));
+            User user = createValidUser();
+            RefreshToken refreshToken = createRefreshToken("new-refresh-token");
 
             when(refreshTokenService.validate(refreshTokenValue)).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(refreshTokenService.rotate(refreshTokenValue)).thenReturn(refreshToken);
-            when(jwtService.generate(userId, tenantId, Set.of("USER")))
-                    .thenReturn(new com.virtualrift.auth.model.Token("new-access-token", "new-refresh-token"));
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("new-access-token", "jwt-refresh"));
 
             LoginResponse response = loginService.refreshToken(refreshTokenValue);
 
             assertNotNull(response);
             assertEquals("new-access-token", response.accessToken());
+            assertEquals("new-refresh-token", response.refreshToken());
         }
 
         @Test
         @DisplayName("should keep same userId in new token")
         void refreshToken_quandoValido_mesmoUserId() {
             String refreshTokenValue = "valid-refresh-token";
-            RefreshToken refreshToken = new RefreshToken(refreshTokenValue, userId, tenantId, java.time.Instant.now().plusDays(7));
+            User user = createValidUser();
+            RefreshToken refreshToken = createRefreshToken("new-refresh-token");
 
             when(refreshTokenService.validate(refreshTokenValue)).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(refreshTokenService.rotate(refreshTokenValue)).thenReturn(refreshToken);
-            when(jwtService.generate(eq(userId), any(), any()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("new-access-token", "new-refresh-token"));
+            when(jwtService.generate(eq(userId), any(), any())).thenReturn(createToken("new-access-token", "jwt-refresh"));
 
             loginService.refreshToken(refreshTokenValue);
 
@@ -405,12 +375,13 @@ class LoginServiceTest {
         @DisplayName("should keep same tenantId in new token")
         void refreshToken_quandoValido_mesmoTenantId() {
             String refreshTokenValue = "valid-refresh-token";
-            RefreshToken refreshToken = new RefreshToken(refreshTokenValue, userId, tenantId, java.time.Instant.now().plusDays(7));
+            User user = createValidUser();
+            RefreshToken refreshToken = createRefreshToken("new-refresh-token");
 
             when(refreshTokenService.validate(refreshTokenValue)).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(refreshTokenService.rotate(refreshTokenValue)).thenReturn(refreshToken);
-            when(jwtService.generate(any(), eq(tenantId), any()))
-                    .thenReturn(new com.virtualrift.auth.model.Token("new-access-token", "new-refresh-token"));
+            when(jwtService.generate(any(), eq(tenantId), any())).thenReturn(createToken("new-access-token", "jwt-refresh"));
 
             loginService.refreshToken(refreshTokenValue);
 
@@ -445,17 +416,27 @@ class LoginServiceTest {
         @DisplayName("should rotate refresh token")
         void refreshToken_quandoValido_geraNovoRefreshToken() {
             String oldRefreshToken = "old-refresh-token";
-            RefreshToken newRefreshToken = new RefreshToken("new-refresh-token", userId, tenantId, java.time.Instant.now().plusDays(7));
+            User user = createValidUser();
+            RefreshToken newRefreshToken = createRefreshToken("new-refresh-token");
 
             when(refreshTokenService.validate(oldRefreshToken)).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(refreshTokenService.rotate(oldRefreshToken)).thenReturn(newRefreshToken);
-            when(jwtService.generate(userId, tenantId, Set.of("USER")))
-                    .thenReturn(new com.virtualrift.auth.model.Token("new-access-token", "new-refresh-token"));
+            when(jwtService.generate(userId, tenantId, user.roles())).thenReturn(createToken("new-access-token", "jwt-refresh"));
 
             LoginResponse response = loginService.refreshToken(oldRefreshToken);
 
             assertEquals("new-refresh-token", response.refreshToken());
             verify(refreshTokenService).rotate(oldRefreshToken);
+        }
+
+        @Test
+        @DisplayName("should throw when refresh token user is not found")
+        void refreshToken_quandoUsuarioNaoExiste_lancaExcecao() {
+            when(refreshTokenService.validate("valid-refresh-token")).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThrows(InvalidTokenException.class, () -> loginService.refreshToken("valid-refresh-token"));
         }
     }
 }

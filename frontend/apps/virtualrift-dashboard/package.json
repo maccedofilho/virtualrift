@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "echo \"No tests configured for virtualrift-dashboard\"",
+    "test": "corepack pnpm --dir ../.. exec vitest run apps/virtualrift-dashboard/src/App.test.tsx",
     "lint": "echo \"No lint configured for virtualrift-dashboard\""
   },
   "dependencies": {
