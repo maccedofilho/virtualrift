@@ -29,12 +29,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -96,11 +98,15 @@ class SastScanE2eTest {
 
     private final ScanOrchestratorService scanOrchestratorService;
     private final FakeGitClient fakeGitClient;
+    private final KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
 
     @Autowired
-    SastScanE2eTest(ScanOrchestratorService scanOrchestratorService, FakeGitClient fakeGitClient) {
+    SastScanE2eTest(ScanOrchestratorService scanOrchestratorService,
+                    FakeGitClient fakeGitClient,
+                    KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry) {
         this.scanOrchestratorService = scanOrchestratorService;
         this.fakeGitClient = fakeGitClient;
+        this.kafkaListenerEndpointRegistry = kafkaListenerEndpointRegistry;
     }
 
     @Test
@@ -112,6 +118,8 @@ class SastScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.ENTERPRISE);
+
+        waitForKafkaAssignments();
 
         var response = scanOrchestratorService.createScan(
                 new CreateScanRequest("https://github.com/acme/vulnerable.git", ScanType.SAST, 1, 30),
@@ -132,6 +140,26 @@ class SastScanE2eTest {
         assertTrue(result.findings().get(0).evidence().contains("password=****"));
         assertFalse(result.findings().get(0).evidence().contains("SuperSecret123"));
         assertEquals(URI.create("https://github.com/acme/vulnerable.git"), fakeGitClient.lastRepositoryUri);
+    }
+
+    private void waitForKafkaAssignments() {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
+
+        while (Instant.now().isBefore(deadline)) {
+            if (!kafkaListenerEndpointRegistry.getListenerContainers().isEmpty()
+                    && kafkaListenerEndpointRegistry.getListenerContainers().stream()
+                    .allMatch(this::hasAssignedPartitions)) {
+                return;
+            }
+
+            sleep();
+        }
+
+        throw new AssertionError("Kafka listeners were not assigned partitions");
+    }
+
+    private boolean hasAssignedPartitions(MessageListenerContainer container) {
+        return container.isRunning() && !container.getAssignedPartitions().isEmpty();
     }
 
     private ScanResultResponse waitForCompletedResult(UUID scanId, UUID tenantId) {
@@ -228,6 +256,7 @@ class SastScanE2eTest {
             config.put("group.id", "virtualrift-sast-e2e");
             config.put("key.deserializer", StringDeserializer.class);
             config.put("value.deserializer", JsonDeserializer.class);
+            config.put("auto.offset.reset", "earliest");
             config.put(JsonDeserializer.TRUSTED_PACKAGES, ScanRequestedEvent.class.getPackageName());
             return new DefaultKafkaConsumerFactory<>(
                     config,
