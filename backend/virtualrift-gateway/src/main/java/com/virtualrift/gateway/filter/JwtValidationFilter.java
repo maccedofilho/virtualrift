@@ -1,7 +1,6 @@
 package com.virtualrift.gateway.filter;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.DecodedJWT;
 import com.virtualrift.gateway.config.GatewayConfig;
 import com.virtualrift.gateway.config.JwtConfig;
 import com.virtualrift.gateway.dto.ProblemDetail;
@@ -39,6 +38,7 @@ public class JwtValidationFilter implements GlobalFilter, Ordered {
             "/health",
             "/actuator/health",
             "/api/v1/auth/token",
+            "/api/v1/auth/refresh",
             "/api/v1/auth/register",
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/reset-password"
@@ -80,35 +80,29 @@ public class JwtValidationFilter implements GlobalFilter, Ordered {
             );
         }
 
-        try {
-            DecodedJWT jwt = jwtValidator.validate(token);
+        return tokenDenylist.isDenied(token)
+                .flatMap(isDenied -> {
+                    if (isDenied) {
+                        log.debug("Token is denylisted");
+                        return ResponseUtil.writeProblemDetail(
+                                exchange,
+                                HttpStatus.UNAUTHORIZED,
+                                ProblemDetail.unauthorized("Token has been revoked", path)
+                        );
+                    }
 
-            String jti = jwt.getId();
-            if (jti != null) {
-                return tokenDenylist.isDenied(jti)
-                        .flatMap(isDenied -> {
-                            if (isDenied) {
-                                log.debug("Token is denylisted: {}", jti);
-                                return ResponseUtil.writeProblemDetail(
-                                        exchange,
-                                        HttpStatus.UNAUTHORIZED,
-                                        ProblemDetail.unauthorized("Token has been revoked", path)
-                                );
-                            }
-                            return proceedWithValidToken(exchange, chain, token);
-                        });
-            }
-
-            return proceedWithValidToken(exchange, chain, token);
-
-        } catch (JWTVerificationException e) {
-            log.debug("Invalid token for path {}: {}", path, e.getMessage());
-            return ResponseUtil.writeProblemDetail(
-                    exchange,
-                    HttpStatus.UNAUTHORIZED,
-                    ProblemDetail.unauthorized("Invalid or expired token", path)
-            );
-        }
+                    try {
+                        jwtValidator.validate(token);
+                        return proceedWithValidToken(exchange, chain, token);
+                    } catch (JWTVerificationException e) {
+                        log.debug("Invalid token for path {}: {}", path, e.getMessage());
+                        return ResponseUtil.writeProblemDetail(
+                                exchange,
+                                HttpStatus.UNAUTHORIZED,
+                                ProblemDetail.unauthorized("Invalid or expired token", path)
+                        );
+                    }
+                });
     }
 
     private Mono<Void> proceedWithValidToken(ServerWebExchange exchange,

@@ -9,23 +9,24 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("RateLimitFilter Tests")
 class RateLimitFilterTest {
 
@@ -33,17 +34,12 @@ class RateLimitFilterTest {
     private ProxyManager<byte[]> proxyManager;
 
     @Mock
-    private GatewayConfig gatewayConfig;
-
-    @Mock
-    private GatewayConfig.RateLimit rateLimitConfig;
-
-    @Mock
     private RemoteBucketBuilder remoteBucketBuilder;
 
     @Mock
     private BucketProxy bucketProxy;
 
+    private GatewayConfig gatewayConfig;
     private RateLimitFilter filter;
     private GatewayFilterChain filterChain;
 
@@ -51,20 +47,17 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(gatewayConfig.getRateLimit()).thenReturn(rateLimitConfig);
-        lenient().when(rateLimitConfig.isEnabled()).thenReturn(true);
-        lenient().when(rateLimitConfig.getDefaultLimit()).thenReturn(100);
-        lenient().when(rateLimitConfig.getScanLimit()).thenReturn(10);
-        lenient().when(rateLimitConfig.getWindowDuration()).thenReturn(60);
+        GatewayConfig.RateLimit rateLimit = new GatewayConfig.RateLimit();
+        rateLimit.setEnabled(true);
+        rateLimit.setDefaultLimit(100);
+        rateLimit.setScanLimit(10);
+        rateLimit.setWindowDuration(60);
 
-        lenient().when(proxyManager.builder()).thenReturn(remoteBucketBuilder);
-        lenient().when(remoteBucketBuilder.build(any(byte[].class), any(java.util.function.Supplier.class))).thenReturn(bucketProxy);
-        lenient().when(bucketProxy.tryConsume(1)).thenReturn(true);
-        lenient().when(bucketProxy.getAvailableTokens()).thenReturn(99L);
+        gatewayConfig = new GatewayConfig();
+        gatewayConfig.setRateLimit(rateLimit);
 
         filter = new RateLimitFilter(proxyManager, gatewayConfig);
         filterChain = mock(GatewayFilterChain.class);
-        when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
     }
 
     private ServerWebExchange createExchangeWithTenant(String path, String tenantId) {
@@ -79,18 +72,72 @@ class RateLimitFilterTest {
         return MockServerWebExchange.from(request);
     }
 
+    private ServerWebExchange createExchangeWithClientIp(String path, String ipAddress) {
+        MockServerHttpRequest request = MockServerHttpRequest.get(path)
+                .remoteAddress(new InetSocketAddress(ipAddress, 8080))
+                .build();
+        return MockServerWebExchange.from(request);
+    }
+
+    private void stubAllowedRequest(long availableTokens) {
+        when(proxyManager.builder()).thenReturn(remoteBucketBuilder);
+        when(remoteBucketBuilder.build(any(byte[].class), any(java.util.function.Supplier.class)))
+                .thenReturn(bucketProxy);
+        when(bucketProxy.tryConsume(1)).thenReturn(true);
+        when(bucketProxy.getAvailableTokens()).thenReturn(availableTokens);
+        when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+    }
+
+    private void stubRejectedRequest() {
+        when(proxyManager.builder()).thenReturn(remoteBucketBuilder);
+        when(remoteBucketBuilder.build(any(byte[].class), any(java.util.function.Supplier.class)))
+                .thenReturn(bucketProxy);
+        when(bucketProxy.tryConsume(1)).thenReturn(false);
+    }
+
     @Nested
     @DisplayName("Rate limit enforcement")
     class RateLimitEnforcement {
 
         @Test
-        @DisplayName("should call proxy manager when rate limiting enabled")
-        void filter_quandoHabilitado_chamaProxyManager() {
+        @DisplayName("should add rate limit headers for regular endpoints")
+        void filter_quandoPermitido_adicionaHeadersDeRateLimit() {
+            stubAllowedRequest(99L);
             ServerWebExchange exchange = createExchangeWithTenant("/api/v1/test", TENANT_ID);
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
             verify(proxyManager).builder();
+            verify(filterChain).filter(any(ServerWebExchange.class));
+            assertEquals("100", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Limit"));
+            assertEquals("99", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Remaining"));
+        }
+
+        @Test
+        @DisplayName("should use scan limit for scan endpoints")
+        void filter_quandoEndpointDeScan_usaLimiteDeScan() {
+            stubAllowedRequest(9L);
+            ServerWebExchange exchange = createExchangeWithTenant("/api/v1/scans", TENANT_ID);
+
+            filter.filter(exchange, filterChain).block();
+
+            assertEquals("10", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Limit"));
+            assertEquals("9", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Remaining"));
+        }
+
+        @Test
+        @DisplayName("should return 429 when request exceeds limit")
+        void filter_quandoLimiteExcedido_retornaTooManyRequests() {
+            stubRejectedRequest();
+            ServerWebExchange exchange = createExchangeWithTenant("/api/v1/test", TENANT_ID);
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(filterChain, never()).filter(any(ServerWebExchange.class));
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS, exchange.getResponse().getStatusCode());
+            assertEquals("60", exchange.getResponse().getHeaders().getFirst("Retry-After"));
+            assertEquals("100", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Limit"));
+            assertEquals("0", exchange.getResponse().getHeaders().getFirst("X-RateLimit-Remaining"));
         }
     }
 
@@ -101,9 +148,10 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("should not rate limit /health endpoint")
         void filter_quandoHealthEndpoint_naoLimita() {
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchangeWithoutHeaders("/health");
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
             verify(filterChain).filter(any(ServerWebExchange.class));
             verify(proxyManager, never()).builder();
@@ -112,9 +160,10 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("should not rate limit actuator endpoints")
         void filter_quandoActuatorEndpoint_naoLimita() {
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchangeWithoutHeaders("/actuator/health");
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
             verify(filterChain).filter(any(ServerWebExchange.class));
             verify(proxyManager, never()).builder();
@@ -128,10 +177,11 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("should allow all requests when rate limiting is disabled")
         void filter_quandoDesabilitado_permiteTodos() {
-            when(rateLimitConfig.isEnabled()).thenReturn(false);
+            gatewayConfig.getRateLimit().setEnabled(false);
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchangeWithTenant("/api/v1/test", TENANT_ID);
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
             verify(filterChain).filter(any(ServerWebExchange.class));
             verify(proxyManager, never()).builder();
@@ -156,21 +206,27 @@ class RateLimitFilterTest {
         @Test
         @DisplayName("should use tenantId for rate limit key")
         void filter_quandoTenantIdPresente_usaTenantId() {
+            stubAllowedRequest(99L);
             ServerWebExchange exchange = createExchangeWithTenant("/api/v1/test", "tenant-abc");
+            ArgumentCaptor<byte[]> keyCaptor = ArgumentCaptor.forClass(byte[].class);
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
-            verify(proxyManager).builder();
+            verify(remoteBucketBuilder).build(keyCaptor.capture(), any(java.util.function.Supplier.class));
+            assertEquals("tenant-abc", new String(keyCaptor.getValue(), StandardCharsets.UTF_8));
         }
 
         @Test
         @DisplayName("should fall back to IP when no tenantId")
         void filter_quandoSemTenantId_usaIp() {
-            ServerWebExchange exchange = createExchangeWithoutHeaders("/api/v1/test");
+            stubAllowedRequest(99L);
+            ServerWebExchange exchange = createExchangeWithClientIp("/api/v1/test", "203.0.113.10");
+            ArgumentCaptor<byte[]> keyCaptor = ArgumentCaptor.forClass(byte[].class);
 
-            filter.filter(exchange, filterChain);
+            filter.filter(exchange, filterChain).block();
 
-            verify(proxyManager).builder();
+            verify(remoteBucketBuilder).build(keyCaptor.capture(), any(java.util.function.Supplier.class));
+            assertEquals("203.0.113.10", new String(keyCaptor.getValue(), StandardCharsets.UTF_8));
         }
     }
 }
