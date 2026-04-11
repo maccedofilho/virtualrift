@@ -6,6 +6,7 @@ import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
+import com.virtualrift.orchestrator.repository.ScanFindingRepository;
 import com.virtualrift.orchestrator.repository.ScanRepository;
 import com.virtualrift.orchestrator.service.ScanOrchestratorService;
 import com.virtualrift.tenant.client.TenantClient;
@@ -32,6 +33,9 @@ class ScanIsolationTest {
     private ScanRepository scanRepository;
 
     @Mock
+    private ScanFindingRepository scanFindingRepository;
+
+    @Mock
     private ScanEventProducer eventProducer;
 
     @Mock
@@ -41,7 +45,7 @@ class ScanIsolationTest {
 
     @BeforeEach
     void setUp() {
-        scanOrchestratorService = new ScanOrchestratorService(scanRepository, eventProducer, tenantClient);
+        scanOrchestratorService = new ScanOrchestratorService(scanRepository, scanFindingRepository, eventProducer, tenantClient);
     }
 
     private Scan scan(UUID scanId, UUID tenantId, UUID userId) {

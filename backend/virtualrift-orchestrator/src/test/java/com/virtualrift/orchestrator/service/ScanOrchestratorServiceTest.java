@@ -2,13 +2,18 @@ package com.virtualrift.orchestrator.service;
 
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.ScanType;
+import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.TenantId;
 import com.virtualrift.orchestrator.dto.CreateScanRequest;
+import com.virtualrift.orchestrator.dto.ScanFindingResponse;
 import com.virtualrift.orchestrator.dto.ScanResponse;
+import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
+import com.virtualrift.orchestrator.model.ScanFinding;
+import com.virtualrift.orchestrator.repository.ScanFindingRepository;
 import com.virtualrift.orchestrator.repository.ScanRepository;
 import com.virtualrift.tenant.client.TenantClient;
 import com.virtualrift.tenant.model.Plan;
@@ -21,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +48,9 @@ class ScanOrchestratorServiceTest {
     private ScanRepository scanRepository;
 
     @Mock
+    private ScanFindingRepository scanFindingRepository;
+
+    @Mock
     private ScanEventProducer eventProducer;
 
     @Mock
@@ -54,7 +64,7 @@ class ScanOrchestratorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ScanOrchestratorService(scanRepository, eventProducer, tenantClient);
+        service = new ScanOrchestratorService(scanRepository, scanFindingRepository, eventProducer, tenantClient);
     }
 
     private TenantQuota createQuota(int maxScansPerDay, int maxConcurrentScans) {
@@ -63,6 +73,20 @@ class ScanOrchestratorServiceTest {
 
     private Scan createScan(UUID scanId, UUID tenantId, UUID userId, ScanStatus status) {
         return new Scan(scanId, tenantId, userId, TARGET_URL, ScanType.WEB, 3, 300, status);
+    }
+
+    private ScanFinding createFinding(UUID scanId, UUID tenantId, Severity severity) {
+        return new ScanFinding(
+                UUID.randomUUID(),
+                scanId,
+                tenantId,
+                severity.name() + " finding",
+                severity,
+                "SAST",
+                "src/App.java:10",
+                "password=****",
+                Instant.now()
+        );
     }
 
     @Nested
@@ -214,6 +238,82 @@ class ScanOrchestratorServiceTest {
             when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
 
             assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId, TENANT_ID));
+        }
+    }
+
+    @Nested
+    @DisplayName("Get findings")
+    class GetFindingsFlow {
+
+        @Test
+        @DisplayName("should return findings when tenant owns scan")
+        void getFindings_quandoTenantCorreto_retornaFindings() {
+            UUID scanId = UUID.randomUUID();
+            Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
+            ScanFinding finding = createFinding(scanId, TENANT_ID, Severity.CRITICAL);
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(TENANT_ID, scanId))
+                    .thenReturn(List.of(finding));
+
+            List<ScanFindingResponse> response = service.getFindings(scanId, TENANT_ID);
+
+            assertEquals(1, response.size());
+            assertEquals(finding.getId(), response.get(0).id());
+            assertEquals(Severity.CRITICAL, response.get(0).severity());
+        }
+
+        @Test
+        @DisplayName("should reject findings lookup for another tenant")
+        void getFindings_quandoOutroTenant_lancaScanNotFoundException() {
+            UUID scanId = UUID.randomUUID();
+            Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.COMPLETED);
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+
+            assertThrows(ScanNotFoundException.class, () -> service.getFindings(scanId, TENANT_ID));
+            verify(scanFindingRepository, never()).findByTenantIdAndScanIdOrderByDetectedAtDesc(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Get result")
+    class GetResultFlow {
+
+        @Test
+        @DisplayName("should return aggregate result with severity counts")
+        void getResult_quandoTenantCorreto_retornaResultadoAgregado() {
+            UUID scanId = UUID.randomUUID();
+            Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(TENANT_ID, scanId))
+                    .thenReturn(List.of(
+                            createFinding(scanId, TENANT_ID, Severity.CRITICAL),
+                            createFinding(scanId, TENANT_ID, Severity.HIGH),
+                            createFinding(scanId, TENANT_ID, Severity.LOW)
+                    ));
+
+            ScanResultResponse response = service.getResult(scanId, TENANT_ID);
+
+            assertEquals(scanId, response.scanId());
+            assertEquals(3, response.totalFindings());
+            assertEquals(1, response.criticalCount());
+            assertEquals(1, response.highCount());
+            assertEquals(1, response.lowCount());
+            assertEquals(50, response.riskScore());
+        }
+
+        @Test
+        @DisplayName("should reject result lookup for another tenant")
+        void getResult_quandoOutroTenant_lancaScanNotFoundException() {
+            UUID scanId = UUID.randomUUID();
+            Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.COMPLETED);
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+
+            assertThrows(ScanNotFoundException.class, () -> service.getResult(scanId, TENANT_ID));
+            verify(scanFindingRepository, never()).findByTenantIdAndScanIdOrderByDetectedAtDesc(any(), any());
         }
     }
 }
