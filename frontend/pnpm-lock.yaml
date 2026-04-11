@@ -17,6 +17,9 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(jsdom@26.1.0)(lightningcss@1.32.0)

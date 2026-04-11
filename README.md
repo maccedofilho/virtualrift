@@ -2,151 +2,167 @@
 
 > Find the cracks before someone else does.
 
-VirtualRift is a multi-tenant SaaS platform for automated vulnerability scanning across web applications, REST/GraphQL APIs, network infrastructure and source code — built with Java 21, Spring Boot 3 and React 18.
+VirtualRift is a multi-tenant security platform designed to connect to a customer's repository, website or exposed application surface, inspect how the system is built and operated, and identify vulnerabilities, weak security controls and data exposure risks before they become incidents.
 
----
+The product goal is to analyze real attack paths across source code, APIs, web applications and infrastructure signals, then return actionable findings with enough context for engineering teams to fix the issue instead of just cataloging noise.
 
-## What it does
+## Product Vision
 
-VirtualRift gives security teams and developers a single platform to continuously scan their attack surface and get actionable remediation guidance — without requiring deep security expertise to operate.
+VirtualRift is being built as a backend-first SaaS product for automated security assessment.
 
-| Scanner | What it detects |
+The target experience is:
+
+- connect a repository, site or application target
+- detect the security mechanisms the system already uses
+- evaluate whether those controls are missing, misconfigured or bypassable
+- find vulnerabilities and likely breach paths
+- explain impact, affected area and remediation guidance
+- support multiple programming languages and application stacks from the same platform
+
+## Planned Analysis Coverage
+
+VirtualRift is intended to inspect four major surfaces:
+
+| Surface | Planned focus |
 |---|---|
-| **Web Scanner** | OWASP Top 10, XSS, SQLi, CSRF, open redirects, security headers |
-| **API Scanner** | Broken auth, excessive data exposure, improper rate limiting, spec drift |
-| **Network Scanner** | Open ports, outdated services, weak TLS, CVE matches via NVD |
-| **SAST Engine** | Hardcoded secrets, injection flaws, insecure dependencies in source code |
+| Source code | insecure coding patterns, secrets exposure, weak auth flows, dangerous dependencies, insecure defaults |
+| Web applications | OWASP-style issues, exposed inputs, weak headers, client-side flaws, session problems |
+| APIs | broken authentication, authorization flaws, excessive data exposure, weak rate limiting, insecure contracts |
+| Infrastructure and runtime signals | weak TLS, exposed services, insecure edge configuration, unsafe deployment posture |
 
----
+## Language Strategy
+
+The product is planned to support multiple languages and frameworks.
+
+The initial target is to start with the five most-used frontend ecosystems and the five most-used backend ecosystems, then expand based on demand and detection quality.
+
+At this stage, the repository does not claim full language coverage yet. The backend platform is being prepared first so new analyzers can be added on top of a stable orchestration and tenancy model.
+
+## Current Delivery Phase
+
+VirtualRift is currently in backend construction.
+
+That means:
+
+- the backend services are the active implementation focus right now
+- the frontend is intentionally not the current delivery focus
+- UI, dashboards and polished beta workflows will be shaped after the backend reaches a stronger beta-ready state
+
+The frontend workspace exists, but it should be treated as preparatory structure rather than the finished product experience.
+
+## Repository Status
+
+This monorepo already contains the backend foundation of the platform and the supporting project governance needed to keep the security scope coherent.
+
+### What is implemented now
+
+- Java 21 Spring Boot backend organized as a Maven multi-module system
+- API Gateway, Auth, Tenant and Orchestrator services
+- scanner modules for web, API, network and SAST analysis at different maturity levels
+- shared backend types and domain primitives in `backend/virtualrift-common`
+- repository rules, commands, agents and skills in `.claude`
+- real backend tests with `mvn test`
+- real frontend `test` and `lint` scripts for workspace hygiene, without claiming frontend feature completeness
+
+### What is not complete yet
+
+- full repository ingestion and end-to-end scan onboarding flow
+- mature frontend product experience
+- complete CI workflows in `.github/workflows/`
+- full production infrastructure promised by the long-term platform vision
+- complete scanner depth across all desired languages and frameworks
 
 ## Architecture
 
-Monorepo with a Java microservices backend and a React frontend, deployed on Kubernetes.
-```
+Current repository structure:
+
+```text
 virtualrift/
-├── backend/          Java 21 + Spring Boot 3 — microservices (Maven multi-module)
-├── frontend/         React 18 + TypeScript + Vite (pnpm workspaces)
-├── infra/            Terraform + Helm + GitHub Actions
-├── libs/             Shared Java libraries
-└── .claude/          Claude Code configuration — rules, agents, skills and commands
+├── backend/          Java 21 + Spring Boot 3 microservices
+├── frontend/         workspace kept ready for the future beta UI
+├── infra/            infrastructure documentation and future deployment assets
+├── libs/             shared libraries area, still mostly placeholder
+└── .claude/          project rules, agents, commands and skills
 ```
 
-**Core services:** API Gateway · Auth · Tenant · Scan Orchestrator · Report Service
+Current core backend services:
 
-**Scan engines:** Web Scanner · API Scanner · Network Scanner · SAST Engine
+- `virtualrift-gateway`
+- `virtualrift-auth`
+- `virtualrift-tenant`
+- `virtualrift-orchestrator`
+- `virtualrift-reports`
 
-**Data layer:** PostgreSQL (RLS per tenant) · Elasticsearch · Redis · S3/MinIO
+Current scanner modules:
 
-**Observability:** Prometheus · Grafana · Loki · OpenTelemetry · Jaeger
+- `virtualrift-web-scanner`
+- `virtualrift-api-scanner`
+- `virtualrift-network-scanner`
+- `virtualrift-sast`
 
----
-
-## Getting started
+## Local Development
 
 ### Prerequisites
 
 - Java 21
-- Docker + Docker Compose
-- Node.js 20+ and pnpm
 - Maven 3.9+
+- Docker and Docker Compose
+- Node.js 20+
+- Corepack-enabled `pnpm`
 
-### Run locally
+### Backend
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/virtualrift.git
-cd virtualrift
-
-# Start all infrastructure dependencies
-docker-compose up -d
-
-# Build all backend modules
-cd backend && mvn clean install
-
-# Start the frontend
-cd ../frontend && pnpm install && pnpm dev
+cd backend
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+mvn test
 ```
 
-The dashboard will be available at `http://localhost:5173`.
-The API gateway will be available at `http://localhost:8080`.
+### Frontend workspace checks
 
----
+The frontend is not the active product surface yet, but the workspace tooling is already validated:
 
-## Claude Code Commands
+```bash
+cd frontend
+corepack pnpm install
+corepack pnpm test
+corepack pnpm lint
+```
 
-This repository is configured for use with Claude Code. The following slash commands are available:
+## Roadmap Direction
+
+The current sequence is:
+
+1. finish stabilizing the backend platform
+2. improve scan orchestration, tenancy, auth and reporting flows
+3. grow analyzer coverage across the first target language groups
+4. move into a beta phase with a real frontend experience
+5. evolve the platform into a broader multi-surface security product
+
+## Claude Code
+
+This repository is configured for Claude Code workflows through `.claude/`.
+
+Available project commands include:
 
 | Command | Description |
 |---|---|
-| `/project:add-scanner` | Scaffold a new scan engine end-to-end |
-| `/project:scan-review` | Review a completed scan and generate a remediation plan |
-| `/project:vuln-report` | Generate a formal vulnerability report from scan results |
-| `/project:deploy` | Guide a safe deployment to staging or production |
+| `/project:add-scanner` | Scaffold a new scan engine |
+| `/project:scan-review` | Review a completed scan and produce remediation guidance |
+| `/project:vuln-report` | Generate a formal vulnerability report |
+| `/project:deploy` | Guide a deployment workflow |
 
----
+## Security Positioning
 
-## Development
+VirtualRift is intended to be security-critical software, so the repository is being shaped with security review as part of normal development rather than as a final hardening step.
 
-### Running tests
-```bash
-# Backend — all modules
-cd backend && mvn test
+Current backend direction already assumes:
 
-# Backend — single module
-cd backend/virtualrift-auth && mvn test
-
-# Frontend
-cd frontend && pnpm test
-```
-
-### Code style
-
-Java is enforced via Checkstyle. TypeScript is enforced via ESLint and Prettier.
-All conventions are documented in `.claude/rules/code-style.md`.
-
-### Commits
-
-This project uses [Conventional Commits](https://www.conventionalcommits.org).
-```
-feat(web-scanner): add XSS detection via DOM-based analysis
-fix(auth): prevent token reuse after logout
-security(gateway): enforce rate limiting per tenant on scan endpoints
-```
-
----
-
-## Security
-
-Security is a first-class concern in this project.
-
-- All services enforce JWT authentication and tenant isolation via PostgreSQL RLS
-- Scan engines run in isolated containers with no access to internal infrastructure
-- Secrets are managed via HashiCorp Vault — never in source code or environment files
-- Every pull request is reviewed against the checklist in `.claude/rules/security.md`
-
-To report a vulnerability, please open a private security advisory on GitHub.
-Full security policy is documented in `SECURITY.md`.
-
----
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Language (backend) | Java 21 |
-| Framework | Spring Boot 3, Spring Security, Spring Cloud Gateway, Spring Batch |
-| Language (frontend) | TypeScript 5 |
-| UI framework | React 18, Vite, TailwindCSS, shadcn/ui |
-| Messaging | Apache Kafka |
-| Databases | PostgreSQL 16, Elasticsearch 8, Redis 7 |
-| Storage | S3 / MinIO |
-| Container runtime | Docker, Kubernetes (EKS / GKE) |
-| Infrastructure as code | Terraform, Helm |
-| CI/CD | GitHub Actions |
-| Observability | Prometheus, Grafana, Loki, OpenTelemetry, Jaeger |
-| Secret management | HashiCorp Vault |
-
----
+- tenant-aware isolation boundaries
+- JWT-based authentication across service boundaries
+- rate limiting and denylist controls at the gateway edge
+- review rules for auth, authz, data exposure, injection and scanner abuse
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).

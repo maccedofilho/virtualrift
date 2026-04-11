@@ -6,7 +6,7 @@
     "dev": "pnpm --filter virtualrift-dashboard dev",
     "build": "pnpm --filter virtualrift-dashboard build",
     "test": "corepack pnpm exec vitest run",
-    "lint": "pnpm --filter '*' lint"
+    "lint": "corepack pnpm --filter '*' lint"
   },
   "workspaces": [
     "apps/*",
@@ -16,6 +16,7 @@
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.1.0",
     "jsdom": "^26.1.0",
+    "typescript": "^6.0.2",
     "vitest": "^2.1.9"
   }
 }

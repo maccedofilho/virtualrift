@@ -29,9 +29,9 @@ public class GatewayConfig {
     }
 
     public static class Security {
-        private List<String> publicPaths = List.of("/health", "/actuator/**");
+        private List<String> publicPaths = List.of("/health", "/actuator/**", "/api/v1/auth/refresh");
         private long tokenCacheTtl = 300;
-        private String denylistKeyPrefix = "denylist:";
+        private String denylistKeyPrefix = "auth:denylist:";
 
         public List<String> getPublicPaths() {
             return publicPaths;

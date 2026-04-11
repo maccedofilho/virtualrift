@@ -88,11 +88,8 @@ public class ScanOrchestratorService {
         return getScan(scanId, tenantId);
     }
 
-    public ScanResponse getStatus(UUID scanId) {
-        Scan scan = scanRepository.findById(scanId)
-                .orElseThrow(() -> new ScanNotFoundException("Scan not found: " + scanId));
-
-        return toResponse(scan);
+    public ScanResponse getStatus(UUID scanId, UUID tenantId) {
+        return getScan(scanId, tenantId);
     }
 
     private void validateScanTypeAllowed(ScanType scanType, Plan plan) {

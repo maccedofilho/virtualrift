@@ -17,5 +17,7 @@ public interface ScanTargetRepository extends JpaRepository<ScanTarget, UUID> {
     @Query("SELECT st FROM ScanTarget st WHERE st.tenantId = :tenantId AND st.type = :type")
     List<ScanTarget> findByTenantIdAndType(@Param("tenantId") UUID tenantId, @Param("type") TargetType type);
 
+    long countByTenantId(UUID tenantId);
+
     boolean existsByTenantIdAndTarget(UUID tenantId, String target);
 }

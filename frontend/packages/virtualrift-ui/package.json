@@ -6,6 +6,6 @@
   "exports": "./src/index.ts",
   "scripts": {
     "test": "corepack pnpm --dir ../.. exec vitest run packages/virtualrift-ui/src/__tests__/ui.test.ts",
-    "lint": "echo \"No lint configured for @virtualrift/ui\""
+    "lint": "corepack pnpm --dir ../.. exec tsc --noEmit -p packages/virtualrift-ui/tsconfig.json"
   }
 }

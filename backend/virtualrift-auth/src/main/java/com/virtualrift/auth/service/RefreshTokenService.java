@@ -58,9 +58,14 @@ public class RefreshTokenService {
             throw new InvalidTokenException("token is revoked");
         }
 
-        return repository.findByToken(token)
-                .map(RefreshToken::userId)
+        RefreshToken refreshToken = repository.findByToken(token)
                 .orElseThrow(() -> new InvalidTokenException("token not found"));
+
+        if (refreshToken.expiration().isBefore(Instant.now())) {
+            throw new ExpiredTokenException("token has expired");
+        }
+
+        return refreshToken.userId();
     }
 
     @Transactional

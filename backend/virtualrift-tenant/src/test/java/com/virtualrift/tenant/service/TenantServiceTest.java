@@ -185,7 +185,7 @@ class TenantServiceTest {
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
-            when(scanTargetRepository.count()).thenReturn(0L);
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://acme.example")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -209,7 +209,7 @@ class TenantServiceTest {
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
-            when(scanTargetRepository.count()).thenReturn(0L);
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://acme.example")).thenReturn(true);
 
             assertThrows(SlugAlreadyExistsException.class, () -> tenantService.addScanTarget(tenantId, request));
@@ -226,7 +226,7 @@ class TenantServiceTest {
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
-            when(scanTargetRepository.count()).thenReturn(1L);
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(1L);
 
             assertThrows(TenantQuotaExceededException.class, () -> tenantService.addScanTarget(tenantId, request));
         }

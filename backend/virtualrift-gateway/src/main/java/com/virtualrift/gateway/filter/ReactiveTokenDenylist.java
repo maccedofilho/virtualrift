@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Objects;
 
 @Component
 public class ReactiveTokenDenylist {
@@ -32,16 +33,16 @@ public class ReactiveTokenDenylist {
                 .build();
     }
 
-    public Mono<Boolean> isDenied(String jti) {
-        if (localCache.getIfPresent(jti) != null) {
+    public Mono<Boolean> isDenied(String token) {
+        if (localCache.getIfPresent(token) != null) {
             return Mono.just(true);
         }
 
-        String key = getDenylistKey(jti);
+        String key = getDenylistKey(token);
         return redisTemplate.hasKey(key)
                 .doOnNext(exists -> {
                     if (Boolean.TRUE.equals(exists)) {
-                        localCache.put(jti, true);
+                        localCache.put(token, true);
                     }
                 })
                 .defaultIfEmpty(false)
@@ -52,37 +53,38 @@ public class ReactiveTokenDenylist {
                 });
     }
 
-    public Mono<Boolean> add(String jti, long expiration) {
-        String key = getDenylistKey(jti);
-        localCache.put(jti, true);
+    public Mono<Boolean> add(String token, long expiration) {
+        String key = getDenylistKey(token);
+        localCache.put(token, true);
 
         return redisTemplate.opsForValue()
                 .set(key, "1", Duration.ofSeconds(expiration))
-                .doOnSuccess(success -> log.debug("Token added to denylist: {}", jti))
+                .doOnSuccess(success -> log.debug("Token added to denylist"))
                 .doOnError(e -> log.error("Error adding token to denylist: {}", e.getMessage()))
                 .onErrorResume(e -> Mono.just(false));
     }
 
-    public Mono<Boolean> remove(String jti) {
-        String key = getDenylistKey(jti);
-        localCache.invalidate(jti);
+    public Mono<Boolean> remove(String token) {
+        String key = getDenylistKey(token);
+        localCache.invalidate(token);
 
         return redisTemplate.delete(key)
                 .map(deleted -> deleted > 0)
-                .doOnSuccess(deleted -> log.debug("Token removed from denylist: {}", jti))
+                .doOnSuccess(deleted -> log.debug("Token removed from denylist"))
                 .doOnError(e -> log.error("Error removing token from denylist: {}", e.getMessage()))
                 .onErrorResume(e -> Mono.just(false));
     }
 
-    public void invalidateCache(String jti) {
-        localCache.invalidate(jti);
+    public void invalidateCache(String token) {
+        localCache.invalidate(token);
     }
 
     public void clearCache() {
         localCache.invalidateAll();
     }
 
-    private String getDenylistKey(String jti) {
-        return gatewayConfig.getSecurity().getDenylistKeyPrefix() + jti;
+    private String getDenylistKey(String token) {
+        return gatewayConfig.getSecurity().getDenylistKeyPrefix()
+                + Integer.toHexString(Objects.hash(token));
     }
 }

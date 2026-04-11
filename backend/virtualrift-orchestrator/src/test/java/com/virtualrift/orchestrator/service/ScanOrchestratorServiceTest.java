@@ -190,7 +190,7 @@ class ScanOrchestratorServiceTest {
 
             when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
 
-            ScanResponse response = service.getStatus(scanId);
+            ScanResponse response = service.getStatus(scanId, TENANT_ID);
 
             assertEquals(ScanStatus.COMPLETED, response.status());
             assertEquals(scanId, response.id());
@@ -202,7 +202,18 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             when(scanRepository.findById(scanId)).thenReturn(Optional.empty());
 
-            assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId));
+            assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId, TENANT_ID));
+        }
+
+        @Test
+        @DisplayName("should reject status lookup when scan belongs to another tenant")
+        void getStatus_quandoPertenceAOutroTenant_lancaScanNotFoundException() {
+            UUID scanId = UUID.randomUUID();
+            Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.RUNNING);
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+
+            assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId, TENANT_ID));
         }
     }
 }

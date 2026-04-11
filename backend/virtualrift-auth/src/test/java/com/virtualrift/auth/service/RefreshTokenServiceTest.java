@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.exception.ExpiredTokenException;
 import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.model.RefreshToken;
 import com.virtualrift.auth.repository.RefreshTokenRepository;
@@ -131,6 +132,21 @@ class RefreshTokenServiceTest {
         void validateRefreshToken_quandoRevogado_lancaInvalidTokenException() {
             when(denylist.isRevoked(validToken.token())).thenReturn(true);
             assertThrows(InvalidTokenException.class, () -> service.validate(validToken.token()));
+        }
+
+        @Test
+        @DisplayName("should throw when token is expired")
+        void validateRefreshToken_quandoExpirado_lancaExpiredTokenException() {
+            RefreshToken expiredToken = new RefreshToken(
+                    UUID.randomUUID().toString(),
+                    userId,
+                    tenantId,
+                    Instant.now().minusSeconds(60)
+            );
+            when(repository.findByToken(expiredToken.token())).thenReturn(java.util.Optional.of(expiredToken));
+            when(denylist.isRevoked(expiredToken.token())).thenReturn(false);
+
+            assertThrows(ExpiredTokenException.class, () -> service.validate(expiredToken.token()));
         }
 
         @Test
