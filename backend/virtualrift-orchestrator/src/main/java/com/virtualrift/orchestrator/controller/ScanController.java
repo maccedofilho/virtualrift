@@ -43,8 +43,9 @@ public class ScanController {
     }
 
     @GetMapping("/{scanId}/status")
-    public ResponseEntity<ScanResponse> getStatus(@PathVariable UUID scanId) {
-        ScanResponse response = scanOrchestratorService.getStatus(scanId);
+    public ResponseEntity<ScanResponse> getStatus(@PathVariable UUID scanId,
+                                                  @RequestHeader("X-Tenant-Id") UUID tenantId) {
+        ScanResponse response = scanOrchestratorService.getStatus(scanId, tenantId);
         return ResponseEntity.ok(response);
     }
 }

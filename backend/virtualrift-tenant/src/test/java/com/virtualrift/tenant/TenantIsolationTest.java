@@ -113,11 +113,12 @@ class TenantIsolationTest {
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota(tenantId)));
-            when(scanTargetRepository.count()).thenReturn(0L);
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://shared.example")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             assertDoesNotThrow(() -> tenantService.addScanTarget(tenantId, request));
+            verify(scanTargetRepository).countByTenantId(tenantId);
             verify(scanTargetRepository).existsByTenantIdAndTarget(tenantId, "https://shared.example");
         }
     }

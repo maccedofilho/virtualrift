@@ -98,5 +98,18 @@ class ScanIsolationTest {
             assertEquals(scanId, response.id());
             assertEquals(tenantId, response.tenantId());
         }
+
+        @Test
+        @DisplayName("should preserve tenant filtering when reading scan status")
+        void getStatus_quandoTenantDiferente_lancaScanNotFoundException() {
+            UUID scanId = UUID.randomUUID();
+            UUID ownerTenantId = UUID.randomUUID();
+            UUID requesterTenantId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+
+            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan(scanId, ownerTenantId, userId)));
+
+            assertThrows(ScanNotFoundException.class, () -> scanOrchestratorService.getStatus(scanId, requesterTenantId));
+        }
     }
 }

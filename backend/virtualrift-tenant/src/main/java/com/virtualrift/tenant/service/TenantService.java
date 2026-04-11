@@ -95,7 +95,7 @@ public class TenantService {
         TenantQuota quota = quotaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
 
-        long currentTargets = scanTargetRepository.count();
+        long currentTargets = scanTargetRepository.countByTenantId(tenantId);
         if (quota.getMaxScanTargets() > 0 && currentTargets >= quota.getMaxScanTargets()) {
             throw new TenantQuotaExceededException("Maximum scan targets limit reached");
         }
