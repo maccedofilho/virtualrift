@@ -1,3 +1,5 @@
 spring:
   application:
     name: virtualrift-sast
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
