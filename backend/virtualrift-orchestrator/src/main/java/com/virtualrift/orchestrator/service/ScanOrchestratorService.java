@@ -1,16 +1,19 @@
 package com.virtualrift.orchestrator.service;
 
-import com.virtualrift.common.dto.ScanRequest;
-import com.virtualrift.common.events.ScanRequestedEvent;
+import com.virtualrift.common.model.Severity;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.TenantId;
 import com.virtualrift.orchestrator.dto.CreateScanRequest;
+import com.virtualrift.orchestrator.dto.ScanFindingResponse;
 import com.virtualrift.orchestrator.dto.ScanResponse;
+import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
+import com.virtualrift.orchestrator.model.ScanFinding;
+import com.virtualrift.orchestrator.repository.ScanFindingRepository;
 import com.virtualrift.orchestrator.repository.ScanRepository;
 import com.virtualrift.tenant.client.TenantClient;
 import com.virtualrift.tenant.model.TenantQuota;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -29,13 +33,16 @@ public class ScanOrchestratorService {
     private static final Logger log = LoggerFactory.getLogger(ScanOrchestratorService.class);
 
     private final ScanRepository scanRepository;
+    private final ScanFindingRepository scanFindingRepository;
     private final ScanEventProducer eventProducer;
     private final TenantClient tenantClient;
 
     public ScanOrchestratorService(ScanRepository scanRepository,
+                                  ScanFindingRepository scanFindingRepository,
                                   ScanEventProducer eventProducer,
                                   TenantClient tenantClient) {
         this.scanRepository = scanRepository;
+        this.scanFindingRepository = scanFindingRepository;
         this.eventProducer = eventProducer;
         this.tenantClient = tenantClient;
     }
@@ -92,6 +99,44 @@ public class ScanOrchestratorService {
         return getScan(scanId, tenantId);
     }
 
+    public List<ScanFindingResponse> getFindings(UUID scanId, UUID tenantId) {
+        getScan(scanId, tenantId);
+        return scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(tenantId, scanId).stream()
+                .map(this::toFindingResponse)
+                .toList();
+    }
+
+    public ScanResultResponse getResult(UUID scanId, UUID tenantId) {
+        Scan scan = scanRepository.findById(scanId)
+                .orElseThrow(() -> new ScanNotFoundException("Scan not found: " + scanId));
+
+        if (!scan.getTenantId().equals(tenantId)) {
+            throw new ScanNotFoundException("Scan not found: " + scanId);
+        }
+
+        List<ScanFindingResponse> findings = scanFindingRepository
+                .findByTenantIdAndScanIdOrderByDetectedAtDesc(tenantId, scanId).stream()
+                .map(this::toFindingResponse)
+                .toList();
+
+        return new ScanResultResponse(
+                scan.getId(),
+                scan.getTenantId(),
+                scan.getStatus(),
+                findings.size(),
+                countBySeverity(findings, Severity.CRITICAL),
+                countBySeverity(findings, Severity.HIGH),
+                countBySeverity(findings, Severity.MEDIUM),
+                countBySeverity(findings, Severity.LOW),
+                countBySeverity(findings, Severity.INFO),
+                calculateRiskScore(findings),
+                scan.getErrorMessage(),
+                scan.getStartedAt(),
+                scan.getCompletedAt(),
+                findings
+        );
+    }
+
     private void validateScanTypeAllowed(ScanType scanType, Plan plan) {
         if (!isScanTypeAllowed(scanType, plan)) {
             throw new ScanQuotaExceededException(
@@ -143,5 +188,41 @@ public class ScanOrchestratorService {
                 scan.getStartedAt(),
                 scan.getCompletedAt()
         );
+    }
+
+    private ScanFindingResponse toFindingResponse(ScanFinding finding) {
+        return new ScanFindingResponse(
+                finding.getId(),
+                finding.getScanId(),
+                finding.getTenantId(),
+                finding.getTitle(),
+                finding.getSeverity(),
+                finding.getCategory(),
+                finding.getLocation(),
+                finding.getEvidence(),
+                finding.getDetectedAt()
+        );
+    }
+
+    private int countBySeverity(List<ScanFindingResponse> findings, Severity severity) {
+        return (int) findings.stream()
+                .filter(finding -> finding.severity() == severity)
+                .count();
+    }
+
+    private int calculateRiskScore(List<ScanFindingResponse> findings) {
+        if (findings.isEmpty()) {
+            return 0;
+        }
+
+        int score = findings.stream()
+                .mapToInt(finding -> finding.severity().score())
+                .sum();
+
+        int normalized = Math.min(100, score / 5);
+        if (countBySeverity(findings, Severity.CRITICAL) > 0 && normalized < 50) {
+            return 50;
+        }
+        return normalized;
     }
 }
