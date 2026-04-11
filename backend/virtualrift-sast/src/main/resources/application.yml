@@ -3,3 +3,13 @@ spring:
     name: virtualrift-sast
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+virtualrift:
+  sast:
+    workspace-root: ${SAST_WORKSPACE_ROOT:${java.io.tmpdir}/virtualrift-sast}
+    allowed-repository-schemes:
+      - https
+    max-repository-bytes: ${SAST_MAX_REPOSITORY_BYTES:104857600}
+    max-repository-files: ${SAST_MAX_REPOSITORY_FILES:20000}
+    clone-timeout-seconds: ${SAST_CLONE_TIMEOUT_SECONDS:120}
+    local-targets-enabled: ${SAST_LOCAL_TARGETS_ENABLED:true}

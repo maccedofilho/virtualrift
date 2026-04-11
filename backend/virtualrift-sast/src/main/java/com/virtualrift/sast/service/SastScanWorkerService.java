@@ -22,10 +22,14 @@ public class SastScanWorkerService {
     private static final String ERROR_CODE_PROCESSING_FAILED = "SAST_PROCESSING_FAILED";
 
     private final SastAnalyzer analyzer;
+    private final SastTargetResolver targetResolver;
     private final SastScanEventPublisher publisher;
 
-    public SastScanWorkerService(SastAnalyzer analyzer, SastScanEventPublisher publisher) {
+    public SastScanWorkerService(SastAnalyzer analyzer,
+                                 SastTargetResolver targetResolver,
+                                 SastScanEventPublisher publisher) {
         this.analyzer = analyzer;
+        this.targetResolver = targetResolver;
         this.publisher = publisher;
     }
 
@@ -36,9 +40,8 @@ public class SastScanWorkerService {
 
         Instant startedAt = Instant.now();
 
-        try {
-            Path targetPath = resolveTarget(event.target());
-            List<VulnerabilityFinding> findings = analyze(targetPath).stream()
+        try (SastTarget target = targetResolver.resolve(event.target(), event.scanId(), event.timeout())) {
+            List<VulnerabilityFinding> findings = analyze(target.path()).stream()
                     .map(finding -> remapFinding(event, finding))
                     .sorted(VulnerabilityFinding.bySeverity())
                     .toList();
@@ -62,21 +65,6 @@ public class SastScanWorkerService {
 
     private boolean isSastScan(ScanRequestedEvent event) {
         return event != null && ScanType.SAST.name().equalsIgnoreCase(event.scanType());
-    }
-
-    private Path resolveTarget(String target) {
-        if (target == null || target.isBlank()) {
-            throw new IllegalArgumentException("SAST target cannot be blank");
-        }
-
-        Path path = Path.of(target).toAbsolutePath().normalize();
-        if (!Files.exists(path)) {
-            throw new IllegalArgumentException("SAST target does not exist: " + target);
-        }
-        if (!Files.isRegularFile(path) && !Files.isDirectory(path)) {
-            throw new IllegalArgumentException("SAST target must be a file or directory: " + target);
-        }
-        return path;
     }
 
     private List<VulnerabilityFinding> analyze(Path targetPath) {

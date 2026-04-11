@@ -6,6 +6,7 @@ import com.virtualrift.common.events.ScanRequestedEvent;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.TenantId;
+import com.virtualrift.sast.config.SastProperties;
 import com.virtualrift.sast.engine.SastAnalyzer;
 import com.virtualrift.sast.kafka.SastScanEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,9 +19,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,7 +46,10 @@ class SastScanWorkerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SastScanWorkerService(new SastAnalyzer(), publisher);
+        SastProperties properties = new SastProperties();
+        properties.setWorkspaceRoot(tempDir.resolve("workspace"));
+        SastTargetResolver targetResolver = new SastTargetResolver(properties, new TestGitClient());
+        service = new SastScanWorkerService(new SastAnalyzer(), targetResolver, publisher);
     }
 
     @Test
@@ -77,6 +83,25 @@ class SastScanWorkerServiceTest {
         assertEquals(Severity.CRITICAL, completed.findings().get(0).severity());
         assertTrue(completed.findings().get(0).evidence().contains("password=****"));
         assertTrue(completed.completedAt().isAfter(completed.startedAt()) || completed.completedAt().equals(completed.startedAt()));
+    }
+
+    @Test
+    @DisplayName("should clone repository target and publish completed event")
+    void process_quandoTargetRepositorio_publicaEventoCompleted() {
+        UUID scanId = UUID.randomUUID();
+        TenantId tenantId = TenantId.generate();
+        ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://github.com/acme/vulnerable.git", ScanType.SAST.name());
+
+        service.process(event);
+
+        ArgumentCaptor<ScanCompletedEvent> captor = ArgumentCaptor.forClass(ScanCompletedEvent.class);
+        verify(publisher).publishCompleted(captor.capture());
+
+        ScanCompletedEvent completed = captor.getValue();
+        assertEquals(scanId, completed.scanId());
+        assertEquals(tenantId, completed.tenantId());
+        assertEquals(1, completed.totalFindings());
+        assertTrue(completed.findings().get(0).location().contains("RepoExample.java"));
     }
 
     @Test
@@ -137,5 +162,24 @@ class SastScanWorkerServiceTest {
 
     private ScanRequestedEvent requestedEvent(UUID scanId, TenantId tenantId, String target, String scanType) {
         return new ScanRequestedEvent(scanId, tenantId, target, scanType, 1, 300, Instant.now());
+    }
+
+    private static class TestGitClient implements GitClient {
+
+        @Override
+        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout) {
+            try {
+                Files.createDirectories(destination);
+                Files.writeString(destination.resolve("RepoExample.java"), """
+                        class RepoExample {
+                            void run() {
+                                String password = "SuperSecret123";
+                            }
+                        }
+                        """);
+            } catch (IOException e) {
+                throw new IllegalArgumentException("test clone failed", e);
+            }
+        }
     }
 }
