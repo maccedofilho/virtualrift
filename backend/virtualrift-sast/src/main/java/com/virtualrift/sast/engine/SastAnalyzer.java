@@ -6,6 +6,7 @@ import com.virtualrift.common.model.TenantId;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -39,6 +40,10 @@ public class SastAnalyzer {
             Language.CSHARP, Set.of(".cs"),
             Language.RUST, Set.of(".rs"),
             Language.CPP, Set.of(".cpp", ".cc", ".cxx", ".hpp", ".h", ".c")
+    );
+
+    private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(
+            ".git", "node_modules", "target", "build", "dist", "vendor", ".next", ".gradle"
     );
 
     private static final Pattern HARDCODED_PASSWORD = Pattern.compile(
@@ -166,6 +171,10 @@ public class SastAnalyzer {
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
         try {
+            if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS)) {
+                return findings;
+            }
+
             String content = Files.readString(filePath);
             String fileName = filePath.getFileName().toString();
             Language language = detectLanguage(fileName);
@@ -208,10 +217,23 @@ public class SastAnalyzer {
     }
 
     private boolean isCodeFile(Path path) {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || isExcludedPath(path)) {
+            return false;
+        }
+
         String fileName = path.getFileName().toString().toLowerCase();
         return FILE_EXTENSIONS.values().stream()
                 .flatMap(Set::stream)
                 .anyMatch(fileName::endsWith);
+    }
+
+    private boolean isExcludedPath(Path path) {
+        for (Path segment : path) {
+            if (EXCLUDED_DIRECTORIES.contains(segment.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Language detectLanguage(String fileName) {

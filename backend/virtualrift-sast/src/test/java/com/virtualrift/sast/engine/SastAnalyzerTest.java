@@ -155,4 +155,19 @@ class SastAnalyzerTest {
         assertEquals(1, findings.size());
         assertTrue(findings.get(0).location().contains("Example.java"));
     }
+
+    @Test
+    @DisplayName("should ignore excluded dependency directories")
+    void analyzeDirectory_quandoArquivoEstaEmDiretorioExcluido_ignoraArquivo() throws IOException {
+        Path directory = Files.createTempDirectory("sast-project");
+        Path dependencyDirectory = directory.resolve("node_modules");
+        Files.createDirectories(dependencyDirectory);
+        Files.writeString(dependencyDirectory.resolve("dependency.js"), """
+                const password = "SuperSecret123";
+                """);
+
+        List<VulnerabilityFinding> findings = analyzer.analyzeDirectory(directory);
+
+        assertTrue(findings.isEmpty());
+    }
 }
