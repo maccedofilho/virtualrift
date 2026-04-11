@@ -18,7 +18,7 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration/orchestrator
     baseline-on-migrate: true
 
   kafka:
