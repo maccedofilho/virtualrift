@@ -35,7 +35,7 @@ public class KafkaConfig {
         config.put("group.id", "virtualrift-sast");
         config.put("key.deserializer", StringDeserializer.class);
         config.put("value.deserializer", JsonDeserializer.class);
-        config.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        config.put(JsonDeserializer.TRUSTED_PACKAGES, ScanRequestedEvent.class.getPackageName());
         return new DefaultKafkaConsumerFactory<>(
                 config,
                 new StringDeserializer(),

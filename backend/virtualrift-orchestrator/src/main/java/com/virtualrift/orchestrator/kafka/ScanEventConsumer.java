@@ -30,7 +30,11 @@ public class ScanEventConsumer {
         this.scanFindingRepository = scanFindingRepository;
     }
 
-    @KafkaListener(topics = "scan.completed", groupId = "virtualrift-orchestrator")
+    @KafkaListener(
+            topics = "scan.completed",
+            groupId = "virtualrift-orchestrator",
+            containerFactory = "scanCompletedKafkaListenerContainerFactory"
+    )
     @Transactional
     public void onScanCompleted(ScanCompletedEvent event) {
         log.info("Received scan.completed event for scanId: {}", event.scanId());
@@ -50,7 +54,11 @@ public class ScanEventConsumer {
         log.info("Scan {} marked as COMPLETED", event.scanId());
     }
 
-    @KafkaListener(topics = "scan.failed", groupId = "virtualrift-orchestrator")
+    @KafkaListener(
+            topics = "scan.failed",
+            groupId = "virtualrift-orchestrator",
+            containerFactory = "scanFailedKafkaListenerContainerFactory"
+    )
     @Transactional
     public void onScanFailed(ScanFailedEvent event) {
         log.info("Received scan.failed event for scanId: {}", event.scanId());
