@@ -1,6 +1,9 @@
 package com.virtualrift.tenant.client;
 
+import com.virtualrift.common.model.ScanType;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
+import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
+import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
 import com.virtualrift.tenant.model.TenantQuota;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -39,6 +42,19 @@ public class TenantClient {
             );
         } catch (Exception e) {
             throw new ScanNotFoundException("Failed to fetch plan for tenant: " + tenantId);
+        }
+    }
+
+    public boolean isScanTargetAuthorized(UUID tenantId, String target, ScanType scanType) {
+        try {
+            AuthorizeScanTargetResponse response = restTemplate.postForObject(
+                    tenantServiceUrl + "/api/v1/tenants/" + tenantId + "/scan-targets/authorize",
+                    new AuthorizeScanTargetRequest(target, scanType.name()),
+                    AuthorizeScanTargetResponse.class
+            );
+            return response != null && response.authorized();
+        } catch (Exception e) {
+            return false;
         }
     }
 }

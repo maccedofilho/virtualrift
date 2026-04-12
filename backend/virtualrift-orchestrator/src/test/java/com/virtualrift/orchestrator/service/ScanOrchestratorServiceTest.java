@@ -10,6 +10,7 @@ import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
+import com.virtualrift.orchestrator.exception.ScanTargetNotAuthorizedException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
@@ -100,6 +101,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -133,12 +135,27 @@ class ScanOrchestratorServiceTest {
         }
 
         @Test
+        @DisplayName("should reject when target is not authorized for tenant")
+        void createScan_quandoTargetNaoAutorizado_lancaScanTargetNotAuthorizedException() {
+            CreateScanRequest request = new CreateScanRequest(TARGET_URL, ScanType.WEB, 3, 300);
+
+            when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
+            when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(false);
+
+            assertThrows(ScanTargetNotAuthorizedException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
+            verify(scanRepository, never()).save(any(Scan.class));
+            verify(eventProducer, never()).publishScanRequested(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
         @DisplayName("should reject when daily quota is exceeded")
         void createScan_quandoQuotaDiariaExcedida_lancaScanQuotaExceededException() {
             CreateScanRequest request = new CreateScanRequest(TARGET_URL, ScanType.WEB, 3, 300);
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(1, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(1L);
 
             assertThrows(ScanQuotaExceededException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
@@ -151,6 +168,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 1));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(1L);
 

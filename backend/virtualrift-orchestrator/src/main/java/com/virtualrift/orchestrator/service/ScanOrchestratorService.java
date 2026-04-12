@@ -10,6 +10,7 @@ import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
+import com.virtualrift.orchestrator.exception.ScanTargetNotAuthorizedException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
@@ -53,7 +54,8 @@ public class ScanOrchestratorService {
         Plan plan = tenantClient.getPlan(tenantId);
 
         validateScanTypeAllowed(request.scanType(), plan);
-        validateDailyQuota(tenantId);
+        validateTargetAuthorized(tenantId, request.target(), request.scanType());
+        validateDailyQuota(tenantId, quota);
         validateConcurrentScans(tenantId, quota);
 
         Scan scan = new Scan(
@@ -154,9 +156,17 @@ public class ScanOrchestratorService {
         };
     }
 
-    private void validateDailyQuota(UUID tenantId) {
+    private void validateTargetAuthorized(UUID tenantId, String target, ScanType scanType) {
+        if (!tenantClient.isScanTargetAuthorized(tenantId, target, scanType)) {
+            throw new ScanTargetNotAuthorizedException(
+                    "Target is not registered or authorized for tenant: " + tenantId
+            );
+        }
+    }
+
+    private void validateDailyQuota(UUID tenantId, TenantQuota quota) {
         long todayCount = scanRepository.countByTenantIdSince(tenantId, Instant.now().minus(Duration.ofDays(1)));
-        int dailyLimit = tenantClient.getQuota(tenantId).getMaxScansPerDay();
+        int dailyLimit = quota.getMaxScansPerDay();
 
         if (dailyLimit > 0 && todayCount >= dailyLimit) {
             throw new ScanQuotaExceededException("Daily scan quota exceeded");

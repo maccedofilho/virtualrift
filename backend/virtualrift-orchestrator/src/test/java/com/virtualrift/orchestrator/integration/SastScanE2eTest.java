@@ -118,6 +118,11 @@ class SastScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.ENTERPRISE);
+        when(tenantClient.isScanTargetAuthorized(
+                tenantId,
+                "https://github.com/acme/vulnerable.git",
+                ScanType.SAST
+        )).thenReturn(true);
 
         waitForKafkaAssignments();
 

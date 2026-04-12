@@ -274,5 +274,101 @@ class TenantServiceTest {
             assertThrows(TenantNotFoundException.class, () -> tenantService.removeScanTarget(tenantId, targetId));
             verify(scanTargetRepository, never()).delete(any(ScanTarget.class));
         }
+
+        @Test
+        @DisplayName("should authorize WEB scan for registered URL host")
+        void isScanTargetAuthorized_quandoWebHostRegistrado_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://example.com", TargetType.URL, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "https://app.example.com/search", "WEB"));
+        }
+
+        @Test
+        @DisplayName("should reject unregistered WEB host")
+        void isScanTargetAuthorized_quandoWebHostNaoRegistrado_retornaFalse() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://example.com", TargetType.URL, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertFalse(tenantService.isScanTargetAuthorized(tenantId, "https://attacker.test", "WEB"));
+        }
+
+        @Test
+        @DisplayName("should authorize API scan from API spec host")
+        void isScanTargetAuthorized_quandoApiSpecRegistrada_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://api.example.com/openapi.json", TargetType.API_SPEC, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "https://api.example.com/users", "API"));
+        }
+
+        @Test
+        @DisplayName("should authorize NETWORK scan inside registered IPv4 CIDR")
+        void isScanTargetAuthorized_quandoIpDentroDoRange_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "203.0.113.10:443", "NETWORK"));
+        }
+
+        @Test
+        @DisplayName("should reject NETWORK scan outside registered IPv4 CIDR")
+        void isScanTargetAuthorized_quandoIpForaDoRange_retornaFalse() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertFalse(tenantService.isScanTargetAuthorized(tenantId, "198.51.100.10:443", "NETWORK"));
+        }
+
+        @Test
+        @DisplayName("should authorize SAST scan for registered repository")
+        void isScanTargetAuthorized_quandoRepositorioRegistrado_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://github.com/acme/app", TargetType.REPOSITORY, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "https://github.com/acme/app.git", "SAST"));
+        }
+
+        @Test
+        @DisplayName("should reject incompatible target type")
+        void isScanTargetAuthorized_quandoTipoIncompativel_retornaFalse() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://github.com/acme/app", TargetType.REPOSITORY, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertFalse(tenantService.isScanTargetAuthorized(tenantId, "https://github.com/acme/app", "WEB"));
+        }
+
+        @Test
+        @DisplayName("should reject authorization for missing tenant")
+        void isScanTargetAuthorized_quandoTenantNaoExiste_lancaTenantNotFoundException() {
+            UUID tenantId = UUID.randomUUID();
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(false);
+
+            assertThrows(TenantNotFoundException.class,
+                    () -> tenantService.isScanTargetAuthorized(tenantId, "https://example.com", "WEB"));
+            verify(scanTargetRepository, never()).findByTenantIdOrderByCreatedAtDesc(tenantId);
+        }
     }
 }
