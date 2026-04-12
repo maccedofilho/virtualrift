@@ -26,6 +26,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>${springdoc-openapi.version}</version>
+        </dependency>
+
         <!-- Redis for rate limiting and token denylist -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

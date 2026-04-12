@@ -88,7 +88,7 @@ public class LoginService {
         return new LoginResponse(token.accessToken(), refreshToken.token());
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidTokenException.class)
     public void logout(String accessToken, String refreshToken) {
         if (accessToken != null && !accessToken.isBlank()) {
             denylist.add(accessToken, Instant.now());
@@ -105,7 +105,7 @@ public class LoginService {
         log.info("User logged out");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResponse refreshToken(String refreshTokenValue) {
         UUID userId = refreshTokenService.validate(refreshTokenValue);
 

@@ -20,7 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -323,6 +325,15 @@ class LoginServiceTest {
         }
 
         @Test
+        @DisplayName("should not rollback logout when refresh token is invalid")
+        void logout_quandoRefreshTokenInvalido_naoMarcaRollback() throws Exception {
+            Method method = LoginService.class.getDeclaredMethod("logout", String.class, String.class);
+            Transactional transactional = method.getAnnotation(Transactional.class);
+
+            assertArrayEquals(new Class<?>[]{InvalidTokenException.class}, transactional.noRollbackFor());
+        }
+
+        @Test
         @DisplayName("should ignore blank access token")
         void logout_quandoAccessTokenVazio_naoAdicionaNaDenylist() {
             loginService.logout(" ", "refresh-token");
@@ -352,6 +363,15 @@ class LoginServiceTest {
             assertNotNull(response);
             assertEquals("new-access-token", response.accessToken());
             assertEquals("new-refresh-token", response.refreshToken());
+        }
+
+        @Test
+        @DisplayName("should allow writes when rotating refresh token")
+        void refreshToken_quandoRotaciona_naoDeveSerReadOnly() throws Exception {
+            Method method = LoginService.class.getDeclaredMethod("refreshToken", String.class);
+            Transactional transactional = method.getAnnotation(Transactional.class);
+
+            assertFalse(transactional.readOnly());
         }
 
         @Test
