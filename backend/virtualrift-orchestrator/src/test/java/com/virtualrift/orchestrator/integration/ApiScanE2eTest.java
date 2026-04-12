@@ -118,6 +118,11 @@ class ApiScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.STARTER);
+        when(tenantClient.isScanTargetAuthorized(
+                tenantId,
+                "https://api.example.com/users",
+                ScanType.API
+        )).thenReturn(true);
 
         waitForKafkaAssignments();
 

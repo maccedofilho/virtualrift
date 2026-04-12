@@ -1,6 +1,8 @@
 package com.virtualrift.tenant.controller;
 
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
+import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
+import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
@@ -66,6 +68,14 @@ public class TenantController {
             @Valid @RequestBody AddScanTargetRequest request) {
         ScanTargetResponse response = tenantService.addScanTarget(id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{id}/scan-targets/authorize")
+    public ResponseEntity<AuthorizeScanTargetResponse> authorizeScanTarget(
+            @PathVariable UUID id,
+            @Valid @RequestBody AuthorizeScanTargetRequest request) {
+        boolean authorized = tenantService.isScanTargetAuthorized(id, request.target(), request.scanType());
+        return ResponseEntity.ok(new AuthorizeScanTargetResponse(authorized));
     }
 
     @DeleteMapping("/{tenantId}/scan-targets/{targetId}")
