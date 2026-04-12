@@ -1,6 +1,7 @@
 package com.virtualrift.networkscanner.engine;
 
 import com.virtualrift.common.model.Severity;
+import com.virtualrift.common.model.TenantId;
 import com.virtualrift.common.model.VulnerabilityFinding;
 
 import java.security.cert.X509Certificate;
@@ -397,7 +398,7 @@ public class TlsAnalyzer {
         return VulnerabilityFinding.of(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
+                TenantId.generate(),
                 title,
                 severity,
                 "TLS",
