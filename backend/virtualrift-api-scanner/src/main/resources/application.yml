@@ -1,3 +1,29 @@
 spring:
   application:
     name: virtualrift-api-scanner
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  port: ${API_SCANNER_PORT:8086}
+
+virtualrift:
+  api-scanner:
+    request-timeout-seconds: ${API_SCANNER_REQUEST_TIMEOUT_SECONDS:10}
+    max-findings: ${API_SCANNER_MAX_FINDINGS:100}
+    user-agent: ${API_SCANNER_USER_AGENT:VirtualRift-ApiScanner/0.1}
+    default-method: ${API_SCANNER_DEFAULT_METHOD:GET}
+    parameter-names:
+      - id
+      - q
+      - search
+    injection-payloads:
+      - "' OR '1'='1"
+      - "{$ne:null}"
+      - "; id"
+    endpoint-scan-enabled: true
+    cors-scan-enabled: true
+    rate-limit-scan-enabled: true
+    open-api-scan-enabled: true
+    injection-scan-enabled: true
+    jwt-scan-enabled: false
