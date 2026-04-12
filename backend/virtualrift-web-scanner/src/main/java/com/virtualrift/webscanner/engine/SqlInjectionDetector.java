@@ -615,7 +615,7 @@ public class SqlInjectionDetector {
         return VulnerabilityFinding.of(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                null,
+                TenantId.generate(),
                 title,
                 severity,
                 "SQL_INJECTION",

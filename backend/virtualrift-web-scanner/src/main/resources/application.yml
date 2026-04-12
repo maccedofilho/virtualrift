@@ -1,3 +1,26 @@
 spring:
   application:
     name: virtualrift-web-scanner
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  port: ${WEB_SCANNER_PORT:8085}
+
+virtualrift:
+  web-scanner:
+    request-timeout-seconds: ${WEB_SCANNER_REQUEST_TIMEOUT_SECONDS:10}
+    max-findings: ${WEB_SCANNER_MAX_FINDINGS:100}
+    user-agent: ${WEB_SCANNER_USER_AGENT:VirtualRift-WebScanner/0.1}
+    parameter-names:
+      - q
+      - search
+      - query
+      - id
+    xss-payloads:
+      - "<script>alert('XSS')</script>"
+      - "<img src=x onerror=alert('XSS')>"
+    dom-xss-enabled: ${WEB_SCANNER_DOM_XSS_ENABLED:true}
+    sql-error-enabled: ${WEB_SCANNER_SQL_ERROR_ENABLED:true}
+    sql-boolean-enabled: ${WEB_SCANNER_SQL_BOOLEAN_ENABLED:true}
+    sql-union-enabled: ${WEB_SCANNER_SQL_UNION_ENABLED:true}

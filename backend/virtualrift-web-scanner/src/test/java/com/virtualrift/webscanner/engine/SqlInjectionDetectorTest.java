@@ -9,9 +9,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Optional;
 
+import com.virtualrift.common.model.VulnerabilityFinding;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -125,6 +130,24 @@ class SqlInjectionDetectorTest {
 
             assertTrue(detector.scanJson(TARGET_URL, "id").isEmpty());
             verify(httpClient, atLeastOnce()).sendJson(eq(TARGET_URL), anyString());
+        }
+    }
+
+    @Nested
+    @DisplayName("Error-based SQL injection")
+    class ErrorBasedSqlInjection {
+
+        @Test
+        @DisplayName("should create finding with tenant id")
+        void scan_quandoRespostaComErroSql_retornaFindingValido() {
+            when(httpClient.sendRequest(TARGET_URL, "id='"))
+                    .thenReturn(Optional.of("You have an error in your SQL syntax"));
+
+            List<VulnerabilityFinding> findings = detector.scan(TARGET_URL, "id", "'");
+
+            assertEquals(1, findings.size());
+            assertEquals("Error-based SQL Injection", findings.get(0).title());
+            assertNotNull(findings.get(0).tenantId());
         }
     }
 
