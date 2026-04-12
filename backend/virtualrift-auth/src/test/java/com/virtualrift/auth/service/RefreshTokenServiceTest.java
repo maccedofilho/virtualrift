@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -199,6 +201,15 @@ class RefreshTokenServiceTest {
             when(repository.findByToken("unknown-token")).thenReturn(java.util.Optional.empty());
 
             assertThrows(InvalidTokenException.class, () -> service.revoke("unknown-token"));
+        }
+
+        @Test
+        @DisplayName("should not mark transaction rollback-only for invalid token")
+        void revokeRefreshToken_quandoInvalido_naoMarcaRollback() throws Exception {
+            Method method = RefreshTokenService.class.getDeclaredMethod("revoke", String.class);
+            Transactional transactional = method.getAnnotation(Transactional.class);
+
+            assertArrayEquals(new Class<?>[]{InvalidTokenException.class}, transactional.noRollbackFor());
         }
 
         @Test

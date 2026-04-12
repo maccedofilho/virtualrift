@@ -55,6 +55,9 @@ class RateLimitFilterTest {
 
         gatewayConfig = new GatewayConfig();
         gatewayConfig.setRateLimit(rateLimit);
+        GatewayConfig.Security security = new GatewayConfig.Security();
+        security.setPublicPaths(java.util.List.of("/health", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**"));
+        gatewayConfig.setSecurity(security);
 
         filter = new RateLimitFilter(proxyManager, gatewayConfig);
         filterChain = mock(GatewayFilterChain.class);
@@ -162,6 +165,18 @@ class RateLimitFilterTest {
         void filter_quandoActuatorEndpoint_naoLimita() {
             when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchangeWithoutHeaders("/actuator/health");
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(filterChain).filter(any(ServerWebExchange.class));
+            verify(proxyManager, never()).builder();
+        }
+
+        @Test
+        @DisplayName("should not rate limit OpenAPI endpoints")
+        void filter_quandoOpenApiEndpoint_naoLimita() {
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+            ServerWebExchange exchange = createExchangeWithoutHeaders("/v3/api-docs/tenant");
 
             filter.filter(exchange, filterChain).block();
 

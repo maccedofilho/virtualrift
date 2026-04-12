@@ -68,7 +68,7 @@ public class RefreshTokenService {
         return refreshToken.userId();
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidTokenException.class)
     public void revoke(String token) {
         if (token == null || token.isBlank()) {
             throw new InvalidTokenException("token cannot be null or blank");

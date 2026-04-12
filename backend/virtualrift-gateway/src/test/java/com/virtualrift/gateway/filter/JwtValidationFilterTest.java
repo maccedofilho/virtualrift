@@ -53,7 +53,14 @@ class JwtValidationFilterTest {
     void setUp() {
         GatewayConfig gatewayConfig = new GatewayConfig();
         GatewayConfig.Security security = new GatewayConfig.Security();
-        security.setPublicPaths(List.of("/health", "/actuator/**", "/api/v1/auth/login", "/api/v1/auth/refresh"));
+        security.setPublicPaths(List.of(
+                "/health",
+                "/actuator/**",
+                "/api/v1/auth/login",
+                "/api/v1/auth/refresh",
+                "/swagger-ui/**",
+                "/v3/api-docs/**"
+        ));
         gatewayConfig.setSecurity(security);
 
         filter = new JwtValidationFilter(jwtValidator, tokenDenylist, gatewayConfig);
@@ -92,6 +99,18 @@ class JwtValidationFilterTest {
         void filter_quandoRefreshRoute_passaSemAutenticacao() {
             when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchange("/api/v1/auth/refresh");
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(filterChain).filter(exchange);
+            verify(jwtValidator, never()).validate(any());
+        }
+
+        @Test
+        @DisplayName("should bypass auth for OpenAPI docs")
+        void filter_quandoOpenApiRoute_passaSemAutenticacao() {
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+            ServerWebExchange exchange = createExchange("/v3/api-docs/orchestrator");
 
             filter.filter(exchange, filterChain).block();
 

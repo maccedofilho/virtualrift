@@ -168,7 +168,26 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isPublicEndpoint(String path) {
-        return path.equals("/health") || path.startsWith("/actuator/");
+        if (path.equals("/health") || path.startsWith("/actuator/")) {
+            return true;
+        }
+
+        for (String publicPath : gatewayConfig.getSecurity().getPublicPaths()) {
+            if (matchesPath(path, publicPath)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean matchesPath(String path, String configuredPath) {
+        if (configuredPath.endsWith("/**")) {
+            String prefix = configuredPath.substring(0, configuredPath.length() - 3);
+            return path.startsWith(prefix);
+        }
+
+        return path.equals(configuredPath);
     }
 
     @Override

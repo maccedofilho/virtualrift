@@ -3,10 +3,12 @@ package com.virtualrift.auth.service;
 import com.virtualrift.auth.exception.InvalidPasswordException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.util.Set;
 
+@Service
 public class PasswordService {
 
     private static final int MIN_LENGTH = 8;

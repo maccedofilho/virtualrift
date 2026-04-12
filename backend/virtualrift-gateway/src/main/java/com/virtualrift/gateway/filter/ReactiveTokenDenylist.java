@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.virtualrift.gateway.config.GatewayConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -23,7 +24,7 @@ public class ReactiveTokenDenylist {
     private final GatewayConfig gatewayConfig;
     private final Cache<String, Boolean> localCache;
 
-    public ReactiveTokenDenylist(ReactiveRedisTemplate<String, String> redisTemplate,
+    public ReactiveTokenDenylist(@Qualifier("reactiveRedisTemplate") ReactiveRedisTemplate<String, String> redisTemplate,
                                  GatewayConfig gatewayConfig) {
         this.redisTemplate = redisTemplate;
         this.gatewayConfig = gatewayConfig;
