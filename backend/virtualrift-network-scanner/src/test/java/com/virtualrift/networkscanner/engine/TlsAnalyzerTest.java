@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -62,6 +63,18 @@ class TlsAnalyzerTest {
                     .thenReturn(List.of("TLSv1.2", "TLSv1.3"));
 
             assertTrue(analyzer.analyzeProtocols(TARGET_HOST, TARGET_PORT).isEmpty());
+        }
+
+        @Test
+        @DisplayName("should create valid finding identity for weak protocol")
+        void analyzeProtocols_quandoProtocoloFraco_criaFindingComTenantId() {
+            when(tlsConnection.getSupportedProtocols(anyString(), anyInt()))
+                    .thenReturn(List.of("TLSv1"));
+
+            var findings = analyzer.analyzeProtocols(TARGET_HOST, TARGET_PORT);
+
+            assertFalse(findings.isEmpty());
+            assertNotNull(findings.getFirst().tenantId());
         }
 
         @Test

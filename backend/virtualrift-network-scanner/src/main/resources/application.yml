@@ -1,3 +1,22 @@
 spring:
   application:
     name: virtualrift-network-scanner
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  port: ${NETWORK_SCANNER_PORT:8087}
+
+virtualrift:
+  network-scanner:
+    connection-timeout-seconds: ${NETWORK_SCANNER_CONNECTION_TIMEOUT_SECONDS:10}
+    request-timeout-seconds: ${NETWORK_SCANNER_REQUEST_TIMEOUT_SECONDS:10}
+    max-findings: ${NETWORK_SCANNER_MAX_FINDINGS:100}
+    default-port: ${NETWORK_SCANNER_DEFAULT_PORT:443}
+    user-agent: ${NETWORK_SCANNER_USER_AGENT:VirtualRift-NetworkScanner/0.1}
+    certificate-scan-enabled: true
+    protocol-scan-enabled: true
+    cipher-scan-enabled: true
+    key-exchange-scan-enabled: true
+    hostname-scan-enabled: true
+    hsts-scan-enabled: true
