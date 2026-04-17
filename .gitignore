@@ -64,5 +64,6 @@ temp/
 *.swo
 *~
 
-# Local repair plan (optional; remove from ignore if you want it versioned)
-PLANO_REPARO_COMPLETO.md
+# Local project context (optional; remove from ignore if you want it versioned)
+ROADMAP_E_STATUS_VIRTUALRIFT.md
+CONTEXTO_OPERACIONAL_VIRTUALRIFT.md
