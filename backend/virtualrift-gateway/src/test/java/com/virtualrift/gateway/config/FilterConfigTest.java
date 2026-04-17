@@ -6,9 +6,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class FilterConfigTest {
 
@@ -26,12 +26,22 @@ class FilterConfigTest {
     }
 
     @Test
-    void proxyManager_deveConfigurarExpirationStrategyObrigatoria() {
+    void rateLimitExpiration_deveUsarDuracaoConfigurada() {
         GatewayConfig gatewayConfig = new GatewayConfig();
-        LettuceConnectionFactory connectionFactory = new LettuceConnectionFactory("localhost", 6379);
+        gatewayConfig.getRateLimit().setWindowDuration(90);
 
-        ProxyManager<byte[]> proxyManager = new FilterConfig().proxyManager(connectionFactory, gatewayConfig);
+        Duration expiration = new FilterConfig().rateLimitExpiration(gatewayConfig);
 
-        assertNotNull(proxyManager);
+        assertEquals(Duration.ofSeconds(90), expiration);
+    }
+
+    @Test
+    void rateLimitExpiration_deveImporMinimoDeUmSegundo() {
+        GatewayConfig gatewayConfig = new GatewayConfig();
+        gatewayConfig.getRateLimit().setWindowDuration(0);
+
+        Duration expiration = new FilterConfig().rateLimitExpiration(gatewayConfig);
+
+        assertEquals(Duration.ofSeconds(1), expiration);
     }
 }
