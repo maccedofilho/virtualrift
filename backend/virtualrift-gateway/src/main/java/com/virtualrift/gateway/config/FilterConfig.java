@@ -43,12 +43,14 @@ public class FilterConfig {
                 )
         );
 
-        long ttlSeconds = Math.max(1, gatewayConfig.getRateLimit().getWindowDuration());
-
         return LettuceBasedProxyManager.builderFor(redisClient)
                 .withExpirationStrategy(ExpirationAfterWriteStrategy.basedOnTimeForRefillingBucketUpToMax(
-                        Duration.ofSeconds(ttlSeconds)
+                        rateLimitExpiration(gatewayConfig)
                 ))
                 .build();
+    }
+
+    Duration rateLimitExpiration(GatewayConfig gatewayConfig) {
+        return Duration.ofSeconds(Math.max(1, gatewayConfig.getRateLimit().getWindowDuration()));
     }
 }
