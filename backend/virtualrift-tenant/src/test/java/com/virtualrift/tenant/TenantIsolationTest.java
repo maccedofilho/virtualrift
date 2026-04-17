@@ -12,6 +12,7 @@ import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
+import com.virtualrift.tenant.service.ScanTargetOwnershipVerifier;
 import com.virtualrift.tenant.service.TenantService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,11 +47,19 @@ class TenantIsolationTest {
     @Mock
     private ScanTargetRepository scanTargetRepository;
 
+    @Mock
+    private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
+
     private TenantService tenantService;
 
     @BeforeEach
     void setUp() {
-        tenantService = new TenantService(tenantRepository, quotaRepository, scanTargetRepository);
+        tenantService = new TenantService(
+                tenantRepository,
+                quotaRepository,
+                scanTargetRepository,
+                scanTargetOwnershipVerifier
+        );
     }
 
     private Tenant tenant(UUID tenantId, String slug) {
