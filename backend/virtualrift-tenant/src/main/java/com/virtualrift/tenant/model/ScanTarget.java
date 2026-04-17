@@ -32,6 +32,19 @@ public class ScanTarget {
     @Column(name = "description")
     private String description;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false)
+    private ScanTargetVerificationStatus verificationStatus;
+
+    @Column(name = "verification_token", nullable = false)
+    private String verificationToken;
+
+    @Column(name = "verification_checked_at")
+    private Instant verificationCheckedAt;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -44,12 +57,22 @@ public class ScanTarget {
         this.target = target;
         this.type = type;
         this.description = description;
+        this.verificationStatus = ScanTargetVerificationStatus.PENDING;
+        this.verificationToken = UUID.randomUUID().toString();
         this.createdAt = Instant.now();
     }
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (verificationStatus == null) {
+            verificationStatus = ScanTargetVerificationStatus.PENDING;
+        }
+        if (verificationToken == null || verificationToken.isBlank()) {
+            verificationToken = UUID.randomUUID().toString();
+        }
     }
 
     public UUID getId() { return id; }
@@ -57,6 +80,10 @@ public class ScanTarget {
     public String getTarget() { return target; }
     public TargetType getType() { return type; }
     public String getDescription() { return description; }
+    public ScanTargetVerificationStatus getVerificationStatus() { return verificationStatus; }
+    public String getVerificationToken() { return verificationToken; }
+    public Instant getVerificationCheckedAt() { return verificationCheckedAt; }
+    public Instant getVerifiedAt() { return verifiedAt; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setId(UUID id) { this.id = id; }
@@ -64,4 +91,18 @@ public class ScanTarget {
     public void setTarget(String target) { this.target = target; }
     public void setType(TargetType type) { this.type = type; }
     public void setDescription(String description) { this.description = description; }
+    public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
+
+    public void markVerified() {
+        Instant now = Instant.now();
+        this.verificationStatus = ScanTargetVerificationStatus.VERIFIED;
+        this.verificationCheckedAt = now;
+        this.verifiedAt = now;
+    }
+
+    public void markFailed() {
+        this.verificationStatus = ScanTargetVerificationStatus.FAILED;
+        this.verificationCheckedAt = Instant.now();
+        this.verifiedAt = null;
+    }
 }

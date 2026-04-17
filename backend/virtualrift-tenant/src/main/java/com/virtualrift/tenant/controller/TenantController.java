@@ -78,6 +78,14 @@ public class TenantController {
         return ResponseEntity.ok(new AuthorizeScanTargetResponse(authorized));
     }
 
+    @PostMapping("/{tenantId}/scan-targets/{targetId}/verify")
+    public ResponseEntity<ScanTargetResponse> verifyScanTarget(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID targetId) {
+        ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{tenantId}/scan-targets/{targetId}")
     public ResponseEntity<Void> removeScanTarget(
             @PathVariable UUID tenantId,

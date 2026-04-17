@@ -10,6 +10,7 @@ import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.ScanTarget;
+import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Tenant;
 import com.virtualrift.tenant.model.TenantQuota;
@@ -32,13 +33,16 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final TenantQuotaRepository quotaRepository;
     private final ScanTargetRepository scanTargetRepository;
+    private final ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     public TenantService(TenantRepository tenantRepository,
                         TenantQuotaRepository quotaRepository,
-                        ScanTargetRepository scanTargetRepository) {
+                        ScanTargetRepository scanTargetRepository,
+                        ScanTargetOwnershipVerifier scanTargetOwnershipVerifier) {
         this.tenantRepository = tenantRepository;
         this.quotaRepository = quotaRepository;
         this.scanTargetRepository = scanTargetRepository;
+        this.scanTargetOwnershipVerifier = scanTargetOwnershipVerifier;
     }
 
     @Transactional
@@ -117,24 +121,12 @@ public class TenantService {
         );
         scanTarget = scanTargetRepository.save(scanTarget);
 
-        return new ScanTargetResponse(
-                scanTarget.getId(),
-                scanTarget.getTarget(),
-                scanTarget.getType(),
-                scanTarget.getDescription(),
-                scanTarget.getCreatedAt()
-        );
+        return toResponse(scanTarget);
     }
 
     public List<ScanTargetResponse> getScanTargets(UUID tenantId) {
         return scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .map(st -> new ScanTargetResponse(
-                        st.getId(),
-                        st.getTarget(),
-                        st.getType(),
-                        st.getDescription(),
-                        st.getCreatedAt()
-                ))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -147,28 +139,42 @@ public class TenantService {
         }
 
         return scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .filter(scanTarget -> scanTarget.getVerificationStatus() == ScanTargetVerificationStatus.VERIFIED)
                 .filter(scanTarget -> isCompatible(scanTarget.getType(), scanType))
                 .anyMatch(scanTarget -> matches(scanTarget, target));
     }
 
     @Transactional
+    public ScanTargetResponse verifyScanTarget(UUID tenantId, UUID targetId) {
+        ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        ScanTargetOwnershipVerificationResult verification = scanTargetOwnershipVerifier.verify(scanTarget);
+        if (verification.verified()) {
+            scanTarget.markVerified();
+        } else {
+            scanTarget.markFailed();
+        }
+        return toResponse(scanTargetRepository.save(scanTarget));
+    }
+
+    @Transactional
     public void removeScanTarget(UUID tenantId, UUID targetId) {
+        ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        scanTargetRepository.delete(scanTarget);
+    }
+
+    public void validateQuota(UUID tenantId, String quotaType) {
+        quotaRepository.findByTenantId(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
+    }
+
+    private ScanTarget findTenantScanTarget(UUID tenantId, UUID targetId) {
         ScanTarget scanTarget = scanTargetRepository.findById(targetId)
                 .orElseThrow(() -> new TenantNotFoundException("Scan target not found: " + targetId));
 
         if (!scanTarget.getTenantId().equals(tenantId)) {
             throw new TenantNotFoundException("Scan target does not belong to tenant");
         }
-
-        scanTargetRepository.delete(scanTarget);
-    }
-
-    public void validateQuota(UUID tenantId, String quotaType) {
-        TenantQuota quota = quotaRepository.findByTenantId(tenantId)
-                .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
-
-        // implement quota validation logic based on quotaType
-        // this will be called by orchestrator before triggering scans
+        return scanTarget;
     }
 
     private boolean isCompatible(TargetType targetType, String scanType) {
@@ -315,6 +321,20 @@ public class TenantService {
                 tenant.getStatus(),
                 tenant.getCreatedAt(),
                 tenant.getUpdatedAt()
+        );
+    }
+
+    private ScanTargetResponse toResponse(ScanTarget scanTarget) {
+        return new ScanTargetResponse(
+                scanTarget.getId(),
+                scanTarget.getTarget(),
+                scanTarget.getType(),
+                scanTarget.getDescription(),
+                scanTarget.getVerificationStatus(),
+                scanTarget.getVerificationToken(),
+                scanTarget.getVerificationCheckedAt(),
+                scanTarget.getVerifiedAt(),
+                scanTarget.getCreatedAt()
         );
     }
 }

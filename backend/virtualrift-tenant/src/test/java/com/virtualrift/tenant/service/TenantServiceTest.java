@@ -10,6 +10,7 @@ import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.ScanTarget;
+import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Tenant;
 import com.virtualrift.tenant.model.TenantQuota;
@@ -47,11 +48,19 @@ class TenantServiceTest {
     @Mock
     private ScanTargetRepository scanTargetRepository;
 
+    @Mock
+    private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
+
     private TenantService tenantService;
 
     @BeforeEach
     void setUp() {
-        tenantService = new TenantService(tenantRepository, quotaRepository, scanTargetRepository);
+        tenantService = new TenantService(
+                tenantRepository,
+                quotaRepository,
+                scanTargetRepository,
+                scanTargetOwnershipVerifier
+        );
     }
 
     private Tenant createTenant(UUID tenantId, String slug, Plan plan, TenantStatus status) {
@@ -64,6 +73,12 @@ class TenantServiceTest {
 
     private ScanTarget createScanTarget(UUID tenantId, String target) {
         return new ScanTarget(UUID.randomUUID(), tenantId, target, TargetType.URL, "primary target");
+    }
+
+    private ScanTarget createVerifiedScanTarget(UUID tenantId, String target, TargetType targetType) {
+        ScanTarget scanTarget = new ScanTarget(UUID.randomUUID(), tenantId, target, targetType, null);
+        scanTarget.markVerified();
+        return scanTarget;
     }
 
     @Nested
@@ -193,9 +208,12 @@ class TenantServiceTest {
 
             assertEquals("https://acme.example", response.target());
             assertEquals(TargetType.URL, response.type());
+            assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
+            assertNotNull(response.verificationToken());
             verify(scanTargetRepository).save(argThat(target ->
                     target.getTenantId().equals(tenantId) &&
-                    target.getTarget().equals("https://acme.example")
+                    target.getTarget().equals("https://acme.example") &&
+                    target.getVerificationStatus() == ScanTargetVerificationStatus.PENDING
             ));
         }
 
@@ -279,7 +297,7 @@ class TenantServiceTest {
         @DisplayName("should authorize WEB scan for registered URL host")
         void isScanTargetAuthorized_quandoWebHostRegistrado_retornaTrue() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://example.com", TargetType.URL, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://example.com", TargetType.URL);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -288,10 +306,22 @@ class TenantServiceTest {
         }
 
         @Test
+        @DisplayName("should reject matching target when ownership is not verified")
+        void isScanTargetAuthorized_quandoTargetPendente_retornaFalse() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://example.com", TargetType.URL, null);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertFalse(tenantService.isScanTargetAuthorized(tenantId, "https://example.com/login", "WEB"));
+        }
+
+        @Test
         @DisplayName("should reject unregistered WEB host")
         void isScanTargetAuthorized_quandoWebHostNaoRegistrado_retornaFalse() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://example.com", TargetType.URL, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://example.com", TargetType.URL);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -303,7 +333,7 @@ class TenantServiceTest {
         @DisplayName("should authorize API scan from API spec host")
         void isScanTargetAuthorized_quandoApiSpecRegistrada_retornaTrue() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://api.example.com/openapi.json", TargetType.API_SPEC, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://api.example.com/openapi.json", TargetType.API_SPEC);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -315,7 +345,7 @@ class TenantServiceTest {
         @DisplayName("should authorize NETWORK scan inside registered IPv4 CIDR")
         void isScanTargetAuthorized_quandoIpDentroDoRange_retornaTrue() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "203.0.113.0/24", TargetType.IP_RANGE);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -327,7 +357,7 @@ class TenantServiceTest {
         @DisplayName("should reject NETWORK scan outside registered IPv4 CIDR")
         void isScanTargetAuthorized_quandoIpForaDoRange_retornaFalse() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "203.0.113.0/24", TargetType.IP_RANGE);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -339,7 +369,7 @@ class TenantServiceTest {
         @DisplayName("should authorize SAST scan for registered repository")
         void isScanTargetAuthorized_quandoRepositorioRegistrado_retornaTrue() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://github.com/acme/app", TargetType.REPOSITORY, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://github.com/acme/app", TargetType.REPOSITORY);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -351,7 +381,7 @@ class TenantServiceTest {
         @DisplayName("should reject incompatible target type")
         void isScanTargetAuthorized_quandoTipoIncompativel_retornaFalse() {
             UUID tenantId = UUID.randomUUID();
-            ScanTarget target = new ScanTarget(UUID.randomUUID(), tenantId, "https://github.com/acme/app", TargetType.REPOSITORY, null);
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://github.com/acme/app", TargetType.REPOSITORY);
 
             when(tenantRepository.existsById(tenantId)).thenReturn(true);
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
@@ -369,6 +399,42 @@ class TenantServiceTest {
             assertThrows(TenantNotFoundException.class,
                     () -> tenantService.isScanTargetAuthorized(tenantId, "https://example.com", "WEB"));
             verify(scanTargetRepository, never()).findByTenantIdOrderByCreatedAtDesc(tenantId);
+        }
+
+        @Test
+        @DisplayName("should mark target as verified when ownership proof succeeds")
+        void verifyScanTarget_quandoProvaValida_marcaComoVerificado() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.success());
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+
+            assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
+            assertNotNull(response.verifiedAt());
+            verify(scanTargetRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("should mark target as failed when ownership proof fails")
+        void verifyScanTarget_quandoProvaFalha_marcaComoFalhou() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.failed("missing token"));
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+
+            assertEquals(ScanTargetVerificationStatus.FAILED, response.verificationStatus());
+            assertNotNull(response.verificationCheckedAt());
+            verify(scanTargetRepository).save(target);
         }
     }
 }
