@@ -4,10 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "test": "corepack pnpm --dir ../.. exec vitest run apps/virtualrift-dashboard/src/App.test.tsx",
-    "lint": "corepack pnpm exec tsc --noEmit -p tsconfig.json"
+    "dev": "pnpm exec vite",
+    "build": "pnpm exec vite build",
+    "test": "pnpm exec vitest run apps/virtualrift-dashboard/src/App.test.tsx",
+    "lint": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "react": "^18.3.1",

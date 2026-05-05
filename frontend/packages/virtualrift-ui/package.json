@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "test": "corepack pnpm --dir ../.. exec vitest run packages/virtualrift-ui/src/__tests__/ui.test.ts",
-    "lint": "corepack pnpm --dir ../.. exec tsc --noEmit -p packages/virtualrift-ui/tsconfig.json"
+    "test": "pnpm --dir ../.. exec vitest run packages/virtualrift-ui/src/__tests__/ui.test.ts",
+    "lint": "pnpm --dir ../.. exec tsc --noEmit -p packages/virtualrift-ui/tsconfig.json"
   }
 }
