@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
+  "dependencies": {
+    "@virtualrift/types": "workspace:*"
+  },
   "scripts": {
-    "test": "corepack pnpm --dir ../.. exec vitest run packages/virtualrift-api-client/src/__tests__/api-client.test.ts",
-    "lint": "corepack pnpm --dir ../.. exec tsc --noEmit -p packages/virtualrift-api-client/tsconfig.json"
+    "test": "pnpm --dir ../.. exec vitest run packages/virtualrift-api-client/src/__tests__/api-client.test.ts",
+    "lint": "pnpm --dir ../.. exec tsc --noEmit -p packages/virtualrift-api-client/tsconfig.json"
   }
 }

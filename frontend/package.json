@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "pnpm --filter virtualrift-dashboard dev",
     "build": "pnpm --filter virtualrift-dashboard build",
-    "test": "corepack pnpm exec vitest run",
-    "lint": "corepack pnpm --filter '*' lint"
+    "test": "pnpm exec vitest run",
+    "lint": "pnpm --filter '*' lint"
   },
   "workspaces": [
     "apps/*",
