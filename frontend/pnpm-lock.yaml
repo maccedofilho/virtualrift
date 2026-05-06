@@ -26,6 +26,12 @@ importers:
 
   apps/virtualrift-dashboard:
     dependencies:
+      '@virtualrift/api-client':
+        specifier: workspace:*
+        version: link:../../packages/virtualrift-api-client
+      '@virtualrift/types':
+        specifier: workspace:*
+        version: link:../../packages/virtualrift-types
       react:
         specifier: ^18.3.1
         version: 18.3.1

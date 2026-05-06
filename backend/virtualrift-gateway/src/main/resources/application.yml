@@ -115,6 +115,21 @@ auth:
 
 # Gateway Configuration
 gateway:
+  cors:
+    allowed-origins:
+      - ${GATEWAY_ALLOWED_ORIGIN_LOCALHOST:http://localhost:5173}
+      - ${GATEWAY_ALLOWED_ORIGIN_LOOPBACK:http://127.0.0.1:5173}
+    allowed-methods:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - OPTIONS
+    allowed-headers:
+      - "*"
+    allow-credentials: true
+    max-age: 3600
   security:
     # Public paths that don't require authentication
     public-paths:

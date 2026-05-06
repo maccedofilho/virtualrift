@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "pnpm exec vite",
     "build": "pnpm exec vite build",
-    "test": "pnpm exec vitest run apps/virtualrift-dashboard/src/App.test.tsx",
+    "test": "pnpm exec vitest run src",
     "lint": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@virtualrift/api-client": "workspace:*",
+    "@virtualrift/types": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
