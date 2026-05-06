@@ -19,6 +19,7 @@ type SessionProviderProps = {
 
 type SessionContextValue = {
   apiBaseUrl: string;
+  client: VirtualRiftClient;
   error: string | null;
   isAuthenticated: boolean;
   session: AuthSession | null;
@@ -208,6 +209,7 @@ export function SessionProvider({
   const value = useMemo<SessionContextValue>(
     () => ({
       apiBaseUrl: DASHBOARD_API_BASE_URL,
+      client: apiClient,
       error,
       isAuthenticated: status === 'authenticated',
       session,
@@ -216,7 +218,7 @@ export function SessionProvider({
       logout,
       refresh,
     }),
-    [error, session, status],
+    [apiClient, error, session, status],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
