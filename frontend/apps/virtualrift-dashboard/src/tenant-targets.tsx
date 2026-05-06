@@ -19,6 +19,17 @@ type AuthorizationCheckResult = {
   target: string;
 } | null;
 
+const workspaceStatusLabel = (status: 'loading' | 'ready' | 'submitting'): string => {
+  switch (status) {
+    case 'loading':
+      return 'carregando';
+    case 'ready':
+      return 'pronto';
+    case 'submitting':
+      return 'processando';
+  }
+};
+
 const formatDateTime = (value: string | null): string => {
   if (!value) {
     return 'Not available';
@@ -32,7 +43,7 @@ const canVerifyTarget = (target: ScanTargetResponse): boolean => target.type !==
 const toErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message.trim().length > 0) {
     if (error.message === 'Failed to fetch') {
-      return 'Could not reach the API gateway. Check if the backend is running and CORS is configured.';
+      return 'Não foi possível alcançar o gateway da API. Verifique se o backend está em execução e se o CORS está configurado.';
     }
 
     return error.message;
@@ -75,7 +86,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (loadError) {
       setStatus('ready');
-      setError(toErrorMessage(loadError, 'Unable to load tenant targets.'));
+      setError(toErrorMessage(loadError, 'Não foi possível carregar os alvos do tenant.'));
     }
   };
 
@@ -116,7 +127,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (createError) {
       setStatus('ready');
-      setError(toErrorMessage(createError, 'Unable to add scan target.'));
+      setError(toErrorMessage(createError, 'Não foi possível adicionar o alvo de scan.'));
     }
   };
 
@@ -136,7 +147,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (verifyError) {
       setStatus('ready');
-      setError(toErrorMessage(verifyError, 'Unable to verify target ownership.'));
+      setError(toErrorMessage(verifyError, 'Não foi possível verificar o ownership do alvo.'));
     }
   };
 
@@ -154,7 +165,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (removeError) {
       setStatus('ready');
-      setError(toErrorMessage(removeError, 'Unable to remove target.'));
+      setError(toErrorMessage(removeError, 'Não foi possível remover o alvo.'));
     }
   };
 
@@ -181,7 +192,7 @@ export function TenantTargetsPanel() {
     } catch (authorizeError) {
       setAuthorizeStatus('idle');
       setAuthorizationResult(null);
-      setError(toErrorMessage(authorizeError, 'Unable to check target authorization.'));
+      setError(toErrorMessage(authorizeError, 'Não foi possível validar a autorização do alvo.'));
     }
   };
 
@@ -190,114 +201,251 @@ export function TenantTargetsPanel() {
   }
 
   return (
-    <section aria-label="tenant-targets">
-      <h2>Tenant targets</h2>
-      {tenant ? <p>Tenant: {tenant.name} ({tenant.slug})</p> : null}
-      {tenant ? <p>Plan: {tenant.plan}</p> : null}
-      {quota ? <p>Quota: {targets.length}/{quota.maxScanTargets} targets registered</p> : null}
-      {quota ? <p>Verified targets: {verifiedTargets}</p> : null}
-      {status === 'loading' ? <p>Loading tenant workspace...</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+    <section aria-label="tenant-targets" className="glass-card dashboard-panel">
+      <div className="dashboard-panel-header">
+        <div className="dashboard-panel-copy">
+          <span className="eyebrow">Superfície do tenant</span>
+          <h2>Alvos do tenant</h2>
+          <p>Cadastre ativos sob seu controle, valide ownership e confirme se os caminhos solicitados permanecem dentro do limite do tenant.</p>
+        </div>
+        <span className="status-indicator">
+          <span className={`status-dot ${status === 'loading' ? 'status-dot-pending' : 'status-dot-active'}`} />
+          {workspaceStatusLabel(status)}
+        </span>
+      </div>
 
-      <section aria-label="create-target">
-        <h3>Add scan target</h3>
-        <form onSubmit={handleCreateTarget}>
-          <label htmlFor="target-value">Target</label>
-          <input
-            id="target-value"
-            name="target"
-            type="text"
-            value={createTarget}
-            onChange={(event) => setCreateTarget(event.target.value)}
-            placeholder="https://app.example.com or https://github.com/org/repo"
-            required
-          />
-          <label htmlFor="target-type">Type</label>
-          <select id="target-type" name="type" value={createType} onChange={(event) => setCreateType(event.target.value as TargetType)}>
-            {TARGET_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="target-description">Description</label>
-          <input
-            id="target-description"
-            name="description"
-            type="text"
-            value={createDescription}
-            onChange={(event) => setCreateDescription(event.target.value)}
-            placeholder="Primary production application"
-          />
-          <button type="submit" disabled={status === 'submitting'}>
-            {status === 'submitting' ? 'Saving...' : 'Add target'}
-          </button>
+      <div className="stats-grid">
+        <div className="stat-card">
+          <span className="stat-label">Tenant</span>
+          <span className="stat-value">{tenant?.name ?? 'Carregando'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Plano</span>
+          <span className="stat-value">{tenant?.plan ?? '...'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Limite</span>
+          <span className="stat-value">{quota ? `${targets.length}/${quota.maxScanTargets}` : '...'}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Verificados</span>
+          <span className="stat-value">{verifiedTargets}</span>
+        </div>
+      </div>
+
+      <div className="meta-grid">
+        {tenant ? (
+          <>
+            <div className="meta-card">
+              <span className="meta-label">Tenant</span>
+              <span className="meta-value">Tenant: {tenant.name} ({tenant.slug})</span>
+            </div>
+            <div className="meta-card">
+              <span className="meta-label">Plano</span>
+              <span className="meta-value">Plano: {tenant.plan}</span>
+            </div>
+          </>
+        ) : null}
+        {quota ? (
+          <>
+            <div className="meta-card">
+              <span className="meta-label">Limite</span>
+              <span className="meta-value">Limite: {targets.length}/{quota.maxScanTargets} alvos cadastrados</span>
+            </div>
+            <div className="meta-card">
+              <span className="meta-label">Alvos verificados</span>
+              <span className="meta-value">Alvos verificados: {verifiedTargets}</span>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {status === 'loading' ? <p className="alert alert-info">Carregando workspace do tenant...</p> : null}
+      {error ? (
+        <p className="alert alert-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <section aria-label="create-target" className="panel-section">
+        <div className="panel-section-header">
+          <h3 className="panel-section-title">Adicionar alvo de scan</h3>
+          <span className="badge badge-accent">Ownership primeiro</span>
+        </div>
+        <form onSubmit={handleCreateTarget} className="split-grid">
+          <div className="field-grid">
+            <div className="field">
+              <label htmlFor="target-value">Alvo</label>
+              <input
+                className="input"
+                id="target-value"
+                name="target"
+                type="text"
+                value={createTarget}
+                onChange={(event) => setCreateTarget(event.target.value)}
+                placeholder="https://app.example.com or https://github.com/org/repo"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="target-type">Tipo</label>
+              <select
+                className="select"
+                id="target-type"
+                name="type"
+                value={createType}
+                onChange={(event) => setCreateType(event.target.value as TargetType)}
+              >
+                {TARGET_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label htmlFor="target-description">Descrição</label>
+              <input
+                className="input"
+                id="target-description"
+                name="description"
+                type="text"
+                value={createDescription}
+                onChange={(event) => setCreateDescription(event.target.value)}
+                placeholder="Aplicação principal de produção"
+              />
+            </div>
+          </div>
+          <div className="glass-card dashboard-side-card">
+            <div className="dashboard-side-card-copy">
+              <span className="eyebrow">Tipos de alvo</span>
+              <h3>Cadastre apenas a superfície que você realmente controla.</h3>
+              <p>Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.</p>
+            </div>
+            <div className="toolbar">
+              <button className="button-primary" type="submit" disabled={status === 'submitting'}>
+                {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
+              </button>
+            </div>
+          </div>
         </form>
       </section>
 
-      <section aria-label="authorization-check">
-        <h3>Check scan authorization</h3>
-        <form onSubmit={handleAuthorizationCheck}>
-          <label htmlFor="authorize-target">Requested target</label>
-          <input
-            id="authorize-target"
-            name="authorize-target"
-            type="text"
-            value={authorizeTarget}
-            onChange={(event) => setAuthorizeTarget(event.target.value)}
-            placeholder="https://app.example.com/login"
-            required
-          />
-          <label htmlFor="authorize-scan-type">Scan type</label>
-          <select
-            id="authorize-scan-type"
-            name="authorize-scan-type"
-            value={authorizeScanType}
-            onChange={(event) => setAuthorizeScanType(event.target.value as ScanType)}
-          >
-            {SCAN_TYPES.map((scanType) => (
-              <option key={scanType} value={scanType}>
-                {scanType}
-              </option>
-            ))}
-          </select>
-          <button type="submit" disabled={authorizeStatus === 'checking'}>
-            {authorizeStatus === 'checking' ? 'Checking...' : 'Check authorization'}
-          </button>
+      <section aria-label="authorization-check" className="panel-section">
+        <div className="panel-section-header">
+          <h3 className="panel-section-title">Validar autorização do scan</h3>
+          <span className="badge badge-warning">Validação de limite</span>
+        </div>
+        <form onSubmit={handleAuthorizationCheck} className="field-grid">
+          <div className="field">
+            <label htmlFor="authorize-target">Alvo solicitado</label>
+            <input
+              className="input"
+              id="authorize-target"
+              name="authorize-target"
+              type="text"
+              value={authorizeTarget}
+              onChange={(event) => setAuthorizeTarget(event.target.value)}
+              placeholder="https://app.example.com/login"
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="authorize-scan-type">Tipo de scan</label>
+            <select
+              className="select"
+              id="authorize-scan-type"
+              name="authorize-scan-type"
+              value={authorizeScanType}
+              onChange={(event) => setAuthorizeScanType(event.target.value as ScanType)}
+            >
+              {SCAN_TYPES.map((scanType) => (
+                <option key={scanType} value={scanType}>
+                  {scanType}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="toolbar" style={{ gridColumn: '1 / -1' }}>
+            <button className="button-secondary" type="submit" disabled={authorizeStatus === 'checking'}>
+              {authorizeStatus === 'checking' ? 'Validando...' : 'Validar autorização'}
+            </button>
+          </div>
         </form>
         {authorizationResult ? (
-          <p>
-            Authorization for {authorizationResult.scanType} on {authorizationResult.target}: {' '}
-            {authorizationResult.authorized ? 'allowed' : 'denied'}
+          <p className={`alert ${authorizationResult.authorized ? 'alert-info' : 'alert-danger'}`}>
+            Autorização para {authorizationResult.scanType} em {authorizationResult.target}: {authorizationResult.authorized ? 'permitida' : 'negada'}
           </p>
         ) : null}
       </section>
 
-      <section aria-label="registered-targets">
-        <h3>Registered targets</h3>
-        {targets.length === 0 ? <p>No scan targets registered yet.</p> : null}
-        <ul>
+      <section aria-label="registered-targets" className="panel-section">
+        <div className="panel-section-header">
+          <h3 className="panel-section-title">Alvos cadastrados</h3>
+          <span className="badge">{targets.length} itens</span>
+        </div>
+        {targets.length === 0 ? <p className="alert alert-info">Nenhum alvo de scan cadastrado até agora.</p> : null}
+        <div className="list-stack">
           {targets.map((target) => (
-            <li key={target.id}>
-              <h4>{target.target}</h4>
-              <p>Type: {target.type}</p>
-              <p>Status: {target.verificationStatus}</p>
-              <p>Description: {target.description ?? 'No description'}</p>
-              <p>Created at: {formatDateTime(target.createdAt)}</p>
-              <p>Verified at: {formatDateTime(target.verifiedAt)}</p>
-              <p>Last check: {formatDateTime(target.verificationCheckedAt)}</p>
-              {target.verificationToken ? <p>Verification token: {target.verificationToken}</p> : null}
-              {canVerifyTarget(target) ? (
-                <button type="button" onClick={() => void handleVerifyTarget(target.id)} disabled={status === 'submitting'}>
-                  Verify ownership
+            <article key={target.id} className="list-item-card">
+              <div className="list-item-header">
+                <div>
+                  <h4 className="list-item-title">{target.target}</h4>
+                  <div className="list-item-subtitle">Tipo: {target.type}</div>
+                </div>
+                <span
+                  className={`badge ${
+                    target.verificationStatus === 'VERIFIED'
+                      ? 'badge-success'
+                      : target.verificationStatus === 'FAILED'
+                        ? 'badge-danger'
+                        : 'badge-warning'
+                  }`}
+                >
+                  Status: {target.verificationStatus}
+                </span>
+              </div>
+
+              <div className="kv-grid">
+                <div className="kv-item">
+                  <span className="kv-label">Descrição</span>
+                  <span className="kv-value">{target.description ?? 'Sem descrição'}</span>
+                </div>
+                <div className="kv-item">
+                  <span className="kv-label">Criado em</span>
+                  <span className="kv-value">Criado em: {formatDateTime(target.createdAt)}</span>
+                </div>
+                <div className="kv-item">
+                  <span className="kv-label">Verificado em</span>
+                  <span className="kv-value">Verificado em: {formatDateTime(target.verifiedAt)}</span>
+                </div>
+                <div className="kv-item">
+                  <span className="kv-label">Última checagem</span>
+                  <span className="kv-value">Última checagem: {formatDateTime(target.verificationCheckedAt)}</span>
+                </div>
+                {target.verificationToken ? (
+                  <div className="kv-item" style={{ gridColumn: '1 / -1' }}>
+                    <span className="kv-label">Token de verificação</span>
+                    <span className="technical-value">
+                      Token de verificação: <code>{target.verificationToken}</code>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="toolbar">
+                {canVerifyTarget(target) ? (
+                  <button className="button-secondary" type="button" onClick={() => void handleVerifyTarget(target.id)} disabled={status === 'submitting'}>
+                    Verificar ownership
+                  </button>
+                ) : null}
+                <button className="button-ghost" type="button" onClick={() => void handleRemoveTarget(target.id)} disabled={status === 'submitting'}>
+                  Remover alvo
                 </button>
-              ) : null}
-              <button type="button" onClick={() => void handleRemoveTarget(target.id)} disabled={status === 'submitting'}>
-                Remove target
-              </button>
-            </li>
+              </div>
+            </article>
           ))}
-        </ul>
+        </div>
       </section>
     </section>
   );
