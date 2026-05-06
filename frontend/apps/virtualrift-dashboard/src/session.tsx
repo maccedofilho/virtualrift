@@ -29,6 +29,19 @@ type SessionContextValue = {
   refresh: () => Promise<void>;
 };
 
+const sessionStatusLabel = (status: SessionStatus): string => {
+  switch (status) {
+    case 'loading':
+      return 'carregando';
+    case 'anonymous':
+      return 'anônima';
+    case 'authenticated':
+      return 'autenticada';
+    case 'refreshing':
+      return 'atualizando';
+  }
+};
+
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 const decodeBase64Url = (value: string): string => {
@@ -149,7 +162,7 @@ export function SessionProvider({
       applySession(toSession(response.accessToken, response.refreshToken));
     } catch (refreshError) {
       clearSession();
-      setError(refreshError instanceof Error ? refreshError.message : 'Unable to refresh session.');
+      setError(refreshError instanceof Error ? refreshError.message : 'Não foi possível atualizar a sessão.');
     }
   };
 
@@ -162,7 +175,7 @@ export function SessionProvider({
       applySession(toSession(response.accessToken, response.refreshToken));
     } catch (loginError) {
       clearSession();
-      setError(loginError instanceof Error ? loginError.message : 'Unable to sign in.');
+      setError(loginError instanceof Error ? loginError.message : 'Não foi possível entrar.');
     }
   };
 
@@ -179,7 +192,7 @@ export function SessionProvider({
         );
       }
     } catch (logoutError) {
-      setError(logoutError instanceof Error ? logoutError.message : 'Unable to sign out cleanly.');
+      setError(logoutError instanceof Error ? logoutError.message : 'Não foi possível encerrar a sessão corretamente.');
     } finally {
       clearSession();
     }
@@ -237,31 +250,116 @@ export function LoginForm() {
   const { error, login, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [socialHint, setSocialHint] = useState<string | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setSocialHint(null);
     await login({ email, password });
   };
 
   return (
-    <section aria-label="login">
-      <h2>Sign in</h2>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <button type="submit" disabled={status === 'refreshing'}>
-          {status === 'refreshing' ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
-      {error ? <p role="alert">{error}</p> : null}
+    <section aria-label="login" className="dashboard-login">
+      <div className="glass-card dashboard-login-hero">
+        <div className="dashboard-login-hero-copy">
+          <span className="eyebrow">Acesso ao workspace</span>
+          <h2>Proteja cada superfície a partir de um único centro de controle.</h2>
+          <p>Reúna autenticação, verificação de ownership, orquestração de scans e relatórios em um fluxo único antes que um finding chegue em produção.</p>
+        </div>
+
+        <div className="dashboard-login-highlight-grid">
+          <div className="dashboard-login-highlight">
+            <span className="dashboard-login-highlight-label">Alvos</span>
+            <strong>Defina o escopo antes do scan começar.</strong>
+          </div>
+          <div className="dashboard-login-highlight">
+            <span className="dashboard-login-highlight-label">Execução</span>
+            <strong>Dispare fluxos web, API, SAST e rede no mesmo workspace.</strong>
+          </div>
+          <div className="dashboard-login-highlight">
+            <span className="dashboard-login-highlight-label">Relatórios</span>
+            <strong>Mantenha contexto do tenant, findings e status alinhados de ponta a ponta.</strong>
+          </div>
+        </div>
+      </div>
+
+      <aside className="glass-card dashboard-login-pane">
+        <div className="dashboard-login-pane-header">
+          <span className="badge badge-accent">Workspace de segurança</span>
+          <span className="badge">Acesso beta</span>
+        </div>
+        <div className="dashboard-side-card-copy">
+          <span className="eyebrow">Autenticação</span>
+          <h2>Entrar</h2>
+          <p>Conecte-se ao workspace do tenant e libere a gestão de alvos, validações de autorização e fluxos de execução.</p>
+        </div>
+        <div className="dashboard-social-auth">
+          <button
+            className="button-secondary dashboard-social-button"
+            type="button"
+            onClick={() => setSocialHint('Login com GitHub ainda não está disponível nesta beta.')}
+          >
+            Continuar com GitHub
+          </button>
+          <button
+            className="button-secondary dashboard-social-button"
+            type="button"
+            onClick={() => setSocialHint('Login com Google ainda não está disponível nesta beta.')}
+          >
+            Continuar com Google
+          </button>
+        </div>
+        <div className="dashboard-login-divider">
+          <span>ou use seu e-mail</span>
+        </div>
+        <form onSubmit={handleSubmit} className="auth-grid">
+          <div className="field">
+            <label htmlFor="email">E-mail</label>
+            <input
+              className="input"
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="owner@virtualrift.test"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="password">Senha</label>
+            <input
+              className="input"
+              id="password"
+              name="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Digite sua senha"
+            />
+          </div>
+          {socialHint ? <p className="alert alert-info">{socialHint}</p> : null}
+          {error ? (
+            <p className="alert alert-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="toolbar dashboard-login-actions">
+            <button className="button-primary dashboard-login-submit" type="submit" disabled={status === 'refreshing'}>
+              {status === 'refreshing' ? 'Entrando...' : 'Entrar com e-mail'}
+            </button>
+          </div>
+        </form>
+        <div className="dashboard-login-support">
+          <div className="dashboard-login-support-item">
+            <span className="dashboard-login-support-label">Modo</span>
+            <strong>Beta backend-first</strong>
+          </div>
+          <div className="dashboard-login-support-item">
+            <span className="dashboard-login-support-label">Superfície</span>
+            <strong>Painel web</strong>
+          </div>
+        </div>
+      </aside>
     </section>
   );
 }
@@ -274,21 +372,106 @@ export function SessionOverview() {
   }
 
   return (
-    <section aria-label="session-overview">
-      <h2>Session ready</h2>
-      <p>API base URL: {apiBaseUrl}</p>
-      <p>Tenant ID: {session.tenantId}</p>
-      <p>User ID: {session.userId}</p>
-      <p>Roles: {session.roles.join(', ') || 'No roles'}</p>
-      <p>Session status: {status}</p>
-      <p>Expires at: {session.expiresAt ?? 'Unknown'}</p>
-      <button type="button" onClick={() => void refresh()} disabled={status === 'refreshing'}>
-        Refresh session
-      </button>
-      <button type="button" onClick={() => void logout()}>
-        Sign out
-      </button>
-      {error ? <p role="alert">{error}</p> : null}
+    <section aria-label="session-overview" className="dashboard-overview-grid">
+      <div className="glass-card dashboard-panel dashboard-panel-priority">
+        <div className="dashboard-panel-header">
+          <div className="dashboard-panel-copy">
+            <span className="eyebrow">Sessão</span>
+            <h2>Sessão pronta</h2>
+            <p>O painel está autenticado e vinculado ao contexto do tenant necessário para os fluxos atuais do produto.</p>
+          </div>
+          <span className="status-indicator">
+            <span
+              className={`status-dot ${status === 'authenticated' ? 'status-dot-active' : status === 'refreshing' ? 'status-dot-pending' : ''}`}
+            />
+            {sessionStatusLabel(status)}
+          </span>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <span className="stat-label">Status da sessão</span>
+            <span className="stat-value">{sessionStatusLabel(status)}</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Perfis</span>
+            <span className="stat-value">{session.roles.length}</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Escopo do tenant</span>
+            <span className="stat-value">Ativo</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Gateway</span>
+            <span className="stat-value">Online</span>
+          </div>
+        </div>
+
+        <div className="meta-grid">
+          <div className="meta-card">
+            <span className="meta-label">Base da API</span>
+            <span className="meta-value technical-value">Base da API: {apiBaseUrl}</span>
+          </div>
+          <div className="meta-card">
+            <span className="meta-label">ID do tenant</span>
+            <span className="meta-value technical-value">ID do tenant: {session.tenantId}</span>
+          </div>
+          <div className="meta-card">
+            <span className="meta-label">ID do usuário</span>
+            <span className="meta-value technical-value">ID do usuário: {session.userId}</span>
+          </div>
+          <div className="meta-card">
+            <span className="meta-label">Expira em</span>
+            <span className="meta-value technical-value">Expira em: {session.expiresAt ?? 'Desconhecido'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card dashboard-panel dashboard-panel-secondary">
+        <div className="dashboard-panel-copy">
+          <span className="eyebrow">Identidade</span>
+          <h2>Contexto operacional</h2>
+          <p>Use este card como referência rápida antes de cadastrar alvos ou disparar um novo scan.</p>
+        </div>
+
+        <div className="dashboard-context-stack">
+          <div className="meta-card dashboard-context-card">
+            <span className="meta-label">Próximo passo</span>
+            <span className="meta-value">Confirme os perfis e o escopo do tenant antes de entrar em ownership de alvos.</span>
+          </div>
+          <div className="meta-card dashboard-context-card">
+            <span className="meta-label">Status do gateway</span>
+            <span className="meta-value">A sessão já está ligada ao gateway backend ativo.</span>
+          </div>
+        </div>
+
+        <div className="panel-section">
+          <div className="toolbar">
+            {session.roles.map((role) => (
+              <span key={role} className="badge badge-accent">
+                {role}
+              </span>
+            ))}
+            {session.roles.length === 0 ? <span className="badge">Sem perfis</span> : null}
+          </div>
+          <p className="technical-note">Perfis: {session.roles.join(', ') || 'Sem perfis'}</p>
+        </div>
+
+        <div className="toolbar dashboard-context-actions">
+          <button className="button-secondary" type="button" onClick={() => void refresh()} disabled={status === 'refreshing'}>
+            Atualizar sessão
+          </button>
+          <button className="button-ghost" type="button" onClick={() => void logout()}>
+            Sair
+          </button>
+        </div>
+
+        {error ? (
+          <p className="alert alert-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </section>
   );
 }
