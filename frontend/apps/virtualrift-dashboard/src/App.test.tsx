@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VirtualRiftClient } from '@virtualrift/api-client';
-import type { AuthSession, ScanTargetResponse, TenantQuotaResponse, TenantResponse } from '@virtualrift/types';
+import type { AuthSession, ScanResponse, ScanTargetResponse, TenantQuotaResponse, TenantResponse } from '@virtualrift/types';
 import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
 
@@ -109,6 +109,22 @@ const createTarget = (overrides?: Partial<ScanTargetResponse>): ScanTargetRespon
   ...overrides,
 });
 
+const createScan = (overrides?: Partial<ScanResponse>): ScanResponse => ({
+  id: 'scan-1',
+  tenantId: 'tenant-id',
+  userId: 'user-id',
+  target: 'https://app.example.com',
+  scanType: 'WEB',
+  status: 'PENDING',
+  depth: 1,
+  timeout: 30,
+  errorMessage: null,
+  createdAt: '2026-05-06T12:00:00.000Z',
+  startedAt: null,
+  completedAt: null,
+  ...overrides,
+});
+
 const createClient = () => {
   const client = {
     auth: {
@@ -165,6 +181,22 @@ const createClient = () => {
     }),
   );
   client.tenants.removeScanTarget.mockResolvedValue(undefined);
+  client.scans.create.mockImplementation(async (payload) =>
+    createScan({
+      id: 'scan-created',
+      target: payload.target,
+      scanType: payload.scanType,
+      depth: payload.depth ?? null,
+      timeout: payload.timeout ?? null,
+    }),
+  );
+  client.scans.getStatus.mockImplementation(async (scanId) =>
+    createScan({
+      id: scanId,
+      status: 'RUNNING',
+      startedAt: '2026-05-06T12:01:00.000Z',
+    }),
+  );
 
   return client;
 };
@@ -417,5 +449,67 @@ describe('VirtualRift Dashboard App', () => {
       target: 'https://app.example.com/admin',
       scanType: 'WEB',
     });
+  });
+
+  it('creates a scan from a verified target and lists it in the current session panel', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'verified-target',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Create scan' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Requested scan target'), { target: { value: 'https://app.example.com/login' } });
+    fireEvent.change(screen.getByLabelText('Scan depth'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Scan timeout (seconds)'), { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create scan' }));
+
+    expect(await screen.findByText('Scan ID: scan-created')).toBeInTheDocument();
+    expect(screen.getByText('Status: PENDING')).toBeInTheDocument();
+    expect(client.scans.create).toHaveBeenCalledWith({
+      target: 'https://app.example.com/login',
+      scanType: 'WEB',
+      depth: 2,
+      timeout: 45,
+    });
+  });
+
+  it('refreshes the status of a created scan from the session list', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'verified-target',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Create scan' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create scan' }));
+    expect(await screen.findByText('Scan ID: scan-created')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }));
+
+    expect(await screen.findByText('Status: RUNNING')).toBeInTheDocument();
+    expect(client.scans.getStatus).toHaveBeenCalledWith('scan-created');
   });
 });
