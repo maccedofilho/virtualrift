@@ -1,4 +1,5 @@
 import { LoginForm, SessionOverview, useSession } from './session';
+import { ScanCreationPanel } from './scan-creation';
 import { TenantTargetsPanel } from './tenant-targets';
 
 function SessionGate() {
@@ -16,6 +17,7 @@ function SessionGate() {
     <>
       <SessionOverview />
       <TenantTargetsPanel />
+      <ScanCreationPanel />
     </>
   );
 }
