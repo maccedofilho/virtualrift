@@ -1,4 +1,5 @@
 import { LoginForm, SessionOverview, useSession } from './session';
+import { TenantTargetsPanel } from './tenant-targets';
 
 function SessionGate() {
   const { isAuthenticated, status } = useSession();
@@ -11,7 +12,12 @@ function SessionGate() {
     return <LoginForm />;
   }
 
-  return <SessionOverview />;
+  return (
+    <>
+      <SessionOverview />
+      <TenantTargetsPanel />
+    </>
+  );
 }
 
 export default function App() {

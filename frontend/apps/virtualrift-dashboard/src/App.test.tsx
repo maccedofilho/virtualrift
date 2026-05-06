@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VirtualRiftClient } from '@virtualrift/api-client';
-import type { AuthSession } from '@virtualrift/types';
+import type { AuthSession, ScanTargetResponse, TenantQuotaResponse, TenantResponse } from '@virtualrift/types';
 import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
 
@@ -76,8 +76,41 @@ const createSession = (overrides?: Partial<AuthSession>): AuthSession => ({
   ...overrides,
 });
 
-const createClient = () =>
-  ({
+const createTenant = (overrides?: Partial<TenantResponse>): TenantResponse => ({
+  id: 'tenant-id',
+  name: 'Acme Corp',
+  slug: 'acme',
+  plan: 'PROFESSIONAL',
+  status: 'ACTIVE',
+  createdAt: '2026-05-06T10:00:00.000Z',
+  updatedAt: '2026-05-06T10:00:00.000Z',
+  ...overrides,
+});
+
+const createQuota = (overrides?: Partial<TenantQuotaResponse>): TenantQuotaResponse => ({
+  maxScansPerDay: 100,
+  maxConcurrentScans: 5,
+  maxScanTargets: 10,
+  reportRetentionDays: 30,
+  sastEnabled: true,
+  ...overrides,
+});
+
+const createTarget = (overrides?: Partial<ScanTargetResponse>): ScanTargetResponse => ({
+  id: 'target-1',
+  target: 'https://app.example.com',
+  type: 'URL',
+  description: 'Primary app',
+  verificationStatus: 'PENDING',
+  verificationToken: 'token-123',
+  verificationCheckedAt: null,
+  verifiedAt: null,
+  createdAt: '2026-05-06T10:00:00.000Z',
+  ...overrides,
+});
+
+const createClient = () => {
+  const client = {
     auth: {
       login: vi.fn(),
       refresh: vi.fn(),
@@ -107,7 +140,34 @@ const createClient = () =>
       getById: vi.fn(),
       list: vi.fn(),
     },
-  }) satisfies VirtualRiftClient;
+  } satisfies VirtualRiftClient;
+
+  client.tenants.getById.mockResolvedValue(createTenant());
+  client.tenants.getQuota.mockResolvedValue(createQuota());
+  client.tenants.listScanTargets.mockResolvedValue([]);
+  client.tenants.addScanTarget.mockImplementation(async (_tenantId, payload) =>
+    createTarget({
+      id: 'target-created',
+      target: payload.target,
+      type: payload.type,
+      description: payload.description ?? null,
+      verificationToken: 'token-created',
+    }),
+  );
+  client.tenants.authorizeScanTarget.mockResolvedValue({ authorized: true });
+  client.tenants.verifyScanTarget.mockImplementation(async (_tenantId, targetId) =>
+    createTarget({
+      id: targetId,
+      verificationStatus: 'VERIFIED',
+      verificationToken: null,
+      verificationCheckedAt: '2026-05-06T11:00:00.000Z',
+      verifiedAt: '2026-05-06T11:00:00.000Z',
+    }),
+  );
+  client.tenants.removeScanTarget.mockResolvedValue(undefined);
+
+  return client;
+};
 
 const renderApp = ({
   storage = createStorage(),
@@ -162,6 +222,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('Tenant ID: tenant-1')).toBeInTheDocument();
     expect(screen.getByText('User ID: user-1')).toBeInTheDocument();
     expect(screen.getByText('Roles: OWNER, ANALYST')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tenant targets' })).toBeInTheDocument();
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-1"');
     expect(client.auth.login).toHaveBeenCalledWith({
       email: 'owner@virtualrift.test',
@@ -182,6 +243,7 @@ describe('VirtualRift Dashboard App', () => {
     renderApp({ storage });
 
     expect(await screen.findByRole('heading', { name: 'Session ready' })).toBeInTheDocument();
+    expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
     expect(screen.getByText('Tenant ID: tenant-hydrated')).toBeInTheDocument();
     expect(screen.getByText('User ID: user-hydrated')).toBeInTheDocument();
     expect(screen.getByText('Roles: READER')).toBeInTheDocument();
@@ -213,6 +275,7 @@ describe('VirtualRift Dashboard App', () => {
     renderApp({ client, storage });
 
     expect(await screen.findByText('Tenant ID: tenant-refreshed')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Tenant targets' })).toBeInTheDocument();
     expect(client.auth.refresh).toHaveBeenCalledWith({ refreshToken: 'expired-refresh' });
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"refreshToken":"refresh-next"');
   });
@@ -247,5 +310,112 @@ describe('VirtualRift Dashboard App', () => {
       { refreshToken: 'refresh-logout' },
       { accessToken: session.accessToken },
     );
+  });
+
+  it('loads tenant quota and registered scan targets for the authenticated session', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget(),
+      createTarget({
+        id: 'target-2',
+        target: 'https://api.example.com/openapi.json',
+        type: 'API_SPEC',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T12:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
+    expect(screen.getByText('Quota: 2/10 targets registered')).toBeInTheDocument();
+    expect(screen.getByText('Verified targets: 1')).toBeInTheDocument();
+    expect(screen.getByText('https://app.example.com')).toBeInTheDocument();
+    expect(screen.getByText('https://api.example.com/openapi.json')).toBeInTheDocument();
+  });
+
+  it('creates a new scan target from the tenant workspace panel', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Tenant targets' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Target'), { target: { value: 'https://github.com/acme/platform' } });
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'REPOSITORY' } });
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Core repository' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add target' }));
+
+    expect(await screen.findByText('https://github.com/acme/platform')).toBeInTheDocument();
+    expect(client.tenants.addScanTarget).toHaveBeenCalledWith('tenant-id', {
+      target: 'https://github.com/acme/platform',
+      type: 'REPOSITORY',
+      description: 'Core repository',
+    });
+  });
+
+  it('verifies ownership for a pending target', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([createTarget()]);
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Verify ownership' }));
+
+    expect(await screen.findByText('Status: VERIFIED')).toBeInTheDocument();
+    expect(client.tenants.verifyScanTarget).toHaveBeenCalledWith('tenant-id', 'target-1');
+  });
+
+  it('removes a registered target from the workspace list', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([createTarget()]);
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove target' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('https://app.example.com')).not.toBeInTheDocument();
+    });
+    expect(client.tenants.removeScanTarget).toHaveBeenCalledWith('tenant-id', 'target-1');
+  });
+
+  it('checks whether a requested target is authorized for a scan type', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Tenant targets' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Requested target'), { target: { value: 'https://app.example.com/admin' } });
+    fireEvent.change(screen.getByLabelText('Scan type'), { target: { value: 'WEB' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check authorization' }));
+
+    expect(await screen.findByText('Authorization for WEB on https://app.example.com/admin: allowed')).toBeInTheDocument();
+    expect(client.tenants.authorizeScanTarget).toHaveBeenCalledWith('tenant-id', {
+      target: 'https://app.example.com/admin',
+      scanType: 'WEB',
+    });
   });
 });
