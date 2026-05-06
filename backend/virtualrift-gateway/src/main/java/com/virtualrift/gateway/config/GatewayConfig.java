@@ -11,6 +11,7 @@ public class GatewayConfig {
 
     private Security security = new Security();
     private RateLimit rateLimit = new RateLimit();
+    private Cors cors = new Cors();
 
     public Security getSecurity() {
         return security;
@@ -26,6 +27,14 @@ public class GatewayConfig {
 
     public void setRateLimit(RateLimit rateLimit) {
         this.rateLimit = rateLimit;
+    }
+
+    public Cors getCors() {
+        return cors;
+    }
+
+    public void setCors(Cors cors) {
+        this.cors = cors;
     }
 
     public static class Security {
@@ -121,6 +130,54 @@ public class GatewayConfig {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    public static class Cors {
+        private List<String> allowedOrigins = List.of("http://localhost:5173", "http://127.0.0.1:5173");
+        private List<String> allowedMethods = List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+        private List<String> allowedHeaders = List.of("*");
+        private boolean allowCredentials = true;
+        private long maxAge = 3600;
+
+        public List<String> getAllowedOrigins() {
+            return allowedOrigins;
+        }
+
+        public void setAllowedOrigins(List<String> allowedOrigins) {
+            this.allowedOrigins = allowedOrigins;
+        }
+
+        public List<String> getAllowedMethods() {
+            return allowedMethods;
+        }
+
+        public void setAllowedMethods(List<String> allowedMethods) {
+            this.allowedMethods = allowedMethods;
+        }
+
+        public List<String> getAllowedHeaders() {
+            return allowedHeaders;
+        }
+
+        public void setAllowedHeaders(List<String> allowedHeaders) {
+            this.allowedHeaders = allowedHeaders;
+        }
+
+        public boolean isAllowCredentials() {
+            return allowCredentials;
+        }
+
+        public void setAllowCredentials(boolean allowCredentials) {
+            this.allowCredentials = allowCredentials;
+        }
+
+        public long getMaxAge() {
+            return maxAge;
+        }
+
+        public void setMaxAge(long maxAge) {
+            this.maxAge = maxAge;
         }
     }
 }

@@ -15,6 +15,14 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@virtualrift/api-client": [
+        "../../packages/virtualrift-api-client/src/index.ts"
+      ],
+      "@virtualrift/types": [
+        "../../packages/virtualrift-types/src/index.ts"
+      ]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
