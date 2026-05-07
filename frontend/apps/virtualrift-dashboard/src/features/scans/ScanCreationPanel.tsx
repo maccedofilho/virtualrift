@@ -7,27 +7,9 @@ import {
   type ScanType,
   type UUID,
 } from '@virtualrift/types';
-import { useSession } from './session';
-
-const formatDateTime = (value: string | null): string => {
-  if (!value) {
-    return 'Not available';
-  }
-
-  return new Date(value).toLocaleString('pt-BR');
-};
-
-const toErrorMessage = (error: unknown, fallback: string): string => {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    if (error.message === 'Failed to fetch') {
-      return 'Não foi possível alcançar o gateway da API. Verifique se o backend está em execução e se o CORS está configurado.';
-    }
-
-    return error.message;
-  }
-
-  return fallback;
-};
+import { useSession } from '../../session';
+import { toErrorMessage } from '../../shared/errors';
+import { formatDateTime } from '../../shared/format';
 
 const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
   switch (target.type) {
@@ -231,7 +213,7 @@ export function ScanCreationPanel() {
             <h3 className="panel-section-title">Disparar uma solicitação de scan</h3>
             <span className="badge badge-accent">Escopo verificado</span>
           </div>
-          <form onSubmit={handleCreateScan} className="split-grid">
+          <form onSubmit={handleCreateScan} className="form-stack">
             <div className="field-grid">
               <div className="field">
                 <label htmlFor="scan-target-select">Alvo verificado</label>
@@ -308,29 +290,27 @@ export function ScanCreationPanel() {
               </div>
             </div>
 
-            <div className="glass-card dashboard-side-card">
-              <div className="dashboard-side-card-copy">
-                <span className="eyebrow">Política de scan</span>
-                <h3>Mantenha a execução dentro do ownership confirmado.</h3>
-                <p>Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.</p>
+            <div className="meta-grid">
+              <div className="meta-card">
+                <span className="meta-label">Alvo selecionado</span>
+                <span className="technical-value">
+                  {selectedTarget ? `Alvo selecionado: ${selectedTarget.target}` : 'Alvo selecionado: Nenhum alvo selecionado'}
+                </span>
               </div>
-              <div className="meta-grid">
-                <div className="meta-card">
-                  <span className="meta-label">Alvo selecionado</span>
-                  <span className="technical-value">
-                    {selectedTarget ? `Alvo selecionado: ${selectedTarget.target}` : 'Alvo selecionado: Nenhum alvo selecionado'}
-                  </span>
-                </div>
-                <div className="meta-card">
-                  <span className="meta-label">Tipos compatíveis</span>
-                  <span className="meta-value">{availableScanTypes.join(', ') || 'Nenhum tipo de scan disponível'}</span>
-                </div>
+              <div className="meta-card">
+                <span className="meta-label">Tipos compatíveis</span>
+                <span className="meta-value">{availableScanTypes.join(', ') || 'Nenhum tipo de scan disponível'}</span>
               </div>
-              <div className="toolbar">
-                <button className="button-primary" type="submit" disabled={status === 'submitting' || status === 'refreshing'}>
-                  {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
-                </button>
-              </div>
+            </div>
+
+            <p className="form-help">
+              <strong>Política de scan</strong>
+              Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.
+            </p>
+            <div className="form-actions">
+              <button className="button-primary" type="submit" disabled={status === 'submitting' || status === 'refreshing'}>
+                {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
+              </button>
             </div>
           </form>
         </section>

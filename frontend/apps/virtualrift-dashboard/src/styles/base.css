@@ -1,0 +1,61 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: none;
+  cursor: pointer;
+}
+
+input,
+select {
+  outline: none;
+}
+
+code,
+.font-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'SFMono-Regular', ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  font-feature-settings: 'calt' 0;
+}
+
+.eyebrow {
+  color: var(--vr-text-secondary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

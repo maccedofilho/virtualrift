@@ -11,7 +11,9 @@ import {
   type TenantResponse,
   type UUID,
 } from '@virtualrift/types';
-import { useSession } from './session';
+import { useSession } from '../../session';
+import { toErrorMessage } from '../../shared/errors';
+import { formatDateTime } from '../../shared/format';
 
 type AuthorizationCheckResult = {
   authorized: boolean;
@@ -30,27 +32,8 @@ const workspaceStatusLabel = (status: 'loading' | 'ready' | 'submitting'): strin
   }
 };
 
-const formatDateTime = (value: string | null): string => {
-  if (!value) {
-    return 'Not available';
-  }
-
-  return new Date(value).toLocaleString('pt-BR');
-};
-
-const canVerifyTarget = (target: ScanTargetResponse): boolean => target.type !== 'IP_RANGE' && !isVerifiedScanTarget(target.verificationStatus);
-
-const toErrorMessage = (error: unknown, fallback: string): string => {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    if (error.message === 'Failed to fetch') {
-      return 'Não foi possível alcançar o gateway da API. Verifique se o backend está em execução e se o CORS está configurado.';
-    }
-
-    return error.message;
-  }
-
-  return fallback;
-};
+const canVerifyTarget = (target: ScanTargetResponse): boolean =>
+  target.type !== 'IP_RANGE' && !isVerifiedScanTarget(target.verificationStatus);
 
 export function TenantTargetsPanel() {
   const { client, session } = useSession();
@@ -272,7 +255,7 @@ export function TenantTargetsPanel() {
           <h3 className="panel-section-title">Adicionar alvo de scan</h3>
           <span className="badge badge-accent">Ownership primeiro</span>
         </div>
-        <form onSubmit={handleCreateTarget} className="split-grid">
+        <form onSubmit={handleCreateTarget} className="form-stack">
           <div className="field-grid">
             <div className="field">
               <label htmlFor="target-value">Alvo</label>
@@ -316,17 +299,14 @@ export function TenantTargetsPanel() {
               />
             </div>
           </div>
-          <div className="glass-card dashboard-side-card">
-            <div className="dashboard-side-card-copy">
-              <span className="eyebrow">Tipos de alvo</span>
-              <h3>Cadastre apenas a superfície que você realmente controla.</h3>
-              <p>Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.</p>
-            </div>
-            <div className="toolbar">
-              <button className="button-primary" type="submit" disabled={status === 'submitting'}>
-                {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
-              </button>
-            </div>
+          <p className="form-help">
+            <strong>Tipos de alvo</strong>
+            Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.
+          </p>
+          <div className="form-actions">
+            <button className="button-primary" type="submit" disabled={status === 'submitting'}>
+              {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
+            </button>
           </div>
         </form>
       </section>

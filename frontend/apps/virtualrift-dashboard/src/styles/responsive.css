@@ -1,0 +1,189 @@
+@media (max-width: 1120px) {
+  .dashboard-stage-card,
+  .dashboard-login,
+  .dashboard-overview-grid,
+  .dashboard-workspace-grid,
+  .split-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-stage-card {
+    display: grid;
+    align-items: start;
+  }
+
+  .dashboard-login-hero,
+  .dashboard-login-pane {
+    min-height: auto;
+  }
+
+  .dashboard-login-highlight-grid,
+  .stats-grid,
+  .meta-grid,
+  .field-grid,
+  .dashboard-social-auth,
+  .kv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1080px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .dashboard-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    flex-direction: row;
+    align-items: center;
+    padding: 14px 18px;
+    border-right: none;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    overflow-x: auto;
+  }
+
+  .dashboard-sidebar-nav {
+    flex: 1;
+    grid-auto-flow: column;
+    gap: 4px;
+  }
+
+  .dashboard-sidebar-section-label {
+    display: none;
+  }
+
+  .dashboard-sidebar-list {
+    grid-auto-flow: column;
+    gap: 6px;
+  }
+
+  .dashboard-sidebar-link {
+    grid-template-columns: auto;
+    padding: 8px 12px;
+  }
+
+  .dashboard-sidebar-link-copy > span {
+    display: none;
+  }
+
+  .dashboard-sidebar-footer {
+    margin-top: 0;
+  }
+
+  .dashboard-sidebar-footer-copy span {
+    display: none;
+  }
+
+  .dashboard-content {
+    padding: 24px;
+  }
+
+  .dashboard-topbar {
+    padding: 16px 24px;
+  }
+
+  .dashboard-overview-grid,
+  .dashboard-workspace-grid,
+  .split-grid,
+  .field-grid,
+  .stats-grid,
+  .meta-grid,
+  .kv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-header {
+    position: static;
+    flex-direction: column;
+  }
+
+  .dashboard-header-meta {
+    width: 100%;
+  }
+
+  .header-pill {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-app {
+    padding: 16px;
+  }
+
+  .dashboard-header,
+  .dashboard-login-hero,
+  .dashboard-login-pane,
+  .dashboard-login-card,
+  .dashboard-side-card,
+  .dashboard-panel {
+    padding: 22px;
+  }
+
+  .dashboard-header {
+    position: static;
+    flex-direction: column;
+  }
+
+  .dashboard-stage-card {
+    padding: 22px;
+  }
+
+  .dashboard-header-meta {
+    width: 100%;
+  }
+
+  .header-pill {
+    justify-self: start;
+  }
+
+  .dashboard-login-highlight-grid,
+  .stats-grid,
+  .meta-grid,
+  .field-grid,
+  .dashboard-social-auth,
+  .kv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-panel-header,
+  .panel-section-header,
+  .list-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-login-hero-copy h2 {
+    font-size: 2.2rem;
+  }
+
+  .dashboard-content {
+    padding: 18px;
+    gap: 28px;
+  }
+
+  .dashboard-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 18px;
+  }
+
+  .dashboard-topbar-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .toolbar {
+    flex-direction: column;
+  }
+
+  .button-primary,
+  .button-secondary,
+  .button-ghost {
+    width: 100%;
+  }
+}

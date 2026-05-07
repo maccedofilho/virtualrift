@@ -1,0 +1,39 @@
+:root {
+  color-scheme: light;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  color: #1d1d1f;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(0, 113, 227, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 14%, rgba(255, 149, 0, 0.12), transparent 24%),
+    radial-gradient(circle at 76% 82%, rgba(52, 199, 89, 0.1), transparent 22%),
+    linear-gradient(160deg, #f2f4f7 0%, #f7f4ef 52%, #faf5f0 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --vr-text-primary: #1d1d1f;
+  --vr-text-secondary: #6e6e73;
+  --vr-text-tertiary: #aeaeb2;
+  --vr-accent: #0071e3;
+  --vr-accent-soft: rgba(0, 113, 227, 0.08);
+  --vr-success: #34c759;
+  --vr-success-soft: rgba(52, 199, 89, 0.1);
+  --vr-warning: #ff9500;
+  --vr-warning-soft: rgba(255, 149, 0, 0.12);
+  --vr-danger: #ff3b30;
+  --vr-danger-soft: rgba(255, 59, 48, 0.1);
+  --vr-glass: rgba(255, 255, 255, 0.72);
+  --vr-glass-border: rgba(255, 255, 255, 0.58);
+  --vr-shadow-lg: 0 30px 80px rgba(17, 24, 39, 0.12);
+  --vr-shadow-md: 0 18px 36px rgba(17, 24, 39, 0.08);
+  --vr-shadow-sm: 0 10px 24px rgba(17, 24, 39, 0.06);
+  --vr-radius-card: 20px;
+  --vr-radius-control: 14px;
+  --vr-radius-input: 12px;
+  --vr-sidebar-width: 248px;
+  --vr-topbar-height: 76px;
+}

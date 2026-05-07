@@ -1,48 +1,19 @@
-import { LoginForm, SessionOverview, useSession } from './session';
-import { ScanCreationPanel } from './scan-creation';
-import { TenantTargetsPanel } from './tenant-targets';
+import type { ReactNode } from 'react';
+import { useSession } from './session';
+import { LoginForm } from './features/auth/LoginForm';
+import { DashboardLayout } from './layout/DashboardLayout';
 
-function SessionGate() {
-  const { isAuthenticated, status } = useSession();
-
-  if (status === 'loading') {
-    return (
-      <section className="glass-card dashboard-empty">
-        <span className="eyebrow">Sessão</span>
-        <h2>Restaurando sessão...</h2>
-        <p>Hidratando credenciais, contexto do tenant e estado do painel.</p>
-      </section>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginForm />;
-  }
-
+function LoadingState() {
   return (
-    <section className="dashboard-main">
-      <section className="glass-card dashboard-stage-card">
-        <div className="dashboard-stage-copy">
-          <span className="eyebrow">Fluxo operacional</span>
-          <h2>Segurança em uma sequência mais clara.</h2>
-          <p>Primeiro confirme o contexto da sessão, depois organize os alvos autorizados e só então dispare scans dentro do escopo validado.</p>
-        </div>
-        <div className="dashboard-stage-pills">
-          <span className="badge badge-accent">1. Sessão</span>
-          <span className="badge">2. Alvos</span>
-          <span className="badge">3. Scans</span>
-        </div>
-      </section>
-      <SessionOverview />
-      <div className="dashboard-workspace-grid">
-        <TenantTargetsPanel />
-        <ScanCreationPanel />
-      </div>
+    <section className="glass-card dashboard-empty">
+      <span className="eyebrow">Sessão</span>
+      <h2>Restaurando sessão...</h2>
+      <p>Hidratando credenciais, contexto do tenant e estado do painel.</p>
     </section>
   );
 }
 
-export default function App() {
+function PublicShell({ children }: { children: ReactNode }) {
   return (
     <main className="dashboard-app">
       <div className="dashboard-blob dashboard-blob-primary" />
@@ -62,8 +33,30 @@ export default function App() {
             <span className="header-pill header-pill-soft">Beta orientada por backend</span>
           </div>
         </header>
-        <SessionGate />
+        {children}
       </div>
     </main>
   );
+}
+
+export default function App() {
+  const { isAuthenticated, status } = useSession();
+
+  if (status === 'loading') {
+    return (
+      <PublicShell>
+        <LoadingState />
+      </PublicShell>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <PublicShell>
+        <LoginForm />
+      </PublicShell>
+    );
+  }
+
+  return <DashboardLayout />;
 }
