@@ -14,7 +14,23 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  window.location.hash = '';
 });
+
+const goTo = (route: 'overview' | 'targets' | 'scans') => {
+  fireEvent.click(screen.getByRole('link', { name: routeLabel(route) }));
+};
+
+const routeLabel = (route: 'overview' | 'targets' | 'scans'): string => {
+  switch (route) {
+    case 'overview':
+      return 'Visão geral';
+    case 'targets':
+      return 'Alvos';
+    case 'scans':
+      return 'Scans';
+  }
+};
 
 type MockStorage = {
   getItem: (key: string) => string | null;
@@ -254,6 +270,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('ID do tenant: tenant-1')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-1')).toBeInTheDocument();
     expect(screen.getByText('Perfis: OWNER, ANALYST')).toBeInTheDocument();
+    goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-1"');
     expect(client.auth.login).toHaveBeenCalledWith({
@@ -275,10 +292,11 @@ describe('VirtualRift Dashboard App', () => {
     renderApp({ storage });
 
     expect(await screen.findByRole('heading', { name: 'Sessão pronta' })).toBeInTheDocument();
-    expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
     expect(screen.getByText('ID do tenant: tenant-hydrated')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-hydrated')).toBeInTheDocument();
     expect(screen.getByText('Perfis: READER')).toBeInTheDocument();
+    goTo('targets');
+    expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
   });
 
   it('refreshes an expired stored session during bootstrap', async () => {
@@ -307,6 +325,7 @@ describe('VirtualRift Dashboard App', () => {
     renderApp({ client, storage });
 
     expect(await screen.findByText('ID do tenant: tenant-refreshed')).toBeInTheDocument();
+    goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
     expect(client.auth.refresh).toHaveBeenCalledWith({ refreshToken: 'expired-refresh' });
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"refreshToken":"refresh-next"');
@@ -364,6 +383,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
     expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
     expect(screen.getByText('Limite: 2/10 alvos cadastrados')).toBeInTheDocument();
     expect(screen.getByText('Alvos verificados: 1')).toBeInTheDocument();
@@ -379,6 +400,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Alvo'), { target: { value: 'https://github.com/acme/platform' } });
@@ -404,6 +427,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
     expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Verificar ownership' }));
 
@@ -421,6 +446,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
     expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remover alvo' }));
 
@@ -438,6 +465,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Alvo solicitado'), { target: { value: 'https://app.example.com/admin' } });
@@ -468,6 +497,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
     expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Alvo solicitado para o scan'), { target: { value: 'https://app.example.com/login' } });
@@ -502,6 +533,8 @@ describe('VirtualRift Dashboard App', () => {
 
     renderApp({ client, storage });
 
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
     expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Criar scan' }));
