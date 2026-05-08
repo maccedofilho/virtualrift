@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const ROUTES = ['overview', 'targets', 'scans'] as const;
+export const ROUTES = ['overview', 'targets', 'scans', 'account', 'plans'] as const;
 export type Route = (typeof ROUTES)[number];
 
 const isRoute = (value: string): value is Route => (ROUTES as readonly string[]).includes(value);

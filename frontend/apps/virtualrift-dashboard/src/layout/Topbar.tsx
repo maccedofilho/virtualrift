@@ -45,7 +45,7 @@ export function Topbar({ active, copy }: TopbarProps) {
           </span>
         ) : null}
         <span className="dashboard-topbar-pill dashboard-topbar-pill-soft">
-          rota · {active.id}
+          seção · {active.label.toLowerCase()}
         </span>
 
         <div className="dashboard-topbar-actions">

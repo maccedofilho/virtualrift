@@ -422,6 +422,94 @@
   gap: 22px;
 }
 
+.dashboard-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dashboard-plan-card {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+  align-content: start;
+}
+
+.dashboard-plan-card-current {
+  border-color: rgba(0, 113, 227, 0.18);
+  box-shadow: 0 24px 48px rgba(0, 113, 227, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dashboard-plan-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.dashboard-plan-card-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-plan-card-copy h2 {
+  margin: 0;
+  font-size: 1.42rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--vr-text-primary);
+}
+
+.dashboard-plan-card-copy p {
+  margin: 0;
+  color: var(--vr-text-secondary);
+  line-height: 1.6;
+}
+
+.dashboard-plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dashboard-plan-price strong {
+  color: var(--vr-text-primary);
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-plan-price span {
+  color: var(--vr-text-secondary);
+  font-size: 0.96rem;
+}
+
+.dashboard-plan-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-plan-features li {
+  position: relative;
+  padding-left: 18px;
+  color: var(--vr-text-secondary);
+  line-height: 1.5;
+}
+
+.dashboard-plan-features li::before {
+  content: '';
+  position: absolute;
+  top: 0.62em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--vr-accent);
+}
+
 @media (max-width: 900px) {
   .dashboard-route-intro {
     grid-template-columns: 1fr;
@@ -434,6 +522,10 @@
     padding-bottom: 18px;
     border-right: none;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .dashboard-plan-grid {
+    grid-template-columns: 1fr;
   }
 }
 

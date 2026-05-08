@@ -1,6 +1,6 @@
 export const formatDateTime = (value: string | null): string => {
   if (!value) {
-    return 'Not available';
+    return 'Indisponível';
   }
 
   return new Date(value).toLocaleString('pt-BR');

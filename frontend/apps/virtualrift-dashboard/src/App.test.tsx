@@ -17,11 +17,11 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-const goTo = (route: 'overview' | 'targets' | 'scans') => {
+const goTo = (route: 'overview' | 'targets' | 'scans' | 'account' | 'plans') => {
   fireEvent.click(screen.getByRole('link', { name: routeLabel(route) }));
 };
 
-const routeLabel = (route: 'overview' | 'targets' | 'scans'): string => {
+const routeLabel = (route: 'overview' | 'targets' | 'scans' | 'account' | 'plans'): string => {
   switch (route) {
     case 'overview':
       return 'Visão geral';
@@ -29,6 +29,10 @@ const routeLabel = (route: 'overview' | 'targets' | 'scans'): string => {
       return 'Alvos';
     case 'scans':
       return 'Scans';
+    case 'account':
+      return 'Minha conta';
+    case 'plans':
+      return 'Planos';
   }
 };
 
@@ -544,5 +548,39 @@ describe('VirtualRift Dashboard App', () => {
 
     expect(await screen.findByText('Status: RUNNING')).toBeInTheDocument();
     expect(client.scans.getStatus).toHaveBeenCalledWith('scan-created');
+  });
+
+  it('shows the account area with tenant context and operator details', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+
+    renderApp({ storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('account');
+
+    expect(await screen.findByRole('heading', { name: 'Minha conta' })).toBeInTheDocument();
+    expect(screen.getByText('ID do usuário: user-id')).toBeInTheDocument();
+    expect(screen.getByText('ID do tenant: tenant-id')).toBeInTheDocument();
+    expect(screen.getByText('Acme Corp (acme)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver planos' })).toBeInTheDocument();
+  });
+
+  it('shows the plans area with the current tenant plan and pricing catalog', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+
+    renderApp({ storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('plans');
+
+    expect(await screen.findByRole('heading', { name: 'Planos e cobrança' })).toBeInTheDocument();
+    expect(screen.getAllByText('PROFESSIONAL').length).toBeGreaterThan(0);
+    expect(screen.getByText('R$ 1.290')).toBeInTheDocument();
+    expect(screen.getAllByText('/mês').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Voltar para minha conta' })).toBeInTheDocument();
   });
 });
