@@ -4,4 +4,6 @@
 @import './styles/layout.css';
 @import './styles/auth.css';
 @import './styles/dashboard.css';
+@import './styles/account.css';
+@import './styles/plans.css';
 @import './styles/responsive.css';

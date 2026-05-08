@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { AccountPanel } from '../features/account/AccountPanel';
 import { SessionOverview } from '../features/overview/SessionOverview';
+import { PlansPanel } from '../features/plans/PlansPanel';
 import { TenantTargetsPanel } from '../features/targets/TenantTargetsPanel';
 import { ScanCreationPanel } from '../features/scans/ScanCreationPanel';
 import { Sidebar, type NavSection } from './Sidebar';
@@ -10,6 +12,8 @@ const SECTIONS: ReadonlyArray<NavSection> = [
   { id: 'overview', label: 'Visão geral', description: 'Estado da sessão e contexto operacional do tenant.' },
   { id: 'targets', label: 'Alvos', description: 'Cadastre, valide ownership e gerencie alvos do tenant.' },
   { id: 'scans', label: 'Scans', description: 'Dispare e acompanhe scans dentro do escopo verificado.' },
+  { id: 'account', label: 'Minha conta', description: 'Suas informações e como você acessa.' },
+  { id: 'plans', label: 'Planos', description: 'O que tem no seu plano e quando subir.' },
 ];
 
 type RouteCopy = {
@@ -77,15 +81,33 @@ const ROUTE_COPY: Record<Route, RouteCopy> = {
       },
     ],
   },
+  account: {
+    kicker: 'Conta',
+    title: 'Sua conta',
+    description: 'Suas informações de acesso, o workspace que você está usando e o seu plano atual.',
+    intro: [],
+  },
+  plans: {
+    kicker: 'Planos',
+    title: 'Seu plano e como crescer',
+    description: 'Veja o que está incluso no seu plano e descubra quando faz sentido subir.',
+    intro: [],
+  },
 };
 
 const ROUTE_COMPONENT: Record<Route, () => ReactNode> = {
   overview: () => <SessionOverview />,
   targets: () => <TenantTargetsPanel />,
   scans: () => <ScanCreationPanel />,
+  account: () => <AccountPanel />,
+  plans: () => <PlansPanel />,
 };
 
 function RouteIntro({ copy }: { copy: RouteCopy }) {
+  if (copy.intro.length === 0) {
+    return null;
+  }
+
   return (
     <section className="glass-card dashboard-route-intro" aria-label="introdução da seção">
       <div className="dashboard-route-intro-copy">
