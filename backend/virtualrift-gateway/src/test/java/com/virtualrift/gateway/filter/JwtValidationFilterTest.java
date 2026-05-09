@@ -55,7 +55,7 @@ class JwtValidationFilterTest {
         GatewayConfig.Security security = new GatewayConfig.Security();
         security.setPublicPaths(List.of(
                 "/health",
-                "/actuator/**",
+                "/actuator/health",
                 "/api/v1/auth/login",
                 "/api/v1/auth/refresh",
                 "/swagger-ui/**",
@@ -116,6 +116,17 @@ class JwtValidationFilterTest {
 
             verify(filterChain).filter(exchange);
             verify(jwtValidator, never()).validate(any());
+        }
+
+        @Test
+        @DisplayName("should require authentication for non-health actuator routes")
+        void filter_quandoActuatorSensivel_requerAutenticacao() {
+            ServerWebExchange exchange = createExchange("/actuator/metrics");
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(filterChain, never()).filter(any(ServerWebExchange.class));
+            assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
         }
     }
 

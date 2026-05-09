@@ -168,7 +168,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isPublicEndpoint(String path) {
-        if (path.equals("/health") || path.startsWith("/actuator/")) {
+        if (path.equals("/health") || path.equals("/actuator/health")) {
             return true;
         }
 
