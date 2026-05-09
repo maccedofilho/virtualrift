@@ -1,9 +1,7 @@
 package com.virtualrift.tenant.client;
 
 import com.virtualrift.common.model.ScanType;
-import com.virtualrift.orchestrator.exception.ScanNotFoundException;
-import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
-import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
+import com.virtualrift.orchestrator.exception.TenantServiceException;
 import com.virtualrift.tenant.model.TenantQuota;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -30,7 +28,7 @@ public class TenantClient {
                     TenantQuota.class
             );
         } catch (Exception e) {
-            throw new ScanNotFoundException("Failed to fetch quota for tenant: " + tenantId);
+            throw new TenantServiceException("Failed to fetch quota for tenant: " + tenantId, e);
         }
     }
 
@@ -41,7 +39,7 @@ public class TenantClient {
                     com.virtualrift.tenant.model.Plan.class
             );
         } catch (Exception e) {
-            throw new ScanNotFoundException("Failed to fetch plan for tenant: " + tenantId);
+            throw new TenantServiceException("Failed to fetch plan for tenant: " + tenantId, e);
         }
     }
 

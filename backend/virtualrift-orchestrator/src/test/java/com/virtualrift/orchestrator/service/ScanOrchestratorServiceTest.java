@@ -11,6 +11,7 @@ import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.exception.ScanTargetNotAuthorizedException;
+import com.virtualrift.orchestrator.exception.ScanTypeNotAllowedException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
@@ -124,14 +125,39 @@ class ScanOrchestratorServiceTest {
 
         @Test
         @DisplayName("should reject scan type not allowed by tenant plan")
-        void createScan_quandoTipoNaoPermitido_lancaScanQuotaExceededException() {
-            CreateScanRequest request = new CreateScanRequest(TARGET_URL, ScanType.SAST, 3, 300);
+        void createScan_quandoTipoNaoPermitido_lancaScanTypeNotAllowedException() {
+            CreateScanRequest request = new CreateScanRequest(TARGET_URL, ScanType.API, 3, 300);
+
+            when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
+            when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
+
+            assertThrows(ScanTypeNotAllowedException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
+            verify(scanRepository, never()).save(any(Scan.class));
+        }
+
+        @Test
+        @DisplayName("should allow SAST scans on PROFESSIONAL plan")
+        void createScan_quandoProfessionalComSast_criaScan() {
+            CreateScanRequest request = new CreateScanRequest("https://github.com/acme/platform", ScanType.SAST, 3, 300);
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.PROFESSIONAL);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, "https://github.com/acme/platform", ScanType.SAST)).thenReturn(true);
+            when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
+            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
+            when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            assertThrows(ScanQuotaExceededException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
-            verify(scanRepository, never()).save(any(Scan.class));
+            ScanResponse response = service.createScan(request, TENANT_ID, USER_ID);
+
+            assertEquals(ScanType.SAST, response.scanType());
+            verify(eventProducer).publishScanRequested(
+                    eq(response.id()),
+                    any(TenantId.class),
+                    eq("https://github.com/acme/platform"),
+                    eq(ScanType.SAST.name()),
+                    eq(3),
+                    eq(300)
+            );
         }
 
         @Test

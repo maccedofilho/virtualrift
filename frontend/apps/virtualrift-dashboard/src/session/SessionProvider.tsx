@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createVirtualRiftClient, type VirtualRiftClient } from '@virtualrift/api-client';
 import type { AuthSession, LoginRequest } from '@virtualrift/types';
+import { toErrorMessage } from '../shared/errors';
 import { DASHBOARD_API_BASE_URL } from './constants';
 import { isExpired, toSession } from './jwt';
 import { persistSession, readStoredSession } from './storage';
@@ -73,7 +74,7 @@ export function SessionProvider({
       applySession(toSession(response.accessToken, response.refreshToken));
     } catch (refreshError) {
       clearSession();
-      setError(refreshError instanceof Error ? refreshError.message : 'Não foi possível atualizar a sessão.');
+      setError(toErrorMessage(refreshError, 'Não foi possível atualizar a sessão.'));
     }
   };
 
@@ -86,7 +87,7 @@ export function SessionProvider({
       applySession(toSession(response.accessToken, response.refreshToken));
     } catch (loginError) {
       clearSession();
-      setError(loginError instanceof Error ? loginError.message : 'Não foi possível entrar.');
+      setError(toErrorMessage(loginError, 'Não foi possível entrar.'));
     }
   };
 
@@ -103,7 +104,7 @@ export function SessionProvider({
         );
       }
     } catch (logoutError) {
-      setError(logoutError instanceof Error ? logoutError.message : 'Não foi possível encerrar a sessão corretamente.');
+      setError(toErrorMessage(logoutError, 'Não foi possível encerrar a sessão corretamente.'));
     } finally {
       clearSession();
     }

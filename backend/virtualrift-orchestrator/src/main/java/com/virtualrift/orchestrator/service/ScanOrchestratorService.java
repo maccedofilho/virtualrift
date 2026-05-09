@@ -11,6 +11,7 @@ import com.virtualrift.orchestrator.dto.ScanResultResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.exception.ScanTargetNotAuthorizedException;
+import com.virtualrift.orchestrator.exception.ScanTypeNotAllowedException;
 import com.virtualrift.orchestrator.kafka.ScanEventProducer;
 import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
@@ -141,7 +142,7 @@ public class ScanOrchestratorService {
 
     private void validateScanTypeAllowed(ScanType scanType, Plan plan) {
         if (!isScanTypeAllowed(scanType, plan)) {
-            throw new ScanQuotaExceededException(
+            throw new ScanTypeNotAllowedException(
                     "Scan type " + scanType + " is not allowed for plan " + plan
             );
         }
@@ -151,8 +152,7 @@ public class ScanOrchestratorService {
         return switch (plan) {
             case TRIAL -> scanType == ScanType.WEB;
             case STARTER -> scanType == ScanType.WEB || scanType == ScanType.API;
-            case PROFESSIONAL -> scanType != ScanType.SAST;
-            case ENTERPRISE -> true;
+            case PROFESSIONAL, ENTERPRISE -> true;
         };
     }
 

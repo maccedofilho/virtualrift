@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { VirtualRiftClient } from '@virtualrift/api-client';
+import { VirtualRiftApiError, type VirtualRiftClient } from '@virtualrift/api-client';
 import type { AuthSession, ScanResponse, ScanTargetResponse, TenantQuotaResponse, TenantResponse } from '@virtualrift/types';
 import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
@@ -365,6 +365,29 @@ describe('VirtualRift Dashboard App', () => {
       { refreshToken: 'refresh-logout' },
       { accessToken: session.accessToken },
     );
+  });
+
+  it('translates login failures to a pt-BR message', async () => {
+    const client = createClient();
+    client.auth.login.mockRejectedValue(
+      new VirtualRiftApiError(
+        'Unauthorized',
+        401,
+        { title: 'Unauthorized', detail: 'Invalid credentials' },
+        new Response(JSON.stringify({ title: 'Unauthorized', detail: 'Invalid credentials' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/problem+json' },
+        }),
+      ),
+    );
+
+    renderApp({ client });
+
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'owner@virtualrift.test' } });
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'wrong-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar com e-mail' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha inválidos.');
   });
 
   it('loads tenant quota and registered scan targets for the authenticated session', async () => {
