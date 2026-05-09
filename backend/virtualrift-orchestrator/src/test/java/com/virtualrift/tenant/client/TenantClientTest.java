@@ -1,9 +1,7 @@
 package com.virtualrift.tenant.client;
 
 import com.virtualrift.common.model.ScanType;
-import com.virtualrift.orchestrator.exception.ScanNotFoundException;
-import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
-import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
+import com.virtualrift.orchestrator.exception.TenantServiceException;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.TenantQuota;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,8 +62,8 @@ class TenantClientTest {
         }
 
         @Test
-        @DisplayName("should wrap tenant service failures as ScanNotFoundException")
-        void getQuota_quandoServicoFalha_lancaScanNotFoundException() {
+        @DisplayName("should wrap tenant service failures as TenantServiceException")
+        void getQuota_quandoServicoFalha_lancaTenantServiceException() {
             UUID tenantId = UUID.randomUUID();
 
             when(restTemplate.getForObject(
@@ -73,7 +71,7 @@ class TenantClientTest {
                     TenantQuota.class
             )).thenThrow(new RuntimeException("tenant service unavailable"));
 
-            assertThrows(ScanNotFoundException.class, () -> tenantClient.getQuota(tenantId));
+            assertThrows(TenantServiceException.class, () -> tenantClient.getQuota(tenantId));
         }
     }
 
@@ -101,8 +99,8 @@ class TenantClientTest {
         }
 
         @Test
-        @DisplayName("should wrap plan fetch failures as ScanNotFoundException")
-        void getPlan_quandoServicoFalha_lancaScanNotFoundException() {
+        @DisplayName("should wrap plan fetch failures as TenantServiceException")
+        void getPlan_quandoServicoFalha_lancaTenantServiceException() {
             UUID tenantId = UUID.randomUUID();
 
             when(restTemplate.getForObject(
@@ -110,7 +108,7 @@ class TenantClientTest {
                     Plan.class
             )).thenThrow(new RuntimeException("tenant service unavailable"));
 
-            assertThrows(ScanNotFoundException.class, () -> tenantClient.getPlan(tenantId));
+            assertThrows(TenantServiceException.class, () -> tenantClient.getPlan(tenantId));
         }
     }
 
@@ -122,11 +120,10 @@ class TenantClientTest {
         @DisplayName("should return true when tenant service authorizes target")
         void isScanTargetAuthorized_quandoServicoAutoriza_retornaTrue() {
             UUID tenantId = UUID.randomUUID();
-            AuthorizeScanTargetRequest request = new AuthorizeScanTargetRequest("https://example.com", ScanType.WEB.name());
 
             when(restTemplate.postForObject(
                     TENANT_SERVICE_URL + "/api/v1/tenants/" + tenantId + "/scan-targets/authorize",
-                    request,
+                    new AuthorizeScanTargetRequest("https://example.com", ScanType.WEB.name()),
                     AuthorizeScanTargetResponse.class
             )).thenReturn(new AuthorizeScanTargetResponse(true));
 
@@ -135,7 +132,7 @@ class TenantClientTest {
             assertEquals(true, result);
             verify(restTemplate).postForObject(
                     TENANT_SERVICE_URL + "/api/v1/tenants/" + tenantId + "/scan-targets/authorize",
-                    request,
+                    new AuthorizeScanTargetRequest("https://example.com", ScanType.WEB.name()),
                     AuthorizeScanTargetResponse.class
             );
         }
@@ -144,11 +141,10 @@ class TenantClientTest {
         @DisplayName("should fail closed when tenant service authorization fails")
         void isScanTargetAuthorized_quandoServicoFalha_retornaFalse() {
             UUID tenantId = UUID.randomUUID();
-            AuthorizeScanTargetRequest request = new AuthorizeScanTargetRequest("https://example.com", ScanType.WEB.name());
 
             when(restTemplate.postForObject(
                     TENANT_SERVICE_URL + "/api/v1/tenants/" + tenantId + "/scan-targets/authorize",
-                    request,
+                    new AuthorizeScanTargetRequest("https://example.com", ScanType.WEB.name()),
                     AuthorizeScanTargetResponse.class
             )).thenThrow(new RuntimeException("tenant service unavailable"));
 

@@ -3,9 +3,9 @@ package com.virtualrift.orchestrator.exception;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-@ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-public class ScanQuotaExceededException extends RuntimeException {
-    public ScanQuotaExceededException(String message) {
+@ResponseStatus(HttpStatus.FORBIDDEN)
+public class ScanTypeNotAllowedException extends RuntimeException {
+    public ScanTypeNotAllowedException(String message) {
         super(message);
     }
 }

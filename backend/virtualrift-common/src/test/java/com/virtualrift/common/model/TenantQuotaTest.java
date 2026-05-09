@@ -273,9 +273,9 @@ class TenantQuotaTest {
         void trial_quandoChamado_retornaQuotasTrial() {
             TenantQuota quota = TenantQuota.trial();
 
-            assertEquals(10, quota.maxScansPerDay());
-            assertEquals(2, quota.maxConcurrentScans());
-            assertEquals(50, quota.maxScanTargets());
+            assertEquals(3, quota.maxScansPerDay());
+            assertEquals(1, quota.maxConcurrentScans());
+            assertEquals(1, quota.maxScanTargets());
             assertEquals(7, quota.reportRetentionDays());
             assertEquals(Set.of(ScanType.WEB), quota.allowedScanTypes());
         }
@@ -285,9 +285,9 @@ class TenantQuotaTest {
         void starter_quandoChamado_retornaQuotasStarter() {
             TenantQuota quota = TenantQuota.starter();
 
-            assertEquals(100, quota.maxScansPerDay());
-            assertEquals(5, quota.maxConcurrentScans());
-            assertEquals(500, quota.maxScanTargets());
+            assertEquals(20, quota.maxScansPerDay());
+            assertEquals(3, quota.maxConcurrentScans());
+            assertEquals(5, quota.maxScanTargets());
             assertEquals(30, quota.reportRetentionDays());
             assertEquals(Set.of(ScanType.WEB, ScanType.API), quota.allowedScanTypes());
         }
@@ -297,11 +297,11 @@ class TenantQuotaTest {
         void professional_quandoChamado_retornaQuotasProfessional() {
             TenantQuota quota = TenantQuota.professional();
 
-            assertEquals(1000, quota.maxScansPerDay());
-            assertEquals(20, quota.maxConcurrentScans());
-            assertEquals(5000, quota.maxScanTargets());
+            assertEquals(100, quota.maxScansPerDay());
+            assertEquals(10, quota.maxConcurrentScans());
+            assertEquals(25, quota.maxScanTargets());
             assertEquals(90, quota.reportRetentionDays());
-            assertEquals(Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK), quota.allowedScanTypes());
+            assertEquals(Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK, ScanType.SAST), quota.allowedScanTypes());
         }
 
         @Test
@@ -310,7 +310,7 @@ class TenantQuotaTest {
             TenantQuota quota = TenantQuota.enterprise();
 
             assertEquals(-1, quota.maxScansPerDay()); // Unlimited
-            assertEquals(100, quota.maxConcurrentScans());
+            assertEquals(25, quota.maxConcurrentScans());
             assertEquals(-1, quota.maxScanTargets()); // Unlimited
             assertEquals(365, quota.reportRetentionDays());
             assertEquals(Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK, ScanType.SAST), quota.allowedScanTypes());

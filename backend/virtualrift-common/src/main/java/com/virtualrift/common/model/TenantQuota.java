@@ -95,18 +95,18 @@ public record TenantQuota(
     }
 
     public static TenantQuota trial() {
-        return TenantQuota.of(10, 2, 50, 7, Set.of(ScanType.WEB));
+        return TenantQuota.of(3, 1, 1, 7, Set.of(ScanType.WEB));
     }
 
     public static TenantQuota starter() {
-        return TenantQuota.of(100, 5, 500, 30, Set.of(ScanType.WEB, ScanType.API));
+        return TenantQuota.of(20, 3, 5, 30, Set.of(ScanType.WEB, ScanType.API));
     }
 
     public static TenantQuota professional() {
-        return TenantQuota.of(1000, 20, 5000, 90, Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK));
+        return TenantQuota.of(100, 10, 25, 90, Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK, ScanType.SAST));
     }
 
     public static TenantQuota enterprise() {
-        return TenantQuota.of(-1, 100, -1, 365, Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK, ScanType.SAST));
+        return TenantQuota.of(-1, 25, -1, 365, Set.of(ScanType.WEB, ScanType.API, ScanType.NETWORK, ScanType.SAST));
     }
 }
