@@ -27,17 +27,18 @@ public class OrchestratorClient {
         this.orchestratorServiceUrl = orchestratorServiceUrl;
     }
 
-    public OrchestratorScanResponse getScan(UUID tenantId, UUID scanId) {
-        return get(tenantId, scanId, "/api/v1/scans/" + scanId, OrchestratorScanResponse.class);
+    public OrchestratorScanResponse getScan(UUID tenantId, UUID scanId, String rolesHeader) {
+        return get(tenantId, scanId, rolesHeader, "/api/v1/scans/" + scanId, OrchestratorScanResponse.class);
     }
 
-    public OrchestratorScanResultResponse getScanResult(UUID tenantId, UUID scanId) {
-        return get(tenantId, scanId, "/api/v1/scans/" + scanId + "/result", OrchestratorScanResultResponse.class);
+    public OrchestratorScanResultResponse getScanResult(UUID tenantId, UUID scanId, String rolesHeader) {
+        return get(tenantId, scanId, rolesHeader, "/api/v1/scans/" + scanId + "/result", OrchestratorScanResultResponse.class);
     }
 
-    private <T> T get(UUID tenantId, UUID scanId, String path, Class<T> responseType) {
+    private <T> T get(UUID tenantId, UUID scanId, String rolesHeader, String path, Class<T> responseType) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("X-Tenant-Id", tenantId.toString());
+        headers.set("X-Roles", rolesHeader);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
         try {

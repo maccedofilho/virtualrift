@@ -273,7 +273,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText(`Base da API: ${DASHBOARD_API_BASE_URL}`)).toBeInTheDocument();
     expect(screen.getByText('ID do tenant: tenant-1')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-1')).toBeInTheDocument();
-    expect(screen.getByText('Perfis: OWNER, ANALYST')).toBeInTheDocument();
+    expect(screen.getByText('Perfis: Proprietário, Analista')).toBeInTheDocument();
     goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-1"');
@@ -298,7 +298,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(await screen.findByRole('heading', { name: 'Sessão pronta' })).toBeInTheDocument();
     expect(screen.getByText('ID do tenant: tenant-hydrated')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-hydrated')).toBeInTheDocument();
-    expect(screen.getByText('Perfis: READER')).toBeInTheDocument();
+    expect(screen.getByText('Perfis: Leitor')).toBeInTheDocument();
     goTo('targets');
     expect(await screen.findByText('Tenant: Acme Corp (acme)')).toBeInTheDocument();
   });
@@ -484,6 +484,27 @@ describe('VirtualRift Dashboard App', () => {
     expect(client.tenants.removeScanTarget).toHaveBeenCalledWith('tenant-id', 'target-1');
   });
 
+  it('keeps the tenant targets area read-only for reader profiles', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([createTarget()]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
+    expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
+
+    expect(screen.getByText(/apenas um usuário com papel/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adicionar alvo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verificar ownership' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remover alvo' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Token de verificação:/)).not.toBeInTheDocument();
+  });
+
   it('checks whether a requested target is authorized for a scan type', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
@@ -505,6 +526,45 @@ describe('VirtualRift Dashboard App', () => {
       target: 'https://app.example.com/admin',
       scanType: 'WEB',
     });
+  });
+
+  it('shows a contextual 403 message when target mutation is blocked by the backend', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+    const response = new Response(JSON.stringify({ title: 'Forbidden', detail: 'User role is not allowed to access this resource' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/problem+json' },
+    });
+
+    Object.defineProperty(response, 'url', {
+      value: `${DASHBOARD_API_BASE_URL}/api/v1/tenants/tenant-id/scan-targets`,
+      configurable: true,
+    });
+
+    client.tenants.addScanTarget.mockRejectedValue(
+      new VirtualRiftApiError(
+        'Forbidden',
+        403,
+        { title: 'Forbidden', detail: 'User role is not allowed to access this resource' },
+        response,
+      ),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
+    expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Alvo'), { target: { value: 'https://github.com/acme/platform' } });
+    fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'REPOSITORY' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar alvo' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Seu perfil atual não pode alterar alvos do tenant. Use uma conta com papel OWNER para cadastrar, verificar ou remover alvos.',
+    );
   });
 
   it('creates a scan from a verified target and lists it in the current session panel', async () => {
@@ -573,6 +633,31 @@ describe('VirtualRift Dashboard App', () => {
     expect(client.scans.getStatus).toHaveBeenCalledWith('scan-created');
   });
 
+  it('keeps scan creation hidden for reader profiles while preserving read access', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'verified-target',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+    expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
+
+    expect(screen.getByText(/apenas usuários com papel/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Criar scan' })).not.toBeInTheDocument();
+  });
+
   it('shows the account area with tenant context and operator details', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
@@ -605,5 +690,20 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('R$ 1.290')).toBeInTheDocument();
     expect(screen.getAllByText('/mês').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Voltar para minha conta' })).toBeInTheDocument();
+  });
+
+  it('keeps plan change actions read-only for non-owner profiles', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['ANALYST'] })),
+    });
+
+    renderApp({ storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('plans');
+
+    expect(await screen.findByRole('heading', { name: 'Planos e cobrança' })).toBeInTheDocument();
+    expect(screen.getByText(/apenas usuários com papel/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Somente OWNER pode solicitar' }).length).toBeGreaterThan(0);
   });
 });

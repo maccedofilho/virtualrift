@@ -1,4 +1,5 @@
 import { sessionStatusLabel, useSession } from '../../session';
+import { formatRoleLabel } from '../../shared/roles';
 
 export function SessionOverview() {
   const { apiBaseUrl, error, logout, refresh, session, status } = useSession();
@@ -85,12 +86,12 @@ export function SessionOverview() {
           <div className="toolbar">
             {session.roles.map((role) => (
               <span key={role} className="badge badge-accent">
-                {role}
+                {formatRoleLabel(role)}
               </span>
             ))}
             {session.roles.length === 0 ? <span className="badge">Sem perfis</span> : null}
           </div>
-          <p className="technical-note">Perfis: {session.roles.join(', ') || 'Sem perfis'}</p>
+          <p className="technical-note">Perfis: {session.roles.map(formatRoleLabel).join(', ') || 'Sem perfis'}</p>
         </div>
 
         <div className="toolbar dashboard-context-actions">

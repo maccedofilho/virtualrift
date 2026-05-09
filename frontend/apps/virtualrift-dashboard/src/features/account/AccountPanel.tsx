@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
+import { formatRoleLabel } from '../../shared/roles';
 
 const tenantStatusLabel = (status: TenantResponse['status']): string => {
   switch (status) {
@@ -15,16 +16,6 @@ const tenantStatusLabel = (status: TenantResponse['status']): string => {
     case 'CANCELLED':
       return 'Cancelado';
   }
-};
-
-const friendlyRole = (role: string): string => {
-  const map: Record<string, string> = {
-    OWNER: 'Dono',
-    ADMIN: 'Administrador',
-    ANALYST: 'Analista',
-    READER: 'Leitor',
-  };
-  return map[role] ?? role.charAt(0) + role.slice(1).toLowerCase();
 };
 
 const initialsFromName = (name: string | null | undefined): string => {
@@ -96,7 +87,7 @@ export function AccountPanel() {
     return null;
   }
 
-  const primaryRole = session.roles[0] ? friendlyRole(session.roles[0]) : 'membro';
+  const primaryRole = session.roles[0] ? formatRoleLabel(session.roles[0]) : 'membro';
   const workspaceName = tenant?.name ?? 'seu workspace';
   const initials = initialsFromName(tenant?.name);
 
@@ -172,7 +163,7 @@ export function AccountPanel() {
                 ) : (
                   session.roles.map((role) => (
                     <span key={role} className="badge badge-accent">
-                      {friendlyRole(role)}
+                      {formatRoleLabel(role)}
                     </span>
                   ))
                 )}

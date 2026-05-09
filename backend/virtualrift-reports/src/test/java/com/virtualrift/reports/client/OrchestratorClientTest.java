@@ -42,6 +42,7 @@ class OrchestratorClientTest {
     private OrchestratorClient client;
 
     private static final String ORCHESTRATOR_URL = "http://virtualrift-orchestrator";
+    private static final String OWNER_ROLES = "OWNER";
 
     @BeforeEach
     void setUp() {
@@ -53,7 +54,7 @@ class OrchestratorClientTest {
     class GetScan {
 
         @Test
-        @DisplayName("should fetch scan and forward tenant header")
+        @DisplayName("should fetch scan and forward tenant and role headers")
         @SuppressWarnings({"unchecked", "rawtypes"})
         void getScan_quandoServicoResponde_retornaScanComHeaderTenant() {
             UUID tenantId = UUID.randomUUID();
@@ -81,7 +82,7 @@ class OrchestratorClientTest {
                     eq(OrchestratorScanResponse.class)
             )).thenReturn(ResponseEntity.ok(expected));
 
-            OrchestratorScanResponse response = client.getScan(tenantId, scanId);
+            OrchestratorScanResponse response = client.getScan(tenantId, scanId, OWNER_ROLES);
 
             assertEquals(scanId, response.id());
             verify(restTemplate).exchange(
@@ -91,6 +92,7 @@ class OrchestratorClientTest {
                     eq(OrchestratorScanResponse.class)
             );
             assertEquals(tenantId.toString(), entityCaptor.getValue().getHeaders().getFirst("X-Tenant-Id"));
+            assertEquals(OWNER_ROLES, entityCaptor.getValue().getHeaders().getFirst("X-Roles"));
         }
 
         @Test
@@ -106,7 +108,7 @@ class OrchestratorClientTest {
                     eq(OrchestratorScanResponse.class)
             )).thenThrow(new HttpClientErrorException(HttpStatus.NOT_FOUND));
 
-            assertThrows(ReportNotFoundException.class, () -> client.getScan(tenantId, scanId));
+            assertThrows(ReportNotFoundException.class, () -> client.getScan(tenantId, scanId, OWNER_ROLES));
         }
     }
 
@@ -143,7 +145,7 @@ class OrchestratorClientTest {
                     eq(OrchestratorScanResultResponse.class)
             )).thenReturn(ResponseEntity.ok(expected));
 
-            OrchestratorScanResultResponse response = client.getScanResult(tenantId, scanId);
+            OrchestratorScanResultResponse response = client.getScanResult(tenantId, scanId, OWNER_ROLES);
 
             assertEquals(scanId, response.scanId());
         }
@@ -161,7 +163,7 @@ class OrchestratorClientTest {
                     eq(OrchestratorScanResultResponse.class)
             )).thenReturn(ResponseEntity.ok(null));
 
-            assertThrows(ReportGenerationException.class, () -> client.getScanResult(tenantId, scanId));
+            assertThrows(ReportGenerationException.class, () -> client.getScanResult(tenantId, scanId, OWNER_ROLES));
         }
     }
 }

@@ -11,13 +11,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -68,13 +71,13 @@ class ReportControllerTest {
         UUID reportId = UUID.randomUUID();
         ReportResponse expected = response(reportId, tenantId, scanId);
 
-        when(reportService.generateReport(scanId, tenantId)).thenReturn(expected);
+        when(reportService.generateReport(scanId, tenantId, "OWNER")).thenReturn(expected);
 
-        ResponseEntity<ReportResponse> response = controller.generateReport(scanId, tenantId);
+        ResponseEntity<ReportResponse> response = controller.generateReport(scanId, tenantId, "OWNER");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(reportId, response.getBody().id());
-        verify(reportService).generateReport(scanId, tenantId);
+        verify(reportService).generateReport(scanId, tenantId, "OWNER");
     }
 
     @Test
@@ -87,7 +90,7 @@ class ReportControllerTest {
 
         when(reportService.getReport(reportId, tenantId)).thenReturn(expected);
 
-        ResponseEntity<ReportResponse> response = controller.getReport(reportId, tenantId);
+        ResponseEntity<ReportResponse> response = controller.getReport(reportId, tenantId, "READER");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(reportId, response.getBody().id());
@@ -103,10 +106,22 @@ class ReportControllerTest {
 
         when(reportService.listReports(tenantId, scanId)).thenReturn(List.of(expected));
 
-        ResponseEntity<List<ReportResponse>> response = controller.listReports(tenantId, scanId);
+        ResponseEntity<List<ReportResponse>> response = controller.listReports(tenantId, "ANALYST", scanId);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
         verify(reportService).listReports(tenantId, scanId);
+    }
+
+    @Test
+    @DisplayName("should reject report generation for reader role")
+    void generateReport_quandoReader_retorna403() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.generateReport(UUID.randomUUID(), UUID.randomUUID(), "READER")
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verifyNoInteractions(reportService);
     }
 }

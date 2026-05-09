@@ -2,6 +2,7 @@ import { type Plan, type TenantQuotaResponse, type TenantResponse, type UUID } f
 import { useEffect, useState } from 'react';
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
+import { canRequestPlanChanges } from '../../shared/roles';
 
 type PlanCatalogItem = {
   plan: Plan;
@@ -116,6 +117,8 @@ export function PlansPanel() {
   const [hint, setHint] = useState<string | null>(null);
 
   const tenantId: UUID | null = session?.tenantId ?? null;
+  const roles = session?.roles ?? [];
+  const canManagePlans = canRequestPlanChanges(roles);
 
   useEffect(() => {
     if (!tenantId) {
@@ -258,7 +261,7 @@ export function PlansPanel() {
               <button
                 className={isCurrentPlan ? 'button-secondary plan-card-cta' : 'button-primary plan-card-cta'}
                 type="button"
-                disabled={isCurrentPlan}
+                disabled={isCurrentPlan || !canManagePlans}
                 onClick={() =>
                   setHint(
                     isCurrentPlan
@@ -267,7 +270,7 @@ export function PlansPanel() {
                   )
                 }
               >
-                {isCurrentPlan ? 'Você está aqui' : plan.cta}
+                {isCurrentPlan ? 'Você está aqui' : canManagePlans ? plan.cta : 'Somente OWNER pode solicitar'}
               </button>
             </article>
           );
@@ -277,6 +280,12 @@ export function PlansPanel() {
       {hint ? (
         <p className="alert alert-info plans-hint" role="status">
           {hint}
+        </p>
+      ) : null}
+
+      {!canManagePlans ? (
+        <p className="alert alert-info plans-hint" role="status">
+          Você pode consultar os detalhes do plano atual, mas apenas usuários com papel <strong>OWNER</strong> podem solicitar troca de plano nesta beta.
         </p>
       ) : null}
 
