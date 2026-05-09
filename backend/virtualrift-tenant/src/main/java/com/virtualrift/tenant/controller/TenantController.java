@@ -10,6 +10,10 @@ import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.service.TenantService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +32,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/tenants")
+@Tag(name = "Tenant", description = "Gestao de tenants, planos, quotas e alvos de scan.")
 public class TenantController {
 
     private final TenantService tenantService;
@@ -43,6 +48,11 @@ public class TenantController {
     }
 
     @PostMapping
+    @Operation(summary = "Criar tenant", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Tenant criado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode criar tenants")
+    })
     public ResponseEntity<TenantResponse> createTenant(
             @RequestHeader("X-Roles") String rolesHeader,
             @Valid @RequestBody CreateTenantRequest request) {
@@ -52,6 +62,11 @@ public class TenantController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Buscar tenant por id", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tenant encontrado"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura do tenant")
+    })
     public ResponseEntity<TenantResponse> getTenant(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id) {
@@ -61,6 +76,11 @@ public class TenantController {
     }
 
     @GetMapping("/slug/{slug}")
+    @Operation(summary = "Buscar tenant por slug", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tenant encontrado"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura do tenant")
+    })
     public ResponseEntity<TenantResponse> getTenantBySlug(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable String slug) {
@@ -70,6 +90,11 @@ public class TenantController {
     }
 
     @GetMapping("/{id}/quota")
+    @Operation(summary = "Consultar quota do tenant", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Quota retornada"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura da quota")
+    })
     public ResponseEntity<TenantQuotaResponse> getQuota(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id) {
@@ -79,6 +104,11 @@ public class TenantController {
     }
 
     @GetMapping("/{id}/scan-targets")
+    @Operation(summary = "Listar alvos do tenant", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alvos retornados"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura dos alvos")
+    })
     public ResponseEntity<List<ScanTargetResponse>> getScanTargets(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id) {
@@ -88,6 +118,11 @@ public class TenantController {
     }
 
     @PostMapping("/{id}/scan-targets")
+    @Operation(summary = "Adicionar alvo de scan", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Alvo criado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode cadastrar alvos")
+    })
     public ResponseEntity<ScanTargetResponse> addScanTarget(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id,
@@ -98,6 +133,11 @@ public class TenantController {
     }
 
     @PostMapping("/{id}/scan-targets/authorize")
+    @Operation(summary = "Validar autorizacao de alvo para scan", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Autorizacao avaliada"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de consultar autorizacao")
+    })
     public ResponseEntity<AuthorizeScanTargetResponse> authorizeScanTarget(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id,
@@ -108,6 +148,11 @@ public class TenantController {
     }
 
     @PostMapping("/{tenantId}/scan-targets/{targetId}/verify")
+    @Operation(summary = "Verificar ownership de alvo", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alvo verificado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode verificar ownership")
+    })
     public ResponseEntity<ScanTargetResponse> verifyScanTarget(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID tenantId,
@@ -118,6 +163,11 @@ public class TenantController {
     }
 
     @DeleteMapping("/{tenantId}/scan-targets/{targetId}")
+    @Operation(summary = "Remover alvo de scan", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Alvo removido"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode remover alvos")
+    })
     public ResponseEntity<Void> removeScanTarget(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID tenantId,
@@ -128,6 +178,11 @@ public class TenantController {
     }
 
     @GetMapping("/{id}/plan")
+    @Operation(summary = "Consultar plano do tenant", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Plano retornado"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura do plano")
+    })
     public ResponseEntity<com.virtualrift.tenant.model.Plan> getPlan(
             @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id) {

@@ -10,6 +10,7 @@ import {
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
+import { canCreateScans } from '../../shared/roles';
 
 const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
   switch (target.type) {
@@ -52,6 +53,8 @@ export function ScanCreationPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const tenantId = session?.tenantId ?? null;
+  const roles = session?.roles ?? [];
+  const canCreateNewScans = canCreateScans(roles);
 
   useEffect(() => {
     if (!tenantId) {
@@ -213,106 +216,112 @@ export function ScanCreationPanel() {
             <h3 className="panel-section-title">Disparar uma solicitação de scan</h3>
             <span className="badge badge-accent">Escopo verificado</span>
           </div>
-          <form onSubmit={handleCreateScan} className="form-stack">
-            <div className="field-grid">
-              <div className="field">
-                <label htmlFor="scan-target-select">Alvo verificado</label>
-                <select
-                  className="select"
-                  id="scan-target-select"
-                  name="scan-target-select"
-                  value={selectedTargetId}
-                  onChange={(event) => setSelectedTargetId(event.target.value)}
-                >
-                  {verifiedTargets.map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {targetLabel(target)}
-                    </option>
-                  ))}
-                </select>
+          {canCreateNewScans ? (
+            <form onSubmit={handleCreateScan} className="form-stack">
+              <div className="field-grid">
+                <div className="field">
+                  <label htmlFor="scan-target-select">Alvo verificado</label>
+                  <select
+                    className="select"
+                    id="scan-target-select"
+                    name="scan-target-select"
+                    value={selectedTargetId}
+                    onChange={(event) => setSelectedTargetId(event.target.value)}
+                  >
+                    {verifiedTargets.map((target) => (
+                      <option key={target.id} value={target.id}>
+                        {targetLabel(target)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label htmlFor="scan-type-select">Tipo de scan solicitado</label>
+                  <select
+                    className="select"
+                    id="scan-type-select"
+                    name="scan-type-select"
+                    value={scanType}
+                    onChange={(event) => setScanType(event.target.value as ScanType)}
+                  >
+                    {availableScanTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label htmlFor="requested-scan-target">Alvo solicitado para o scan</label>
+                  <input
+                    className="input"
+                    id="requested-scan-target"
+                    name="requested-scan-target"
+                    type="text"
+                    value={requestedTarget}
+                    onChange={(event) => setRequestedTarget(event.target.value)}
+                    placeholder="https://app.example.com/login"
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="scan-depth">Profundidade do scan</label>
+                  <input
+                    className="input"
+                    id="scan-depth"
+                    name="scan-depth"
+                    type="number"
+                    min="1"
+                    value={depth}
+                    onChange={(event) => setDepth(event.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="scan-timeout">Timeout do scan (segundos)</label>
+                  <input
+                    className="input"
+                    id="scan-timeout"
+                    name="scan-timeout"
+                    type="number"
+                    min="1"
+                    value={timeout}
+                    onChange={(event) => setTimeoutValue(event.target.value)}
+                  />
+                </div>
               </div>
 
-              <div className="field">
-                <label htmlFor="scan-type-select">Tipo de scan solicitado</label>
-                <select
-                  className="select"
-                  id="scan-type-select"
-                  name="scan-type-select"
-                  value={scanType}
-                  onChange={(event) => setScanType(event.target.value as ScanType)}
-                >
-                  {availableScanTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
+              <div className="meta-grid">
+                <div className="meta-card">
+                  <span className="meta-label">Alvo selecionado</span>
+                  <span className="technical-value">
+                    {selectedTarget ? `Alvo selecionado: ${selectedTarget.target}` : 'Alvo selecionado: Nenhum alvo selecionado'}
+                  </span>
+                </div>
+                <div className="meta-card">
+                  <span className="meta-label">Tipos compatíveis</span>
+                  <span className="meta-value">{availableScanTypes.join(', ') || 'Nenhum tipo de scan disponível'}</span>
+                </div>
               </div>
 
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="requested-scan-target">Alvo solicitado para o scan</label>
-                <input
-                  className="input"
-                  id="requested-scan-target"
-                  name="requested-scan-target"
-                  type="text"
-                  value={requestedTarget}
-                  onChange={(event) => setRequestedTarget(event.target.value)}
-                  placeholder="https://app.example.com/login"
-                  required
-                />
+              <p className="form-help">
+                <strong>Política de scan</strong>
+                Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.
+              </p>
+              <div className="form-actions">
+                <button className="button-primary" type="submit" disabled={status === 'submitting' || status === 'refreshing'}>
+                  {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
+                </button>
               </div>
-
-              <div className="field">
-                <label htmlFor="scan-depth">Profundidade do scan</label>
-                <input
-                  className="input"
-                  id="scan-depth"
-                  name="scan-depth"
-                  type="number"
-                  min="1"
-                  value={depth}
-                  onChange={(event) => setDepth(event.target.value)}
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="scan-timeout">Timeout do scan (segundos)</label>
-                <input
-                  className="input"
-                  id="scan-timeout"
-                  name="scan-timeout"
-                  type="number"
-                  min="1"
-                  value={timeout}
-                  onChange={(event) => setTimeoutValue(event.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="meta-grid">
-              <div className="meta-card">
-                <span className="meta-label">Alvo selecionado</span>
-                <span className="technical-value">
-                  {selectedTarget ? `Alvo selecionado: ${selectedTarget.target}` : 'Alvo selecionado: Nenhum alvo selecionado'}
-                </span>
-              </div>
-              <div className="meta-card">
-                <span className="meta-label">Tipos compatíveis</span>
-                <span className="meta-value">{availableScanTypes.join(', ') || 'Nenhum tipo de scan disponível'}</span>
-              </div>
-            </div>
-
-            <p className="form-help">
-              <strong>Política de scan</strong>
-              Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.
+            </form>
+          ) : (
+            <p className="alert alert-info">
+              Seu perfil atual pode acompanhar scans já existentes, mas apenas usuários com papel <strong>OWNER</strong> ou <strong>ANALYST</strong> podem criar novas execuções.
             </p>
-            <div className="form-actions">
-              <button className="button-primary" type="submit" disabled={status === 'submitting' || status === 'refreshing'}>
-                {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
-              </button>
-            </div>
-          </form>
+          )}
         </section>
       ) : null}
 

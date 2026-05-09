@@ -14,6 +14,7 @@ const readApiDetail = (error: VirtualRiftApiError): string | null => {
 
 const translateApiError = (error: VirtualRiftApiError): string => {
   const detail = readApiDetail(error)?.toLowerCase() ?? '';
+  const url = error.response.url;
 
   switch (error.status) {
     case 401:
@@ -25,6 +26,15 @@ const translateApiError = (error: VirtualRiftApiError): string => {
       }
       return 'Sua sessão não é válida para esta operação.';
     case 403:
+      if (url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
+        return 'Seu perfil atual não pode alterar alvos do tenant. Use uma conta com papel OWNER para cadastrar, verificar ou remover alvos.';
+      }
+      if (url.includes('/api/v1/scans') && !url.includes('/status') && !url.includes('/findings') && !url.includes('/result')) {
+        return 'Seu perfil atual não pode criar scans. Use uma conta com papel OWNER ou ANALYST para iniciar novas execuções.';
+      }
+      if (url.includes('/api/v1/reports/scans/')) {
+        return 'Seu perfil atual não pode gerar relatórios. Use uma conta com papel OWNER ou ANALYST para concluir esta ação.';
+      }
       return 'Você não tem permissão para concluir esta ação.';
     case 404:
       return 'O recurso solicitado não foi encontrado.';

@@ -45,9 +45,9 @@ public class ReportService {
     }
 
     @Transactional
-    public ReportResponse generateReport(UUID scanId, UUID tenantId) {
-        OrchestratorScanResponse scan = orchestratorClient.getScan(tenantId, scanId);
-        OrchestratorScanResultResponse result = orchestratorClient.getScanResult(tenantId, scanId);
+    public ReportResponse generateReport(UUID scanId, UUID tenantId, String rolesHeader) {
+        OrchestratorScanResponse scan = orchestratorClient.getScan(tenantId, scanId, rolesHeader);
+        OrchestratorScanResultResponse result = orchestratorClient.getScanResult(tenantId, scanId, rolesHeader);
 
         List<OrchestratorScanFindingResponse> sourceFindings = result.findings() == null ? List.of() : result.findings();
 

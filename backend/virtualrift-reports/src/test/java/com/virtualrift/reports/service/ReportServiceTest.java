@@ -58,6 +58,7 @@ class ReportServiceTest {
     private static final UUID TENANT_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
     private static final UUID SCAN_ID = UUID.randomUUID();
+    private static final String OWNER_ROLES = "OWNER";
     private static final String TARGET = "https://example.com";
     private static final Instant CREATED_AT = Instant.parse("2026-04-17T01:00:00Z");
     private static final Instant STARTED_AT = Instant.parse("2026-04-17T01:01:00Z");
@@ -159,12 +160,12 @@ class ReportServiceTest {
         void generateReport_quandoScanCompleto_persisteSnapshot() {
             OrchestratorScanFindingResponse finding = finding(Severity.CRITICAL);
 
-            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID)).thenReturn(scan(ScanStatus.COMPLETED));
-            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID)).thenReturn(result(List.of(finding)));
+            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(scan(ScanStatus.COMPLETED));
+            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(result(List.of(finding)));
             when(reportRepository.findByTenantIdAndScanId(TENANT_ID, SCAN_ID)).thenReturn(Optional.empty());
             when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            ReportResponse response = service.generateReport(SCAN_ID, TENANT_ID);
+            ReportResponse response = service.generateReport(SCAN_ID, TENANT_ID, OWNER_ROLES);
 
             assertNotNull(response.id());
             assertEquals(TENANT_ID, response.tenantId());
@@ -187,12 +188,12 @@ class ReportServiceTest {
             UUID reportId = UUID.randomUUID();
             Report existing = storedReport(reportId, TENANT_ID, SCAN_ID);
 
-            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID)).thenReturn(scan(ScanStatus.COMPLETED));
-            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID)).thenReturn(result(List.of(finding(Severity.CRITICAL))));
+            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(scan(ScanStatus.COMPLETED));
+            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(result(List.of(finding(Severity.CRITICAL))));
             when(reportRepository.findByTenantIdAndScanId(TENANT_ID, SCAN_ID)).thenReturn(Optional.of(existing));
             when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            ReportResponse response = service.generateReport(SCAN_ID, TENANT_ID);
+            ReportResponse response = service.generateReport(SCAN_ID, TENANT_ID, OWNER_ROLES);
 
             assertEquals(reportId, response.id());
             assertEquals(SCAN_ID, response.scanId());
@@ -203,10 +204,10 @@ class ReportServiceTest {
         @Test
         @DisplayName("should reject report generation while scan is still running")
         void generateReport_quandoScanNaoFinalizado_lancaReportNotReadyException() {
-            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID)).thenReturn(scan(ScanStatus.RUNNING));
-            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID)).thenReturn(result(List.of()));
+            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(scan(ScanStatus.RUNNING));
+            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(result(List.of()));
 
-            assertThrows(ReportNotReadyException.class, () -> service.generateReport(SCAN_ID, TENANT_ID));
+            assertThrows(ReportNotReadyException.class, () -> service.generateReport(SCAN_ID, TENANT_ID, OWNER_ROLES));
             verify(reportRepository, never()).save(any());
             verify(eventProducer, never()).publishReportGenerated(any(), any(), any(), any());
         }
@@ -230,10 +231,10 @@ class ReportServiceTest {
                     COMPLETED_AT
             );
 
-            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID)).thenReturn(scan);
-            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID)).thenReturn(result(List.of()));
+            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(scan);
+            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(result(List.of()));
 
-            assertThrows(ReportGenerationException.class, () -> service.generateReport(SCAN_ID, TENANT_ID));
+            assertThrows(ReportGenerationException.class, () -> service.generateReport(SCAN_ID, TENANT_ID, OWNER_ROLES));
             verify(reportRepository, never()).save(any());
         }
 
@@ -252,10 +253,10 @@ class ReportServiceTest {
                     COMPLETED_AT
             );
 
-            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID)).thenReturn(scan(ScanStatus.COMPLETED));
-            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID)).thenReturn(result(List.of(finding)));
+            when(orchestratorClient.getScan(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(scan(ScanStatus.COMPLETED));
+            when(orchestratorClient.getScanResult(TENANT_ID, SCAN_ID, OWNER_ROLES)).thenReturn(result(List.of(finding)));
 
-            assertThrows(ReportGenerationException.class, () -> service.generateReport(SCAN_ID, TENANT_ID));
+            assertThrows(ReportGenerationException.class, () -> service.generateReport(SCAN_ID, TENANT_ID, OWNER_ROLES));
             verify(reportRepository, never()).save(any());
         }
     }

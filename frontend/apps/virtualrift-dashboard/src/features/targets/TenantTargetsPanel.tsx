@@ -14,6 +14,7 @@ import {
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
+import { canManageTenantTargets } from '../../shared/roles';
 
 type AuthorizationCheckResult = {
   authorized: boolean;
@@ -51,6 +52,8 @@ export function TenantTargetsPanel() {
   const [authorizationResult, setAuthorizationResult] = useState<AuthorizationCheckResult>(null);
 
   const tenantId = session?.tenantId ?? null;
+  const roles = session?.roles ?? [];
+  const canManageTargets = canManageTenantTargets(roles);
 
   const loadWorkspace = async (activeTenantId: UUID) => {
     setStatus('loading');
@@ -255,60 +258,66 @@ export function TenantTargetsPanel() {
           <h3 className="panel-section-title">Adicionar alvo de scan</h3>
           <span className="badge badge-accent">Ownership primeiro</span>
         </div>
-        <form onSubmit={handleCreateTarget} className="form-stack">
-          <div className="field-grid">
-            <div className="field">
-              <label htmlFor="target-value">Alvo</label>
-              <input
-                className="input"
-                id="target-value"
-                name="target"
-                type="text"
-                value={createTarget}
-                onChange={(event) => setCreateTarget(event.target.value)}
-                placeholder="https://app.example.com or https://github.com/org/repo"
-                required
-              />
+        {canManageTargets ? (
+          <form onSubmit={handleCreateTarget} className="form-stack">
+            <div className="field-grid">
+              <div className="field">
+                <label htmlFor="target-value">Alvo</label>
+                <input
+                  className="input"
+                  id="target-value"
+                  name="target"
+                  type="text"
+                  value={createTarget}
+                  onChange={(event) => setCreateTarget(event.target.value)}
+                  placeholder="https://app.example.com or https://github.com/org/repo"
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="target-type">Tipo</label>
+                <select
+                  className="select"
+                  id="target-type"
+                  name="type"
+                  value={createType}
+                  onChange={(event) => setCreateType(event.target.value as TargetType)}
+                >
+                  {TARGET_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label htmlFor="target-description">Descrição</label>
+                <input
+                  className="input"
+                  id="target-description"
+                  name="description"
+                  type="text"
+                  value={createDescription}
+                  onChange={(event) => setCreateDescription(event.target.value)}
+                  placeholder="Aplicação principal de produção"
+                />
+              </div>
             </div>
-            <div className="field">
-              <label htmlFor="target-type">Tipo</label>
-              <select
-                className="select"
-                id="target-type"
-                name="type"
-                value={createType}
-                onChange={(event) => setCreateType(event.target.value as TargetType)}
-              >
-                {TARGET_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
+            <p className="form-help">
+              <strong>Tipos de alvo</strong>
+              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.
+            </p>
+            <div className="form-actions">
+              <button className="button-primary" type="submit" disabled={status === 'submitting'}>
+                {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
+              </button>
             </div>
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label htmlFor="target-description">Descrição</label>
-              <input
-                className="input"
-                id="target-description"
-                name="description"
-                type="text"
-                value={createDescription}
-                onChange={(event) => setCreateDescription(event.target.value)}
-                placeholder="Aplicação principal de produção"
-              />
-            </div>
-          </div>
-          <p className="form-help">
-            <strong>Tipos de alvo</strong>
-            Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.
+          </form>
+        ) : (
+          <p className="alert alert-info">
+            Seu perfil atual pode consultar o escopo do tenant, mas apenas um usuário com papel <strong>OWNER</strong> pode cadastrar, verificar ou remover alvos.
           </p>
-          <div className="form-actions">
-            <button className="button-primary" type="submit" disabled={status === 'submitting'}>
-              {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
-            </button>
-          </div>
-        </form>
+        )}
       </section>
 
       <section aria-label="authorization-check" className="panel-section">
@@ -403,7 +412,7 @@ export function TenantTargetsPanel() {
                   <span className="kv-label">Última checagem</span>
                   <span className="kv-value">Última checagem: {formatDateTime(target.verificationCheckedAt)}</span>
                 </div>
-                {target.verificationToken ? (
+                {target.verificationToken && canManageTargets ? (
                   <div className="kv-item" style={{ gridColumn: '1 / -1' }}>
                     <span className="kv-label">Token de verificação</span>
                     <span className="technical-value">
@@ -414,14 +423,16 @@ export function TenantTargetsPanel() {
               </div>
 
               <div className="toolbar">
-                {canVerifyTarget(target) ? (
+                {canManageTargets && canVerifyTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleVerifyTarget(target.id)} disabled={status === 'submitting'}>
                     Verificar ownership
                   </button>
                 ) : null}
-                <button className="button-ghost" type="button" onClick={() => void handleRemoveTarget(target.id)} disabled={status === 'submitting'}>
-                  Remover alvo
-                </button>
+                {canManageTargets ? (
+                  <button className="button-ghost" type="button" onClick={() => void handleRemoveTarget(target.id)} disabled={status === 'submitting'}>
+                    Remover alvo
+                  </button>
+                ) : null}
               </div>
             </article>
           ))}

@@ -71,13 +71,13 @@ class ReportControllerTest {
         UUID reportId = UUID.randomUUID();
         ReportResponse expected = response(reportId, tenantId, scanId);
 
-        when(reportService.generateReport(scanId, tenantId)).thenReturn(expected);
+        when(reportService.generateReport(scanId, tenantId, "OWNER")).thenReturn(expected);
 
         ResponseEntity<ReportResponse> response = controller.generateReport(scanId, tenantId, "OWNER");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(reportId, response.getBody().id());
-        verify(reportService).generateReport(scanId, tenantId);
+        verify(reportService).generateReport(scanId, tenantId, "OWNER");
     }
 
     @Test
