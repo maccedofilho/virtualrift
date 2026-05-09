@@ -56,7 +56,7 @@ class RateLimitFilterTest {
         gatewayConfig = new GatewayConfig();
         gatewayConfig.setRateLimit(rateLimit);
         GatewayConfig.Security security = new GatewayConfig.Security();
-        security.setPublicPaths(java.util.List.of("/health", "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**"));
+        security.setPublicPaths(java.util.List.of("/health", "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"));
         gatewayConfig.setSecurity(security);
 
         filter = new RateLimitFilter(proxyManager, gatewayConfig);
@@ -170,6 +170,18 @@ class RateLimitFilterTest {
 
             verify(filterChain).filter(any(ServerWebExchange.class));
             verify(proxyManager, never()).builder();
+        }
+
+        @Test
+        @DisplayName("should rate limit non-health actuator routes")
+        void filter_quandoActuatorSensivel_aplicaRateLimit() {
+            stubAllowedRequest(99L);
+            ServerWebExchange exchange = createExchangeWithoutHeaders("/actuator/metrics");
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(proxyManager).builder();
+            verify(filterChain).filter(any(ServerWebExchange.class));
         }
 
         @Test

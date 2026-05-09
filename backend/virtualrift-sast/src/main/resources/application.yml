@@ -12,4 +12,4 @@ virtualrift:
     max-repository-bytes: ${SAST_MAX_REPOSITORY_BYTES:104857600}
     max-repository-files: ${SAST_MAX_REPOSITORY_FILES:20000}
     clone-timeout-seconds: ${SAST_CLONE_TIMEOUT_SECONDS:120}
-    local-targets-enabled: ${SAST_LOCAL_TARGETS_ENABLED:true}
+    local-targets-enabled: ${SAST_LOCAL_TARGETS_ENABLED:false}

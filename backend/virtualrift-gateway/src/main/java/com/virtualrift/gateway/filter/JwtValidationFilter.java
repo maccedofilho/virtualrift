@@ -158,10 +158,6 @@ public class JwtValidationFilter implements GlobalFilter, Ordered {
             return true;
         }
 
-        if (path.startsWith("/actuator/")) {
-            return true;
-        }
-
         for (String publicPath : gatewayConfig.getSecurity().getPublicPaths()) {
             if (publicPath.endsWith("/**")) {
                 String prefix = publicPath.substring(0, publicPath.length() - 3);

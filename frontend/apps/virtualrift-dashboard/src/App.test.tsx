@@ -332,7 +332,7 @@ describe('VirtualRift Dashboard App', () => {
     goTo('targets');
     expect(await screen.findByRole('heading', { name: 'Alvos do tenant' })).toBeInTheDocument();
     expect(client.auth.refresh).toHaveBeenCalledWith({ refreshToken: 'expired-refresh' });
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"refreshToken":"refresh-next"');
+    expect(storage.getItem(SESSION_STORAGE_KEY)).not.toContain('refreshToken');
   });
 
   it('logs out and clears the stored session', async () => {
