@@ -48,7 +48,8 @@ class ScanControllerTest {
                 .thenThrow(new ScanNotFoundException("Scan not found: " + scanId));
 
         mockMvc.perform(get("/api/v1/scans/{scanId}", scanId)
-                        .header("X-Tenant-Id", tenantId))
+                        .header("X-Tenant-Id", tenantId)
+                        .header("X-Roles", "READER"))
                 .andExpect(status().isNotFound());
     }
 
@@ -66,7 +67,8 @@ class ScanControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request))
                         .header("X-Tenant-Id", tenantId)
-                        .header("X-User-Id", userId))
+                        .header("X-User-Id", userId)
+                        .header("X-Roles", "ANALYST"))
                 .andExpect(status().isTooManyRequests());
     }
 
@@ -84,7 +86,8 @@ class ScanControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request))
                         .header("X-Tenant-Id", tenantId)
-                        .header("X-User-Id", userId))
+                        .header("X-User-Id", userId)
+                        .header("X-Roles", "OWNER"))
                 .andExpect(status().isForbidden());
     }
 
@@ -102,7 +105,24 @@ class ScanControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request))
                         .header("X-Tenant-Id", tenantId)
-                        .header("X-User-Id", userId))
+                        .header("X-User-Id", userId)
+                        .header("X-Roles", "OWNER"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    @DisplayName("should return 403 when reader tries to create a scan")
+    void createScan_quandoReader_retorna403() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        CreateScanRequest request = new CreateScanRequest("https://example.com", ScanType.WEB, 3, 300);
+
+        mockMvc.perform(post("/api/v1/scans")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(request))
+                        .header("X-Tenant-Id", tenantId)
+                        .header("X-User-Id", userId)
+                        .header("X-Roles", "READER"))
+                .andExpect(status().isForbidden());
     }
 }

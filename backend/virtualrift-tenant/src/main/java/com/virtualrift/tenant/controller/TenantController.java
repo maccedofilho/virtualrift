@@ -1,5 +1,7 @@
 package com.virtualrift.tenant.controller;
 
+import com.virtualrift.common.security.RoleAccess;
+import com.virtualrift.common.security.UserRole;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
 import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
@@ -16,8 +18,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -32,70 +36,102 @@ public class TenantController {
         this.tenantService = tenantService;
     }
 
+    private void requireAnyRole(String rolesHeader, UserRole... allowedRoles) {
+        if (!RoleAccess.hasAny(rolesHeader, allowedRoles)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User role is not allowed to access this resource");
+        }
+    }
+
     @PostMapping
-    public ResponseEntity<TenantResponse> createTenant(@Valid @RequestBody CreateTenantRequest request) {
+    public ResponseEntity<TenantResponse> createTenant(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @Valid @RequestBody CreateTenantRequest request) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
         TenantResponse response = tenantService.createTenant(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TenantResponse> getTenant(@PathVariable UUID id) {
+    public ResponseEntity<TenantResponse> getTenant(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         TenantResponse response = tenantService.getTenant(id);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/slug/{slug}")
-    public ResponseEntity<TenantResponse> getTenantBySlug(@PathVariable String slug) {
+    public ResponseEntity<TenantResponse> getTenantBySlug(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable String slug) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         TenantResponse response = tenantService.getTenantBySlug(slug);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/quota")
-    public ResponseEntity<TenantQuotaResponse> getQuota(@PathVariable UUID id) {
+    public ResponseEntity<TenantQuotaResponse> getQuota(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         TenantQuotaResponse response = tenantService.getQuota(id);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}/scan-targets")
-    public ResponseEntity<List<ScanTargetResponse>> getScanTargets(@PathVariable UUID id) {
+    public ResponseEntity<List<ScanTargetResponse>> getScanTargets(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         List<ScanTargetResponse> response = tenantService.getScanTargets(id);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{id}/scan-targets")
     public ResponseEntity<ScanTargetResponse> addScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id,
             @Valid @RequestBody AddScanTargetRequest request) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
         ScanTargetResponse response = tenantService.addScanTarget(id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/{id}/scan-targets/authorize")
     public ResponseEntity<AuthorizeScanTargetResponse> authorizeScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID id,
             @Valid @RequestBody AuthorizeScanTargetRequest request) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         boolean authorized = tenantService.isScanTargetAuthorized(id, request.target(), request.scanType());
         return ResponseEntity.ok(new AuthorizeScanTargetResponse(authorized));
     }
 
     @PostMapping("/{tenantId}/scan-targets/{targetId}/verify")
     public ResponseEntity<ScanTargetResponse> verifyScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID tenantId,
             @PathVariable UUID targetId) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
         ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
         return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{tenantId}/scan-targets/{targetId}")
     public ResponseEntity<Void> removeScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
             @PathVariable UUID tenantId,
             @PathVariable UUID targetId) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
         tenantService.removeScanTarget(tenantId, targetId);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/plan")
-    public ResponseEntity<com.virtualrift.tenant.model.Plan> getPlan(@PathVariable UUID id) {
+    public ResponseEntity<com.virtualrift.tenant.model.Plan> getPlan(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         com.virtualrift.tenant.model.Plan plan = tenantService.getPlan(id);
         return ResponseEntity.ok(plan);
     }
