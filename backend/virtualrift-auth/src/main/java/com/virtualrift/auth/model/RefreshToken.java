@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -19,7 +20,10 @@ public class RefreshToken {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "token", nullable = false, unique = true)
+    @Column(name = "token_hash", nullable = false, unique = true)
+    private String tokenHash;
+
+    @Transient
     private String token;
 
     @Column(name = "user_id", nullable = false)
@@ -35,7 +39,12 @@ public class RefreshToken {
     }
 
     public RefreshToken(String token, UUID userId, UUID tenantId, Instant expiration) {
+        this(token, null, userId, tenantId, expiration);
+    }
+
+    public RefreshToken(String token, String tokenHash, UUID userId, UUID tenantId, Instant expiration) {
         this.token = token;
+        this.tokenHash = tokenHash;
         this.userId = userId;
         this.tenantId = tenantId;
         this.expiration = expiration != null ? expiration : Instant.now().plusSeconds(7 * 24 * 60 * 60);
@@ -47,6 +56,10 @@ public class RefreshToken {
 
     public String token() {
         return token;
+    }
+
+    public String tokenHash() {
+        return tokenHash;
     }
 
     public UUID userId() {
