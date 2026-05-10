@@ -14,7 +14,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -36,6 +40,15 @@ class RefreshTokenServiceTest {
     @BeforeEach
     void setUp() {
         service = new RefreshTokenService(repository, denylist);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Nested
@@ -78,7 +91,11 @@ class RefreshTokenServiceTest {
             when(repository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
             RefreshToken token = service.generate(userId, tenantId);
 
-            verify(repository).save(argThat(t -> t.token().equals(token.token())));
+            verify(repository).save(argThat(t ->
+                    t.token().equals(token.token()) &&
+                    t.tokenHash() != null &&
+                    !t.tokenHash().equals(token.token())
+            ));
         }
 
         @Test
@@ -106,14 +123,15 @@ class RefreshTokenServiceTest {
 
         @BeforeEach
         void setUp() {
-            validToken = new RefreshToken(UUID.randomUUID().toString(), userId, tenantId,
+            String rawToken = UUID.randomUUID().toString();
+            validToken = new RefreshToken(rawToken, hashToken(rawToken), userId, tenantId,
                     Instant.now().plusSeconds(3600));
         }
 
         @Test
         @DisplayName("should return userId when token is valid")
         void validateRefreshToken_quandoValido_retornaUserId() {
-            when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            when(repository.findByTokenHash(validToken.tokenHash())).thenReturn(java.util.Optional.of(validToken));
             when(denylist.isRevoked(validToken.token())).thenReturn(false);
             UUID result = service.validate(validToken.token());
 
@@ -124,7 +142,7 @@ class RefreshTokenServiceTest {
         @DisplayName("should throw when token is not found")
         void validateRefreshToken_quandoNaoEncontrado_lancaInvalidTokenException() {
             String unknownToken = UUID.randomUUID().toString();
-            when(repository.findByToken(unknownToken)).thenReturn(java.util.Optional.empty());
+            when(repository.findByTokenHash(hashToken(unknownToken))).thenReturn(java.util.Optional.empty());
 
             assertThrows(InvalidTokenException.class, () -> service.validate(unknownToken));
         }
@@ -139,23 +157,28 @@ class RefreshTokenServiceTest {
         @Test
         @DisplayName("should throw when token is expired")
         void validateRefreshToken_quandoExpirado_lancaExpiredTokenException() {
+            String rawToken = UUID.randomUUID().toString();
             RefreshToken expiredToken = new RefreshToken(
-                    UUID.randomUUID().toString(),
+                    rawToken,
+                    hashToken(rawToken),
                     userId,
                     tenantId,
                     Instant.now().minusSeconds(60)
             );
-            when(repository.findByToken(expiredToken.token())).thenReturn(java.util.Optional.of(expiredToken));
+            when(repository.findByTokenHash(expiredToken.tokenHash())).thenReturn(java.util.Optional.of(expiredToken));
             when(denylist.isRevoked(expiredToken.token())).thenReturn(false);
 
             assertThrows(ExpiredTokenException.class, () -> service.validate(expiredToken.token()));
         }
 
         @Test
-        @DisplayName("should throw when token format is invalid")
-        void validateRefreshToken_quandoFormatoInvalido_lancaInvalidTokenException() {
-            assertThrows(InvalidTokenException.class, () -> service.validate("invalid-format"));
-            verify(repository, never()).findByToken("invalid-format");
+        @DisplayName("should hash opaque tokens before repository lookup")
+        void validateRefreshToken_quandoOpaco_buscaPorHash() {
+            String opaqueToken = "opaque-refresh-token";
+            when(repository.findByTokenHash(hashToken(opaqueToken))).thenReturn(java.util.Optional.empty());
+
+            assertThrows(InvalidTokenException.class, () -> service.validate(opaqueToken));
+            verify(repository).findByTokenHash(hashToken(opaqueToken));
         }
 
         @Test
@@ -181,14 +204,15 @@ class RefreshTokenServiceTest {
 
         @BeforeEach
         void setUp() {
-            validToken = new RefreshToken(UUID.randomUUID().toString(), userId, tenantId,
+            String rawToken = UUID.randomUUID().toString();
+            validToken = new RefreshToken(rawToken, hashToken(rawToken), userId, tenantId,
                     Instant.now().plusSeconds(3600));
         }
 
         @Test
         @DisplayName("should revoke token")
         void revokeRefreshToken_quandoValido_revoga() {
-            when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            when(repository.findByTokenHash(validToken.tokenHash())).thenReturn(java.util.Optional.of(validToken));
             service.revoke(validToken.token());
 
             verify(denylist).add(eq(validToken.token()), any(Instant.class));
@@ -198,7 +222,7 @@ class RefreshTokenServiceTest {
         @Test
         @DisplayName("should throw when token does not exist")
         void revokeRefreshToken_quandoNaoExiste_lancaExcecao() {
-            when(repository.findByToken("unknown-token")).thenReturn(java.util.Optional.empty());
+            when(repository.findByTokenHash(hashToken("unknown-token"))).thenReturn(java.util.Optional.empty());
 
             assertThrows(InvalidTokenException.class, () -> service.revoke("unknown-token"));
         }
@@ -216,7 +240,7 @@ class RefreshTokenServiceTest {
         @DisplayName("should throw when token is blank")
         void revokeRefreshToken_quandoVazio_lancaExcecao() {
             assertThrows(InvalidTokenException.class, () -> service.revoke(" "));
-            verify(repository, never()).findByToken(any());
+            verify(repository, never()).findByTokenHash(any());
         }
     }
 
@@ -230,14 +254,15 @@ class RefreshTokenServiceTest {
 
         @BeforeEach
         void setUp() {
-            validToken = new RefreshToken(UUID.randomUUID().toString(), userId, tenantId,
+            String rawToken = UUID.randomUUID().toString();
+            validToken = new RefreshToken(rawToken, hashToken(rawToken), userId, tenantId,
                     Instant.now().plusSeconds(3600));
         }
 
         @Test
         @DisplayName("should generate new token and revoke old")
         void rotateRefreshToken_quandoValido_geraNovoERevogaAntigo() {
-            when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            when(repository.findByTokenHash(validToken.tokenHash())).thenReturn(java.util.Optional.of(validToken));
             when(denylist.isRevoked(validToken.token())).thenReturn(false);
             when(repository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
             RefreshToken newToken = service.rotate(validToken.token());
@@ -252,7 +277,7 @@ class RefreshTokenServiceTest {
         @Test
         @DisplayName("should preserve userId and tenantId")
         void rotateRefreshToken_preservaUserIdETenantId() {
-            when(repository.findByToken(validToken.token())).thenReturn(java.util.Optional.of(validToken));
+            when(repository.findByTokenHash(validToken.tokenHash())).thenReturn(java.util.Optional.of(validToken));
             when(denylist.isRevoked(validToken.token())).thenReturn(false);
             when(repository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
             RefreshToken newToken = service.rotate(validToken.token());
@@ -265,7 +290,7 @@ class RefreshTokenServiceTest {
         @DisplayName("should throw when old token is invalid")
         void rotateRefreshToken_quantoInvalido_lancaExcecao() {
             String unknownToken = UUID.randomUUID().toString();
-            when(repository.findByToken(unknownToken)).thenReturn(java.util.Optional.empty());
+            when(repository.findByTokenHash(hashToken(unknownToken))).thenReturn(java.util.Optional.empty());
 
             assertThrows(InvalidTokenException.class, () -> service.rotate(unknownToken));
         }
