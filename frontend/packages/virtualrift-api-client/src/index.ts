@@ -1,12 +1,16 @@
 import type {
+  AccountProfileResponse,
   AddScanTargetRequest,
   AuthorizeScanTargetRequest,
   AuthorizeScanTargetResponse,
+  BillingSummaryResponse,
+  CreatePlanChangeRequestRequest,
   CreateScanRequest,
   CreateTenantRequest,
   LoginRequest,
   LoginResponse,
   Plan,
+  PlanChangeRequestResponse,
   ProblemDetailResponse,
   RefreshTokenRequest,
   ReportResponse,
@@ -230,6 +234,8 @@ const createAuthClient = (request: VirtualRiftRequestExecutor) => ({
     request<LoginResponse>({ method: 'POST', path: '/api/v1/auth/refresh', body: payload, ...options }),
   logout: (payload?: RefreshTokenRequest, options?: VirtualRiftRequestOptions) =>
     request<void>({ method: 'POST', path: '/api/v1/auth/logout', body: payload, ...options }),
+  me: (options?: VirtualRiftRequestOptions) =>
+    request<AccountProfileResponse>({ method: 'GET', path: '/api/v1/auth/me', ...options }),
 });
 
 const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
@@ -243,6 +249,8 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
     request<TenantQuotaResponse>({ method: 'GET', path: `/api/v1/tenants/${tenantId}/quota`, ...options }),
   getPlan: (tenantId: UUID, options?: VirtualRiftRequestOptions) =>
     request<Plan>({ method: 'GET', path: `/api/v1/tenants/${tenantId}/plan`, ...options }),
+  getBillingSummary: (tenantId: UUID, options?: VirtualRiftRequestOptions) =>
+    request<BillingSummaryResponse>({ method: 'GET', path: `/api/v1/tenants/${tenantId}/billing-summary`, ...options }),
   listScanTargets: (tenantId: UUID, options?: VirtualRiftRequestOptions) =>
     request<ScanTargetResponse[]>({ method: 'GET', path: `/api/v1/tenants/${tenantId}/scan-targets`, ...options }),
   addScanTarget: (tenantId: UUID, payload: AddScanTargetRequest, options?: VirtualRiftRequestOptions) =>
@@ -263,6 +271,13 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
     request<ScanTargetResponse>({
       method: 'POST',
       path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}/verify`,
+      ...options,
+    }),
+  requestPlanChange: (tenantId: UUID, payload: CreatePlanChangeRequestRequest, options?: VirtualRiftRequestOptions) =>
+    request<PlanChangeRequestResponse>({
+      method: 'POST',
+      path: `/api/v1/tenants/${tenantId}/plan-change-requests`,
+      body: payload,
       ...options,
     }),
   removeScanTarget: (tenantId: UUID, targetId: UUID, options?: VirtualRiftRequestOptions) =>

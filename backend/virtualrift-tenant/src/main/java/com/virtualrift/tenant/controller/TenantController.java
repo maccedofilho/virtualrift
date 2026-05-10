@@ -5,7 +5,10 @@ import com.virtualrift.common.security.UserRole;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.AuthorizeScanTargetRequest;
 import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
+import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
+import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
@@ -189,5 +192,38 @@ public class TenantController {
         requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
         com.virtualrift.tenant.model.Plan plan = tenantService.getPlan(id);
         return ResponseEntity.ok(plan);
+    }
+
+    @GetMapping("/{id}/billing-summary")
+    @Operation(summary = "Consultar resumo de conta e plano", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Resumo retornado"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura do resumo")
+    })
+    public ResponseEntity<BillingSummaryResponse> getBillingSummary(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
+        return ResponseEntity.ok(tenantService.getBillingSummary(id));
+    }
+
+    @PostMapping("/{id}/plan-change-requests")
+    @Operation(summary = "Solicitar troca de plano", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Solicitacao criada"),
+            @ApiResponse(responseCode = "400", description = "Solicitacao invalida"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode solicitar troca de plano"),
+            @ApiResponse(responseCode = "409", description = "Ja existe uma solicitacao pendente")
+    })
+    public ResponseEntity<PlanChangeRequestResponse> createPlanChangeRequest(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreatePlanChangeRequestRequest request
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        PlanChangeRequestResponse response = tenantService.createPlanChangeRequest(id, userId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

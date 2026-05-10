@@ -1,11 +1,11 @@
-import { type TenantQuotaResponse, type TenantResponse, type UUID } from '@virtualrift/types';
+import { type AccountProfileResponse, type BillingSummaryResponse, type UUID } from '@virtualrift/types';
 import { useEffect, useState } from 'react';
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
 import { formatRoleLabel } from '../../shared/roles';
 
-const tenantStatusLabel = (status: TenantResponse['status']): string => {
+const tenantStatusLabel = (status: BillingSummaryResponse['tenantStatus']): string => {
   switch (status) {
     case 'ACTIVE':
       return 'Ativo';
@@ -49,8 +49,8 @@ const AUTH_METHODS: ReadonlyArray<{ name: string; description: string; status: '
 
 export function AccountPanel() {
   const { client, error: sessionError, logout, refresh, session, status } = useSession();
-  const [tenant, setTenant] = useState<TenantResponse | null>(null);
-  const [quota, setQuota] = useState<TenantQuotaResponse | null>(null);
+  const [profile, setProfile] = useState<AccountProfileResponse | null>(null);
+  const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState<'loading' | 'ready'>('loading');
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
@@ -66,13 +66,13 @@ export function AccountPanel() {
       setWorkspaceError(null);
 
       try {
-        const [nextTenant, nextQuota] = await Promise.all([
-          client.tenants.getById(tenantId),
-          client.tenants.getQuota(tenantId),
+        const [nextProfile, nextSummary] = await Promise.all([
+          client.auth.me(),
+          client.tenants.getBillingSummary(tenantId),
         ]);
 
-        setTenant(nextTenant);
-        setQuota(nextQuota);
+        setProfile(nextProfile);
+        setBillingSummary(nextSummary);
         setWorkspaceStatus('ready');
       } catch (loadError) {
         setWorkspaceStatus('ready');
@@ -87,9 +87,10 @@ export function AccountPanel() {
     return null;
   }
 
-  const primaryRole = session.roles[0] ? formatRoleLabel(session.roles[0]) : 'membro';
-  const workspaceName = tenant?.name ?? 'seu workspace';
-  const initials = initialsFromName(tenant?.name);
+  const roles = profile?.roles ?? session.roles;
+  const primaryRole = roles[0] ? formatRoleLabel(roles[0]) : 'membro';
+  const workspaceName = billingSummary?.tenantName ?? 'seu workspace';
+  const initials = initialsFromName(billingSummary?.tenantName);
 
   return (
     <section aria-label="account-panel" className="account-page">
@@ -103,7 +104,7 @@ export function AccountPanel() {
             <h2>Minha conta</h2>
             <p>
               Você é <strong>{primaryRole}</strong> no workspace <strong>{workspaceName}</strong>
-              {tenant ? <> · plano <strong>{tenant.plan}</strong></> : null}.
+              {billingSummary ? <> · plano <strong>{billingSummary.currentPlan}</strong></> : null}.
             </p>
           </div>
         </div>
@@ -114,7 +115,7 @@ export function AccountPanel() {
                 workspaceStatus === 'loading' ? 'status-dot-pending' : 'status-dot-active'
               }`}
             />
-            {tenant ? tenantStatusLabel(tenant.status) : 'Carregando…'}
+            {billingSummary ? tenantStatusLabel(billingSummary.tenantStatus) : 'Carregando…'}
           </span>
           <a className="button-secondary" href="#/plans">
             Ver planos
@@ -125,23 +126,25 @@ export function AccountPanel() {
       <div className="account-stats">
         <div className="account-stat-card">
           <span className="account-stat-label">Seu plano</span>
-          <strong className="account-stat-value">{tenant?.plan ?? '—'}</strong>
-          <span className="account-stat-help">{quota ? 'Limites do contrato atual.' : 'Carregando seus limites…'}</span>
+          <strong className="account-stat-value">{billingSummary?.currentPlan ?? '—'}</strong>
+          <span className="account-stat-help">
+            {billingSummary ? 'Limites reais do contrato atual.' : 'Carregando seus limites…'}
+          </span>
         </div>
         <div className="account-stat-card">
           <span className="account-stat-label">Scans por dia</span>
-          <strong className="account-stat-value">{quota?.maxScansPerDay ?? '—'}</strong>
+          <strong className="account-stat-value">{billingSummary?.quota.maxScansPerDay ?? '—'}</strong>
           <span className="account-stat-help">Quantas execuções você pode disparar em 24h.</span>
         </div>
         <div className="account-stat-card">
           <span className="account-stat-label">Alvos máximos</span>
-          <strong className="account-stat-value">{quota?.maxScanTargets ?? '—'}</strong>
+          <strong className="account-stat-value">{billingSummary?.quota.maxScanTargets ?? '—'}</strong>
           <span className="account-stat-help">Quantos sites, APIs ou repositórios cabem aqui.</span>
         </div>
         <div className="account-stat-card">
           <span className="account-stat-label">Histórico</span>
           <strong className="account-stat-value">
-            {quota ? `${quota.reportRetentionDays} dias` : '—'}
+            {billingSummary ? `${billingSummary.quota.reportRetentionDays} dias` : '—'}
           </strong>
           <span className="account-stat-help">Por quanto tempo os relatórios ficam guardados.</span>
         </div>
@@ -156,12 +159,16 @@ export function AccountPanel() {
 
           <ul className="account-info-list">
             <li>
+              <span>E-mail</span>
+              <strong>{profile?.email ?? 'Carregando…'}</strong>
+            </li>
+            <li>
               <span>Permissões</span>
               <div className="account-role-list">
-                {session.roles.length === 0 ? (
+                {roles.length === 0 ? (
                   <span className="badge">Sem permissões</span>
                 ) : (
-                  session.roles.map((role) => (
+                  roles.map((role) => (
                     <span key={role} className="badge badge-accent">
                       {formatRoleLabel(role)}
                     </span>
@@ -172,12 +179,16 @@ export function AccountPanel() {
             <li>
               <span>Workspace</span>
               <strong>
-                {tenant ? `${tenant.name} (${tenant.slug})` : 'Carregando…'}
+                {billingSummary ? `${billingSummary.tenantName} (${billingSummary.tenantSlug})` : 'Carregando…'}
               </strong>
             </li>
             <li>
               <span>Status do workspace</span>
-              <strong>{tenant ? tenantStatusLabel(tenant.status) : '—'}</strong>
+              <strong>{billingSummary ? tenantStatusLabel(billingSummary.tenantStatus) : '—'}</strong>
+            </li>
+            <li>
+              <span>Membro desde</span>
+              <strong>{formatDateTime(profile?.createdAt ?? null)}</strong>
             </li>
             <li>
               <span>Sessão válida até</span>
@@ -239,7 +250,7 @@ export function AccountPanel() {
         <ul>
           <li className="font-mono">ID do usuário: {session.userId}</li>
           <li className="font-mono">ID do tenant: {session.tenantId}</li>
-          <li>Workspace: {tenant ? `${tenant.name} (${tenant.slug})` : 'Carregando'}</li>
+          <li>Workspace: {billingSummary ? `${billingSummary.tenantName} (${billingSummary.tenantSlug})` : 'Carregando'}</li>
         </ul>
       </details>
     </section>

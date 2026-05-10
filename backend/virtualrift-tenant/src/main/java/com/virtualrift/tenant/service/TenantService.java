@@ -1,14 +1,22 @@
 package com.virtualrift.tenant.service;
 
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
+import com.virtualrift.tenant.dto.BillingSummaryResponse;
+import com.virtualrift.tenant.dto.BillingUsageResponse;
+import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
+import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
+import com.virtualrift.tenant.model.PlanChangeRequest;
+import com.virtualrift.tenant.model.PlanChangeRequestStatus;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
@@ -16,6 +24,7 @@ import com.virtualrift.tenant.model.Tenant;
 import com.virtualrift.tenant.model.TenantQuota;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
+import com.virtualrift.tenant.repository.PlanChangeRequestRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
 import org.springframework.stereotype.Service;
@@ -33,15 +42,18 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final TenantQuotaRepository quotaRepository;
     private final ScanTargetRepository scanTargetRepository;
+    private final PlanChangeRequestRepository planChangeRequestRepository;
     private final ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     public TenantService(TenantRepository tenantRepository,
                         TenantQuotaRepository quotaRepository,
                         ScanTargetRepository scanTargetRepository,
+                        PlanChangeRequestRepository planChangeRequestRepository,
                         ScanTargetOwnershipVerifier scanTargetOwnershipVerifier) {
         this.tenantRepository = tenantRepository;
         this.quotaRepository = quotaRepository;
         this.scanTargetRepository = scanTargetRepository;
+        this.planChangeRequestRepository = planChangeRequestRepository;
         this.scanTargetOwnershipVerifier = scanTargetOwnershipVerifier;
     }
 
@@ -93,6 +105,68 @@ public class TenantService {
     public Plan getPlan(UUID tenantId) {
         return tenantRepository.findPlanById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
+    }
+
+    public BillingSummaryResponse getBillingSummary(UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
+        TenantQuota quota = quotaRepository.findByTenantId(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
+        long scanTargetsUsed = scanTargetRepository.countByTenantId(tenantId);
+        Integer scanTargetsRemaining = quota.getMaxScanTargets() < 0
+                ? null
+                : Math.max(quota.getMaxScanTargets() - (int) scanTargetsUsed, 0);
+        PlanChangeRequestResponse pendingPlanChangeRequest = planChangeRequestRepository
+                .findFirstByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, PlanChangeRequestStatus.PENDING)
+                .map(this::toResponse)
+                .orElse(null);
+
+        return new BillingSummaryResponse(
+                tenant.getId(),
+                tenant.getName(),
+                tenant.getSlug(),
+                tenant.getStatus(),
+                tenant.getPlan(),
+                new TenantQuotaResponse(
+                        quota.getMaxScansPerDay(),
+                        quota.getMaxConcurrentScans(),
+                        quota.getMaxScanTargets(),
+                        quota.getReportRetentionDays(),
+                        quota.isSastEnabled()
+                ),
+                new BillingUsageResponse(scanTargetsUsed, scanTargetsRemaining),
+                pendingPlanChangeRequest
+        );
+    }
+
+    @Transactional
+    public PlanChangeRequestResponse createPlanChangeRequest(
+            UUID tenantId,
+            UUID requestedByUserId,
+            CreatePlanChangeRequestRequest request
+    ) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
+
+        if (request.requestedPlan() == tenant.getPlan()) {
+            throw new InvalidPlanChangeRequestException("Requested plan must differ from the current tenant plan");
+        }
+
+        if (planChangeRequestRepository.existsByTenantIdAndStatus(tenantId, PlanChangeRequestStatus.PENDING)) {
+            throw new PlanChangeRequestAlreadyPendingException("There is already a pending plan change request for this tenant");
+        }
+
+        PlanChangeRequest planChangeRequest = new PlanChangeRequest(
+                UUID.randomUUID(),
+                tenantId,
+                requestedByUserId,
+                tenant.getPlan(),
+                request.requestedPlan(),
+                PlanChangeRequestStatus.PENDING,
+                normalizeNote(request.note())
+        );
+
+        return toResponse(planChangeRequestRepository.save(planChangeRequest));
     }
 
     @Transactional
@@ -165,6 +239,14 @@ public class TenantService {
     public void validateQuota(UUID tenantId, String quotaType) {
         quotaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
+    }
+
+    private String normalizeNote(String note) {
+        if (note == null) {
+            return null;
+        }
+        String trimmed = note.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private ScanTarget findTenantScanTarget(UUID tenantId, UUID targetId) {
@@ -335,6 +417,20 @@ public class TenantService {
                 scanTarget.getVerificationCheckedAt(),
                 scanTarget.getVerifiedAt(),
                 scanTarget.getCreatedAt()
+        );
+    }
+
+    private PlanChangeRequestResponse toResponse(PlanChangeRequest request) {
+        return new PlanChangeRequestResponse(
+                request.getId(),
+                request.getTenantId(),
+                request.getRequestedByUserId(),
+                request.getCurrentPlan(),
+                request.getRequestedPlan(),
+                request.getStatus(),
+                request.getNote(),
+                request.getCreatedAt(),
+                request.getUpdatedAt()
         );
     }
 }

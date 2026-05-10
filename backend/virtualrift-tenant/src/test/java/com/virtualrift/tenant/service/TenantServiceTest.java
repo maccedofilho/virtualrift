@@ -1,20 +1,28 @@
 package com.virtualrift.tenant.service;
 
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
+import com.virtualrift.tenant.dto.BillingSummaryResponse;
+import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
+import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
+import com.virtualrift.tenant.model.PlanChangeRequest;
+import com.virtualrift.tenant.model.PlanChangeRequestStatus;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Tenant;
 import com.virtualrift.tenant.model.TenantQuota;
 import com.virtualrift.tenant.model.TenantStatus;
+import com.virtualrift.tenant.repository.PlanChangeRequestRepository;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
@@ -49,6 +57,9 @@ class TenantServiceTest {
     private ScanTargetRepository scanTargetRepository;
 
     @Mock
+    private PlanChangeRequestRepository planChangeRequestRepository;
+
+    @Mock
     private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     private TenantService tenantService;
@@ -59,6 +70,7 @@ class TenantServiceTest {
                 tenantRepository,
                 quotaRepository,
                 scanTargetRepository,
+                planChangeRequestRepository,
                 scanTargetOwnershipVerifier
         );
     }
@@ -79,6 +91,18 @@ class TenantServiceTest {
         ScanTarget scanTarget = new ScanTarget(UUID.randomUUID(), tenantId, target, targetType, null);
         scanTarget.markVerified();
         return scanTarget;
+    }
+
+    private PlanChangeRequest createPlanChangeRequest(UUID tenantId, UUID userId, Plan currentPlan, Plan requestedPlan) {
+        return new PlanChangeRequest(
+                UUID.randomUUID(),
+                tenantId,
+                userId,
+                currentPlan,
+                requestedPlan,
+                PlanChangeRequestStatus.PENDING,
+                "Need more capacity"
+        );
     }
 
     @Nested
@@ -183,6 +207,93 @@ class TenantServiceTest {
             assertEquals(10, response.maxConcurrentScans());
             assertEquals(25, response.maxScanTargets());
             assertTrue(response.sastEnabled());
+        }
+
+        @Test
+        @DisplayName("should return billing summary with quota, usage and pending plan request")
+        void getBillingSummary_quandoTenantExiste_retornaResumo() {
+            UUID tenantId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+            TenantQuota quota = createQuota(tenantId);
+            PlanChangeRequest pendingRequest = createPlanChangeRequest(tenantId, userId, Plan.PROFESSIONAL, Plan.ENTERPRISE);
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(3L);
+            when(planChangeRequestRepository.findFirstByTenantIdAndStatusOrderByCreatedAtDesc(
+                    tenantId,
+                    PlanChangeRequestStatus.PENDING
+            )).thenReturn(Optional.of(pendingRequest));
+
+            BillingSummaryResponse response = tenantService.getBillingSummary(tenantId);
+
+            assertEquals("Acme Corp", response.tenantName());
+            assertEquals(3L, response.usage().scanTargetsUsed());
+            assertEquals(22, response.usage().scanTargetsRemaining());
+            assertEquals(Plan.ENTERPRISE, response.pendingPlanChangeRequest().requestedPlan());
+        }
+
+        @Test
+        @DisplayName("should create a pending plan change request")
+        void createPlanChangeRequest_quandoValido_criaSolicitacao() {
+            UUID tenantId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+            CreatePlanChangeRequestRequest request = new CreatePlanChangeRequestRequest(Plan.ENTERPRISE, "Need enterprise support");
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+            when(planChangeRequestRepository.existsByTenantIdAndStatus(tenantId, PlanChangeRequestStatus.PENDING)).thenReturn(false);
+            when(planChangeRequestRepository.save(any(PlanChangeRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PlanChangeRequestResponse response = tenantService.createPlanChangeRequest(tenantId, userId, request);
+
+            assertEquals(tenantId, response.tenantId());
+            assertEquals(userId, response.requestedByUserId());
+            assertEquals(Plan.PROFESSIONAL, response.currentPlan());
+            assertEquals(Plan.ENTERPRISE, response.requestedPlan());
+            assertEquals(PlanChangeRequestStatus.PENDING, response.status());
+            verify(planChangeRequestRepository).save(argThat(planChangeRequest ->
+                    planChangeRequest.getTenantId().equals(tenantId)
+                            && planChangeRequest.getRequestedByUserId().equals(userId)
+                            && planChangeRequest.getRequestedPlan() == Plan.ENTERPRISE
+                            && planChangeRequest.getStatus() == PlanChangeRequestStatus.PENDING
+            ));
+        }
+
+        @Test
+        @DisplayName("should reject plan change request for the current plan")
+        void createPlanChangeRequest_quandoPlanoIgual_lancaInvalidPlanChangeRequestException() {
+            UUID tenantId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+            CreatePlanChangeRequestRequest request = new CreatePlanChangeRequestRequest(Plan.PROFESSIONAL, null);
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+            assertThrows(
+                    InvalidPlanChangeRequestException.class,
+                    () -> tenantService.createPlanChangeRequest(tenantId, userId, request)
+            );
+            verify(planChangeRequestRepository, never()).save(any(PlanChangeRequest.class));
+        }
+
+        @Test
+        @DisplayName("should reject duplicate pending plan change requests")
+        void createPlanChangeRequest_quandoJaExistePendente_lancaPlanChangeRequestAlreadyPendingException() {
+            UUID tenantId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+            CreatePlanChangeRequestRequest request = new CreatePlanChangeRequestRequest(Plan.ENTERPRISE, null);
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+            when(planChangeRequestRepository.existsByTenantIdAndStatus(tenantId, PlanChangeRequestStatus.PENDING)).thenReturn(true);
+
+            assertThrows(
+                    PlanChangeRequestAlreadyPendingException.class,
+                    () -> tenantService.createPlanChangeRequest(tenantId, userId, request)
+            );
+            verify(planChangeRequestRepository, never()).save(any(PlanChangeRequest.class));
         }
     }
 
