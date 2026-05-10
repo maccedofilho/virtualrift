@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,16 +37,37 @@ public class User {
     @Column(name = "roles", nullable = false)
     private Set<String> roles;
 
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
     protected User() {
     }
 
     public User(UUID id, String email, String password, UUID tenantId, UserStatus status, Set<String> roles) {
+        this(id, email, password, tenantId, status, roles, null, null);
+    }
+
+    public User(
+            UUID id,
+            String email,
+            String password,
+            UUID tenantId,
+            UserStatus status,
+            Set<String> roles,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
         this.id = id;
         this.email = email != null ? email.toLowerCase() : null;
         this.password = password;
         this.tenantId = tenantId;
         this.status = status;
         this.roles = roles;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 
     public UUID id() {
@@ -70,5 +92,13 @@ public class User {
 
     public Set<String> roles() {
         return roles;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    public Instant updatedAt() {
+        return updatedAt;
     }
 }

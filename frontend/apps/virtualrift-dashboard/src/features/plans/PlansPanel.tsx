@@ -1,4 +1,4 @@
-import { type Plan, type TenantQuotaResponse, type TenantResponse, type UUID } from '@virtualrift/types';
+import { type BillingSummaryResponse, type Plan, type PlanChangeRequestResponse, type UUID } from '@virtualrift/types';
 import { useEffect, useState } from 'react';
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
@@ -85,7 +85,7 @@ const FAQ: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Como faço para mudar de plano?',
     answer:
-      'Nesta beta, a troca ainda é manual. Clique no plano desejado e nosso time entra em contato em até 1 dia útil para acertar a migração.',
+      'Nesta beta, a solicitação já é registrada pelo dashboard. Depois disso, nosso time revisa a mudança e confirma a migração com você.',
   },
   {
     question: 'O que conta como um scan?',
@@ -110,11 +110,11 @@ const workspaceStatusLabel = (status: 'loading' | 'ready'): string => {
 
 export function PlansPanel() {
   const { client, session } = useSession();
-  const [tenant, setTenant] = useState<TenantResponse | null>(null);
-  const [quota, setQuota] = useState<TenantQuotaResponse | null>(null);
+  const [billingSummary, setBillingSummary] = useState<BillingSummaryResponse | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [requestingPlan, setRequestingPlan] = useState<Plan | null>(null);
 
   const tenantId: UUID | null = session?.tenantId ?? null;
   const roles = session?.roles ?? [];
@@ -130,13 +130,8 @@ export function PlansPanel() {
       setError(null);
 
       try {
-        const [nextTenant, nextQuota] = await Promise.all([
-          client.tenants.getById(tenantId),
-          client.tenants.getQuota(tenantId),
-        ]);
-
-        setTenant(nextTenant);
-        setQuota(nextQuota);
+        const nextSummary = await client.tenants.getBillingSummary(tenantId);
+        setBillingSummary(nextSummary);
         setStatus('ready');
       } catch (loadError) {
         setStatus('ready');
@@ -151,7 +146,39 @@ export function PlansPanel() {
     return null;
   }
 
-  const currentPlan = tenant?.plan ?? null;
+  const currentPlan = billingSummary?.currentPlan ?? null;
+  const pendingRequest = billingSummary?.pendingPlanChangeRequest ?? null;
+
+  const handlePlanRequest = async (plan: Plan, label: string) => {
+    if (!tenantId || !canManagePlans) {
+      return;
+    }
+
+    setHint(null);
+    setError(null);
+    setRequestingPlan(plan);
+
+    try {
+      const response: PlanChangeRequestResponse = await client.tenants.requestPlanChange(tenantId, {
+        requestedPlan: plan,
+        note: `Solicitação enviada pelo dashboard beta para o plano ${label}.`,
+      });
+
+      setBillingSummary((currentSummary) =>
+        currentSummary
+          ? {
+              ...currentSummary,
+              pendingPlanChangeRequest: response,
+            }
+          : currentSummary,
+      );
+      setHint(`Solicitação do plano ${label} registrada. Nosso time vai revisar essa mudança em breve.`);
+    } catch (requestError) {
+      setError(toErrorMessage(requestError, 'Não conseguimos registrar sua solicitação agora.'));
+    } finally {
+      setRequestingPlan(null);
+    }
+  };
 
   return (
     <section aria-label="plans-page" className="plans-page">
@@ -174,19 +201,19 @@ export function PlansPanel() {
         <div className="plans-hero-stats">
           <div>
             <span>Scans por dia</span>
-            <strong>{quota?.maxScansPerDay ?? '—'}</strong>
+            <strong>{billingSummary?.quota.maxScansPerDay ?? '—'}</strong>
           </div>
           <div>
             <span>Em paralelo</span>
-            <strong>{quota?.maxConcurrentScans ?? '—'}</strong>
+            <strong>{billingSummary?.quota.maxConcurrentScans ?? '—'}</strong>
           </div>
           <div>
             <span>Alvos</span>
-            <strong>{quota?.maxScanTargets ?? '—'}</strong>
+            <strong>{billingSummary?.quota.maxScanTargets ?? '—'}</strong>
           </div>
           <div>
             <span>Histórico</span>
-            <strong>{quota ? `${quota.reportRetentionDays}d` : '—'}</strong>
+            <strong>{billingSummary ? `${billingSummary.quota.reportRetentionDays}d` : '—'}</strong>
           </div>
         </div>
 
@@ -195,9 +222,9 @@ export function PlansPanel() {
             <span className={`status-dot ${status === 'loading' ? 'status-dot-pending' : 'status-dot-active'}`} />
             {workspaceStatusLabel(status)}
           </span>
-          {tenant ? (
+          {billingSummary ? (
             <span className="plans-hero-workspace">
-              {tenant.name} <em>· {tenant.slug}</em>
+              {billingSummary.tenantName} <em>· {billingSummary.tenantSlug}</em>
             </span>
           ) : null}
         </div>
@@ -207,11 +234,19 @@ export function PlansPanel() {
             {error}
           </p>
         ) : null}
+
+        {pendingRequest ? (
+          <p className="alert alert-info plans-hint" role="status">
+            Existe uma solicitação pendente para mudar do plano <strong>{pendingRequest.currentPlan}</strong> para{' '}
+            <strong>{pendingRequest.requestedPlan}</strong>.
+          </p>
+        ) : null}
       </header>
 
       <section className="plans-catalog" aria-label="comparação de planos">
         {PLAN_CATALOG.map((plan) => {
           const isCurrentPlan = currentPlan === plan.plan;
+          const isPendingPlan = pendingRequest?.requestedPlan === plan.plan;
 
           return (
             <article
@@ -220,6 +255,7 @@ export function PlansPanel() {
               aria-current={isCurrentPlan ? 'true' : undefined}
             >
               {isCurrentPlan ? <span className="plan-card-ribbon">Plano atual</span> : null}
+              {isPendingPlan ? <span className="plan-card-ribbon plan-card-ribbon-soft">Solicitado</span> : null}
               {!isCurrentPlan && plan.recommended ? (
                 <span className="plan-card-ribbon plan-card-ribbon-soft">Mais escolhido</span>
               ) : null}
@@ -261,16 +297,18 @@ export function PlansPanel() {
               <button
                 className={isCurrentPlan ? 'button-secondary plan-card-cta' : 'button-primary plan-card-cta'}
                 type="button"
-                disabled={isCurrentPlan || !canManagePlans}
-                onClick={() =>
-                  setHint(
-                    isCurrentPlan
-                      ? null
-                      : `A solicitação do plano ${plan.label} ainda é tratada manualmente. Nosso time entra em contato em breve.`,
-                  )
-                }
+                disabled={isCurrentPlan || isPendingPlan || !!pendingRequest || !canManagePlans || requestingPlan === plan.plan}
+                onClick={() => void handlePlanRequest(plan.plan, plan.label)}
               >
-                {isCurrentPlan ? 'Você está aqui' : canManagePlans ? plan.cta : 'Somente OWNER pode solicitar'}
+                {isCurrentPlan
+                  ? 'Você está aqui'
+                  : isPendingPlan
+                    ? 'Solicitação pendente'
+                    : canManagePlans
+                      ? requestingPlan === plan.plan
+                        ? 'Enviando…'
+                        : plan.cta
+                      : 'Somente OWNER pode solicitar'}
               </button>
             </article>
           );

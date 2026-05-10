@@ -4,7 +4,16 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VirtualRiftApiError, type VirtualRiftClient } from '@virtualrift/api-client';
-import type { AuthSession, ScanResponse, ScanTargetResponse, TenantQuotaResponse, TenantResponse } from '@virtualrift/types';
+import type {
+  AccountProfileResponse,
+  AuthSession,
+  BillingSummaryResponse,
+  PlanChangeRequestResponse,
+  ScanResponse,
+  ScanTargetResponse,
+  TenantQuotaResponse,
+  TenantResponse,
+} from '@virtualrift/types';
 import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
 
@@ -116,6 +125,45 @@ const createQuota = (overrides?: Partial<TenantQuotaResponse>): TenantQuotaRespo
   ...overrides,
 });
 
+const createAccountProfile = (overrides?: Partial<AccountProfileResponse>): AccountProfileResponse => ({
+  id: 'user-id',
+  email: 'owner@virtualrift.test',
+  tenantId: 'tenant-id',
+  status: 'ACTIVE',
+  roles: ['OWNER'],
+  createdAt: '2026-05-01T10:00:00.000Z',
+  updatedAt: '2026-05-06T10:00:00.000Z',
+  ...overrides,
+});
+
+const createPlanChangeRequest = (overrides?: Partial<PlanChangeRequestResponse>): PlanChangeRequestResponse => ({
+  id: 'plan-request-1',
+  tenantId: 'tenant-id',
+  requestedByUserId: 'user-id',
+  currentPlan: 'PROFESSIONAL',
+  requestedPlan: 'ENTERPRISE',
+  status: 'PENDING',
+  note: 'Need more capacity',
+  createdAt: '2026-05-06T13:00:00.000Z',
+  updatedAt: '2026-05-06T13:00:00.000Z',
+  ...overrides,
+});
+
+const createBillingSummary = (overrides?: Partial<BillingSummaryResponse>): BillingSummaryResponse => ({
+  tenantId: 'tenant-id',
+  tenantName: 'Acme Corp',
+  tenantSlug: 'acme',
+  tenantStatus: 'ACTIVE',
+  currentPlan: 'PROFESSIONAL',
+  quota: createQuota(),
+  usage: {
+    scanTargetsUsed: 0,
+    scanTargetsRemaining: 10,
+  },
+  pendingPlanChangeRequest: null,
+  ...overrides,
+});
+
 const createTarget = (overrides?: Partial<ScanTargetResponse>): ScanTargetResponse => ({
   id: 'target-1',
   target: 'https://app.example.com',
@@ -151,6 +199,7 @@ const createClient = () => {
       login: vi.fn(),
       refresh: vi.fn(),
       logout: vi.fn(),
+      me: vi.fn(),
     },
     tenants: {
       create: vi.fn(),
@@ -158,10 +207,12 @@ const createClient = () => {
       getBySlug: vi.fn(),
       getQuota: vi.fn(),
       getPlan: vi.fn(),
+      getBillingSummary: vi.fn(),
       listScanTargets: vi.fn(),
       addScanTarget: vi.fn(),
       authorizeScanTarget: vi.fn(),
       verifyScanTarget: vi.fn(),
+      requestPlanChange: vi.fn(),
       removeScanTarget: vi.fn(),
     },
     scans: {
@@ -180,6 +231,8 @@ const createClient = () => {
 
   client.tenants.getById.mockResolvedValue(createTenant());
   client.tenants.getQuota.mockResolvedValue(createQuota());
+  client.auth.me.mockResolvedValue(createAccountProfile());
+  client.tenants.getBillingSummary.mockResolvedValue(createBillingSummary());
   client.tenants.listScanTargets.mockResolvedValue([]);
   client.tenants.addScanTarget.mockImplementation(async (_tenantId, payload) =>
     createTarget({
@@ -198,6 +251,12 @@ const createClient = () => {
       verificationToken: null,
       verificationCheckedAt: '2026-05-06T11:00:00.000Z',
       verifiedAt: '2026-05-06T11:00:00.000Z',
+    }),
+  );
+  client.tenants.requestPlanChange.mockImplementation(async (_tenantId, payload) =>
+    createPlanChangeRequest({
+      requestedPlan: payload.requestedPlan,
+      note: payload.note ?? null,
     }),
   );
   client.tenants.removeScanTarget.mockResolvedValue(undefined);
@@ -669,6 +728,7 @@ describe('VirtualRift Dashboard App', () => {
     goTo('account');
 
     expect(await screen.findByRole('heading', { name: 'Minha conta' })).toBeInTheDocument();
+    expect(screen.getByText('owner@virtualrift.test')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-id')).toBeInTheDocument();
     expect(screen.getByText('ID do tenant: tenant-id')).toBeInTheDocument();
     expect(screen.getByText('Acme Corp (acme)')).toBeInTheDocument();
@@ -690,6 +750,29 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('R$ 1.290')).toBeInTheDocument();
     expect(screen.getAllByText('/mês').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Voltar para minha conta' })).toBeInTheDocument();
+  });
+
+  it('creates a backend plan change request for owner profiles', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    renderApp({ storage, client });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('plans');
+
+    expect(await screen.findByRole('heading', { name: 'Planos e cobrança' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Falar com vendas' }));
+
+    expect(await screen.findByText(/solicitação do plano enterprise registrada/i)).toBeInTheDocument();
+    expect(client.tenants.requestPlanChange).toHaveBeenCalledWith(
+      'tenant-id',
+      expect.objectContaining({
+        requestedPlan: 'ENTERPRISE',
+      }),
+    );
   });
 
   it('keeps plan change actions read-only for non-owner profiles', async () => {

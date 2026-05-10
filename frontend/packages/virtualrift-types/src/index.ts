@@ -19,6 +19,12 @@ export type Plan = (typeof PLANS)[number];
 export const TENANT_STATUSES = ['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'CANCELLED'] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
+export const USER_STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED', 'DELETED'] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];
+
+export const PLAN_CHANGE_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
+export type PlanChangeRequestStatus = (typeof PLAN_CHANGE_REQUEST_STATUSES)[number];
+
 export const TARGET_TYPES = ['URL', 'IP_RANGE', 'API_SPEC', 'REPOSITORY'] as const;
 export type TargetType = (typeof TARGET_TYPES)[number];
 
@@ -34,6 +40,18 @@ export type LoginResponse = {
   accessToken: string;
   refreshToken: string;
 };
+
+export type AccountProfile = {
+  id: UUID;
+  email: string;
+  tenantId: UUID;
+  status: UserStatus;
+  roles: string[];
+  createdAt: Nullable<IsoDateTime>;
+  updatedAt: Nullable<IsoDateTime>;
+};
+
+export type AccountProfileResponse = AccountProfile;
 
 export type RefreshTokenRequest = {
   refreshToken: string;
@@ -84,6 +102,43 @@ export type TenantQuota = {
 };
 
 export type TenantQuotaResponse = TenantQuota;
+
+export type PlanChangeRequest = {
+  id: UUID;
+  tenantId: UUID;
+  requestedByUserId: UUID;
+  currentPlan: Plan;
+  requestedPlan: Plan;
+  status: PlanChangeRequestStatus;
+  note: Nullable<string>;
+  createdAt: Nullable<IsoDateTime>;
+  updatedAt: Nullable<IsoDateTime>;
+};
+
+export type PlanChangeRequestResponse = PlanChangeRequest;
+
+export type CreatePlanChangeRequestRequest = {
+  requestedPlan: Plan;
+  note?: Nullable<string>;
+};
+
+export type BillingUsage = {
+  scanTargetsUsed: number;
+  scanTargetsRemaining: Nullable<number>;
+};
+
+export type BillingSummary = {
+  tenantId: UUID;
+  tenantName: string;
+  tenantSlug: string;
+  tenantStatus: TenantStatus;
+  currentPlan: Plan;
+  quota: TenantQuota;
+  usage: BillingUsage;
+  pendingPlanChangeRequest: Nullable<PlanChangeRequest>;
+};
+
+export type BillingSummaryResponse = BillingSummary;
 
 export type AddScanTargetRequest = {
   target: string;

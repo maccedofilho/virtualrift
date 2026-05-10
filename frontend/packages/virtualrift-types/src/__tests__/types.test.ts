@@ -6,23 +6,30 @@ import {
   isInProgressScanStatus,
   isVerifiedScanTarget,
   PLANS,
+  PLAN_CHANGE_REQUEST_STATUSES,
   SCAN_STATUSES,
   SCAN_TARGET_VERIFICATION_STATUSES,
   SCAN_TYPES,
   SEVERITIES,
   TARGET_TYPES,
   TENANT_STATUSES,
+  USER_STATUSES,
 } from '../index';
 import type {
+  AccountProfile,
   AddScanTargetRequest,
   AuthSession,
   AuthorizeScanTargetRequest,
+  BillingSummary,
   CreateScanRequest,
+  CreatePlanChangeRequestRequest,
   CreateTenantRequest,
   JwtClaims,
   LoginRequest,
   LoginResponse,
   Plan,
+  PlanChangeRequest,
+  PlanChangeRequestStatus,
   ProblemDetailResponse,
   RefreshTokenRequest,
   Report,
@@ -39,6 +46,7 @@ import type {
   Tenant,
   TenantQuota,
   TenantStatus,
+  UserStatus,
   VirtualRiftConfig,
 } from '../index';
 
@@ -59,6 +67,8 @@ describe('virtualrift types package', () => {
     expect(SEVERITIES).toEqual(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
     expect(PLANS).toEqual(['TRIAL', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE']);
     expect(TENANT_STATUSES).toEqual(['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'CANCELLED']);
+    expect(USER_STATUSES).toEqual(['PENDING', 'ACTIVE', 'SUSPENDED', 'DELETED']);
+    expect(PLAN_CHANGE_REQUEST_STATUSES).toEqual(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']);
     expect(TARGET_TYPES).toEqual(['URL', 'IP_RANGE', 'API_SPEC', 'REPOSITORY']);
     expect(SCAN_TARGET_VERIFICATION_STATUSES).toEqual(['PENDING', 'VERIFIED', 'FAILED']);
   });
@@ -82,6 +92,15 @@ describe('virtualrift types package', () => {
       userId: string;
       roles: string[];
       expiresAt?: string | null;
+    }>();
+    expectTypeOf<AccountProfile>().toEqualTypeOf<{
+      id: string;
+      email: string;
+      tenantId: string;
+      status: UserStatus;
+      roles: string[];
+      createdAt: string | null;
+      updatedAt: string | null;
     }>();
   });
 
@@ -120,6 +139,34 @@ describe('virtualrift types package', () => {
       createdAt: string;
     }>();
     expectTypeOf<AuthorizeScanTargetRequest>().toEqualTypeOf<{ target: string; scanType: ScanType }>();
+    expectTypeOf<CreatePlanChangeRequestRequest>().toEqualTypeOf<{
+      requestedPlan: Plan;
+      note?: string | null;
+    }>();
+    expectTypeOf<PlanChangeRequest>().toEqualTypeOf<{
+      id: string;
+      tenantId: string;
+      requestedByUserId: string;
+      currentPlan: Plan;
+      requestedPlan: Plan;
+      status: PlanChangeRequestStatus;
+      note: string | null;
+      createdAt: string | null;
+      updatedAt: string | null;
+    }>();
+    expectTypeOf<BillingSummary>().toEqualTypeOf<{
+      tenantId: string;
+      tenantName: string;
+      tenantSlug: string;
+      tenantStatus: TenantStatus;
+      currentPlan: Plan;
+      quota: TenantQuota;
+      usage: {
+        scanTargetsUsed: number;
+        scanTargetsRemaining: number | null;
+      };
+      pendingPlanChangeRequest: PlanChangeRequest | null;
+    }>();
   });
 
   it('keeps scan contracts aligned with the backend DTOs', () => {

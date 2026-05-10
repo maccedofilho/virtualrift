@@ -190,6 +190,89 @@ describe('API client package', () => {
     expect(response).toBeUndefined();
   });
 
+  it('loads the authenticated account profile from auth me', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'user-id',
+          email: 'owner@virtualrift.test',
+          tenantId: 'tenant-id',
+          status: 'ACTIVE',
+          roles: ['OWNER'],
+          createdAt: '2026-05-01T10:00:00Z',
+          updatedAt: '2026-05-06T10:00:00Z',
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.auth.me({ accessToken: 'token-123' });
+
+    expect(response.email).toBe('owner@virtualrift.test');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/auth/me',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
+  it('sends plan change requests to the tenant billing foundation endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'request-id',
+          tenantId: 'tenant-id',
+          requestedByUserId: 'user-id',
+          currentPlan: 'PROFESSIONAL',
+          requestedPlan: 'ENTERPRISE',
+          status: 'PENDING',
+          note: 'Need more capacity',
+          createdAt: '2026-05-06T13:00:00Z',
+          updatedAt: '2026-05-06T13:00:00Z',
+        }),
+        {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.tenants.requestPlanChange('tenant-id', {
+      requestedPlan: 'ENTERPRISE',
+      note: 'Need more capacity',
+    });
+
+    expect(response.requestedPlan).toBe('ENTERPRISE');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/plan-change-requests',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          requestedPlan: 'ENTERPRISE',
+          note: 'Need more capacity',
+        }),
+      }),
+    );
+  });
+
   it('throws typed api errors with parsed problem details', async () => {
     fetchMock.mockResolvedValue(
       new Response(
