@@ -13,6 +13,16 @@ function LoadingState() {
   );
 }
 
+function OAuthCallbackState() {
+  return (
+    <section className="glass-card dashboard-empty">
+      <span className="eyebrow">Login social</span>
+      <h2>Concluindo autenticação...</h2>
+      <p>Validando o retorno do provedor e preparando a sessão do workspace.</p>
+    </section>
+  );
+}
+
 function PublicShell({ children }: { children: ReactNode }) {
   return (
     <main className="dashboard-app">
@@ -40,7 +50,15 @@ function PublicShell({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const { isAuthenticated, status } = useSession();
+  const { isAuthenticated, oauthStatus, status } = useSession();
+
+  if (oauthStatus === 'processing') {
+    return (
+      <PublicShell>
+        <OAuthCallbackState />
+      </PublicShell>
+    );
+  }
 
   if (status === 'loading') {
     return (

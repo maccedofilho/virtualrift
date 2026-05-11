@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { useSession } from '../../session';
+import type { OAuthProvider } from '../../session/types';
 
 const HERO_FLOW_STEPS: ReadonlyArray<{ idx: string; label: string; detail: string }> = [
   { idx: '01', label: 'Sessão autenticada', detail: 'Token JWT validado e contexto do tenant aplicado.' },
@@ -29,7 +30,7 @@ const GoogleIcon = () => (
 );
 
 export function LoginForm() {
-  const { error, login, status } = useSession();
+  const { error, login, oauthProviders, oauthStatus, startOAuth, status } = useSession();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +63,19 @@ export function LoginForm() {
         ? 'Entrando...'
         : 'Entrar com e-mail'
       : 'Criar conta';
+
+  const handleOAuthClick = (provider: OAuthProvider) => {
+    const config = oauthProviders.find((entry) => entry.provider === provider);
+    setHint(null);
+
+    if (!config?.available) {
+      const providerLabel = provider === 'github' ? 'GitHub' : 'Google';
+      setHint(`Login com ${providerLabel} ainda não foi configurado neste ambiente.`);
+      return;
+    }
+
+    startOAuth(provider);
+  };
 
   return (
     <section aria-label="login" className="dashboard-login">
@@ -197,7 +211,8 @@ export function LoginForm() {
             className="button-secondary dashboard-social-button"
             type="button"
             aria-label="Continuar com GitHub"
-            onClick={() => setHint('Login com GitHub ainda não está disponível nesta beta.')}
+            onClick={() => handleOAuthClick('github')}
+            disabled={oauthStatus === 'redirecting'}
           >
             <GitHubIcon />
             <span>GitHub</span>
@@ -206,7 +221,8 @@ export function LoginForm() {
             className="button-secondary dashboard-social-button"
             type="button"
             aria-label="Continuar com Google"
-            onClick={() => setHint('Login com Google ainda não está disponível nesta beta.')}
+            onClick={() => handleOAuthClick('google')}
+            disabled={oauthStatus === 'redirecting'}
           >
             <GoogleIcon />
             <span>Google</span>
