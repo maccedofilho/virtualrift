@@ -228,6 +228,11 @@ export function LoginForm() {
             <span>Google</span>
           </button>
         </div>
+        {oauthStatus === 'redirecting' ? (
+          <p className="alert alert-info dashboard-social-hint" role="status">
+            Redirecionando para o provedor social e preparando o retorno ao dashboard.
+          </p>
+        ) : null}
         {hint ? <p className="alert alert-info dashboard-social-hint">{hint}</p> : null}
         <div className="dashboard-login-footer">
           <span>Beta backend-first · Painel web</span>

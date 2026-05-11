@@ -6,7 +6,10 @@ type OAuthCallbackPayload = {
   error: string | null;
   accessToken: string | null;
   refreshToken: string | null;
+  nextHash: string;
 };
+
+const DASHBOARD_ROUTE_HASHES = ['#/overview', '#/targets', '#/scans', '#/reports', '#/account', '#/plans'] as const;
 
 const readParams = (value: string): URLSearchParams => {
   const normalized = value.startsWith('?') ? value.slice(1) : value;
@@ -21,10 +24,32 @@ const normalizeProvider = (value: string | null): OAuthProvider | null => {
   return null;
 };
 
+const normalizeNextHash = (value: string | null | undefined): string => {
+  if (!value) {
+    return '#/overview';
+  }
+
+  const trimmed = value.trim();
+  if ((DASHBOARD_ROUTE_HASHES as readonly string[]).includes(trimmed)) {
+    return trimmed;
+  }
+
+  return '#/overview';
+};
+
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
+const resolveNextHash = (location: BrowserLocationLike): string => {
+  const currentHash = location.hash.split('?')[0];
+  return normalizeNextHash(currentHash);
+};
+
 const replaceTemplate = (template: string, location: BrowserLocationLike): string => {
-  const callbackUrl = `${trimTrailingSlash(location.origin)}/${OAUTH_CALLBACK_HASH}`;
+  const callbackParams = new URLSearchParams({
+    provider: 'provider-placeholder',
+    next: resolveNextHash(location),
+  });
+  const callbackUrl = `${trimTrailingSlash(location.origin)}/${OAUTH_CALLBACK_HASH}?${callbackParams.toString()}`;
 
   return template
     .split('{callbackUrl}')
@@ -60,11 +85,12 @@ export const readOAuthCallback = (location: BrowserLocationLike): OAuthCallbackP
     error: params.get('error'),
     accessToken: params.get('accessToken'),
     refreshToken: params.get('refreshToken'),
+    nextHash: normalizeNextHash(params.get('next')),
   };
 };
 
-export const clearOAuthCallback = (browser: BrowserAdapter): void => {
-  browser.replaceUrl(`${trimTrailingSlash(browser.location.origin)}${browser.location.pathname}#/overview`);
+export const clearOAuthCallback = (browser: BrowserAdapter, nextHash = '#/overview'): void => {
+  browser.replaceUrl(`${trimTrailingSlash(browser.location.origin)}${browser.location.pathname}${normalizeNextHash(nextHash)}`);
 };
 
 export const buildOAuthProviders = (location: BrowserLocationLike): OAuthProviderConfig[] => {
@@ -75,13 +101,17 @@ export const buildOAuthProviders = (location: BrowserLocationLike): OAuthProvide
     {
       provider: 'github',
       label: 'GitHub',
-      startUrl: githubStartUrl ? replaceTemplate(githubStartUrl, location) : null,
+      startUrl: githubStartUrl
+        ? replaceTemplate(githubStartUrl, location).replace('provider-placeholder', 'github')
+        : null,
       available: githubStartUrl.length > 0,
     },
     {
       provider: 'google',
       label: 'Google',
-      startUrl: googleStartUrl ? replaceTemplate(googleStartUrl, location) : null,
+      startUrl: googleStartUrl
+        ? replaceTemplate(googleStartUrl, location).replace('provider-placeholder', 'google')
+        : null,
       available: googleStartUrl.length > 0,
     },
   ];
@@ -101,6 +131,8 @@ export const toOAuthErrorMessage = (provider: OAuthProvider | null, error: strin
       return `A sessão de autenticação com ${providerLabel} expirou ou ficou inconsistente. Tente novamente.`;
     case 'callback_incomplete':
       return `O retorno do login com ${providerLabel} veio incompleto. Tente novamente.`;
+    case 'invalid_provider':
+      return 'O retorno do login social veio com um provedor inválido. Tente iniciar a autenticação novamente.';
     default:
       return `O login com ${providerLabel} falhou: ${error}.`;
   }
