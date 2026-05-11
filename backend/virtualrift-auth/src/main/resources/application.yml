@@ -31,6 +31,26 @@ auth:
   jwt:
     private-key: ${JWT_PRIVATE_KEY}
     public-key: ${JWT_PUBLIC_KEY}
+  oauth:
+    public-base-url: ${AUTH_PUBLIC_BASE_URL:http://localhost:8080}
+    state-secret: ${AUTH_OAUTH_STATE_SECRET:}
+    state-ttl-seconds: ${AUTH_OAUTH_STATE_TTL_SECONDS:300}
+    allowed-redirect-origins:
+      - ${AUTH_OAUTH_ALLOWED_REDIRECT_ORIGIN_LOCALHOST:http://localhost:5173}
+      - ${AUTH_OAUTH_ALLOWED_REDIRECT_ORIGIN_LOOPBACK:http://127.0.0.1:5173}
+    auto-provision:
+      enabled: ${AUTH_OAUTH_AUTO_PROVISION_ENABLED:false}
+      tenant-id: ${AUTH_OAUTH_AUTO_PROVISION_TENANT_ID:}
+      roles: ${AUTH_OAUTH_AUTO_PROVISION_ROLES:READER}
+    github:
+      enabled: ${AUTH_GITHUB_OAUTH_ENABLED:false}
+      client-id: ${AUTH_GITHUB_CLIENT_ID:}
+      client-secret: ${AUTH_GITHUB_CLIENT_SECRET:}
+      authorize-url: ${AUTH_GITHUB_AUTHORIZE_URL:https://github.com/login/oauth/authorize}
+      token-url: ${AUTH_GITHUB_TOKEN_URL:https://github.com/login/oauth/access_token}
+      user-url: ${AUTH_GITHUB_USER_URL:https://api.github.com/user}
+      emails-url: ${AUTH_GITHUB_EMAILS_URL:https://api.github.com/user/emails}
+      scope: ${AUTH_GITHUB_SCOPE:read:user user:email}
 
 # Server configuration
 server:

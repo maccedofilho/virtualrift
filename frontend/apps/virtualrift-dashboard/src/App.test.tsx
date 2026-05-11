@@ -408,7 +408,7 @@ describe('VirtualRift Dashboard App', () => {
   });
 
   it('starts the GitHub OAuth flow when the provider is configured', () => {
-    vi.stubEnv('VITE_GITHUB_OAUTH_START_URL', 'http://localhost:8080/oauth/github/start?redirect_uri={callbackUrl}');
+    vi.stubEnv('VITE_GITHUB_OAUTH_START_URL', 'http://localhost:8080/api/v1/auth/oauth/github/start?redirect_uri={callbackUrl}');
     const browser = createBrowser('http://localhost:3000/#/reports');
 
     renderApp({ browser });
@@ -416,7 +416,7 @@ describe('VirtualRift Dashboard App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continuar com GitHub' }));
 
     expect(browser.assignedUrl).toBe(
-      'http://localhost:8080/oauth/github/start?redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F%23%2Fauth%2Fcallback%3Fprovider%3Dgithub%26next%3D%2523%252Freports',
+      'http://localhost:8080/api/v1/auth/oauth/github/start?redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F%23%2Fauth%2Fcallback%3Fprovider%3Dgithub%26next%3D%2523%252Freports',
     );
   });
 
