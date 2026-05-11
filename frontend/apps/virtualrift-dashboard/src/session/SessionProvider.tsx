@@ -4,8 +4,9 @@ import type { AuthSession, LoginRequest } from '@virtualrift/types';
 import { toErrorMessage } from '../shared/errors';
 import { DASHBOARD_API_BASE_URL } from './constants';
 import { isExpired, toSession } from './jwt';
+import { buildOAuthProviders, clearOAuthCallback, readOAuthCallback, toOAuthErrorMessage } from './oauth';
 import { persistSession, readStoredSession } from './storage';
-import type { SessionContextValue, SessionStatus, StorageLike } from './types';
+import type { BrowserAdapter, SessionContextValue, SessionStatus, StorageLike } from './types';
 
 const defaultNow = () => Date.now();
 
@@ -14,19 +15,45 @@ type SessionProviderProps = {
   storage?: StorageLike;
   client?: VirtualRiftClient;
   now?: () => number;
+  browser?: BrowserAdapter;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+const defaultBrowser = (): BrowserAdapter => {
+  if (typeof window === 'undefined') {
+    return {
+      location: {
+        origin: 'http://localhost:5173',
+        pathname: '/',
+        search: '',
+        hash: '',
+        assign: () => undefined,
+      },
+      replaceUrl: () => undefined,
+    };
+  }
+
+  return {
+    location: window.location,
+    replaceUrl: (url) => window.history.replaceState(null, '', url),
+  };
+};
 
 export function SessionProvider({
   children,
   storage = window.localStorage,
   client,
   now = defaultNow,
+  browser,
 }: SessionProviderProps) {
+  const runtimeBrowser = useMemo(() => browser ?? defaultBrowser(), [browser]);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [status, setStatus] = useState<SessionStatus>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [oauthStatus, setOAuthStatus] = useState<'idle' | 'redirecting' | 'processing'>(() =>
+    readOAuthCallback(runtimeBrowser.location) ? 'processing' : 'idle',
+  );
   const sessionRef = useRef<AuthSession | null>(null);
 
   useEffect(() => {
@@ -57,6 +84,20 @@ export function SessionProvider({
     setSession(null);
     persistSession(storage, null);
     setStatus('anonymous');
+  };
+
+  const oauthProviders = useMemo(() => buildOAuthProviders(runtimeBrowser.location), [runtimeBrowser]);
+
+  const startOAuth = (provider: 'github' | 'google') => {
+    const config = oauthProviders.find((entry) => entry.provider === provider);
+
+    if (!config?.startUrl) {
+      return;
+    }
+
+    setError(null);
+    setOAuthStatus('redirecting');
+    runtimeBrowser.location.assign(config.startUrl);
   };
 
   const refresh = async () => {
@@ -111,6 +152,40 @@ export function SessionProvider({
   };
 
   useEffect(() => {
+    const oauthCallback = readOAuthCallback(runtimeBrowser.location);
+
+    if (oauthCallback) {
+      setOAuthStatus('processing');
+      setError(null);
+
+      if (oauthCallback.error) {
+        clearSession();
+        setError(toOAuthErrorMessage(oauthCallback.provider, oauthCallback.error));
+        clearOAuthCallback(runtimeBrowser);
+        setOAuthStatus('idle');
+        return;
+      }
+
+      if (oauthCallback.accessToken && oauthCallback.refreshToken) {
+        try {
+          applySession(toSession(oauthCallback.accessToken, oauthCallback.refreshToken));
+        } catch {
+          clearSession();
+          setError(toOAuthErrorMessage(oauthCallback.provider, 'callback_incomplete'));
+        } finally {
+          clearOAuthCallback(runtimeBrowser);
+          setOAuthStatus('idle');
+        }
+        return;
+      }
+
+      clearSession();
+      setError(toOAuthErrorMessage(oauthCallback.provider, 'callback_incomplete'));
+      clearOAuthCallback(runtimeBrowser);
+      setOAuthStatus('idle');
+      return;
+    }
+
     const storedSession = readStoredSession(storage);
 
     if (!storedSession) {
@@ -129,7 +204,7 @@ export function SessionProvider({
     setSession(storedSession);
     sessionRef.current = storedSession;
     setStatus('authenticated');
-  }, [now, storage]);
+  }, [now, runtimeBrowser, storage]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -137,13 +212,16 @@ export function SessionProvider({
       client: apiClient,
       error,
       isAuthenticated: status === 'authenticated',
+      oauthProviders,
+      oauthStatus,
       session,
       status,
       login,
       logout,
       refresh,
+      startOAuth,
     }),
-    [apiClient, error, session, status],
+    [apiClient, error, oauthProviders, oauthStatus, session, status],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

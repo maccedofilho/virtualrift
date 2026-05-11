@@ -1,4 +1,5 @@
 export const SESSION_STORAGE_KEY = 'virtualrift.dashboard.session';
+export const OAUTH_CALLBACK_HASH = '#/auth/callback';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 

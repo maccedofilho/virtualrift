@@ -18,15 +18,18 @@ import type {
 } from '@virtualrift/types';
 import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
+import type { BrowserAdapter } from './session/types';
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   cleanup();
 });
 
 beforeEach(() => {
   vi.restoreAllMocks();
   window.location.hash = '';
+  window.history.replaceState(null, '', 'http://localhost:3000/');
 });
 
 const goTo = (route: 'overview' | 'targets' | 'scans' | 'reports' | 'account' | 'plans') => {
@@ -68,6 +71,38 @@ const createStorage = (seed?: Record<string, string>): MockStorage => {
       values.delete(key);
     },
   };
+};
+
+const createBrowser = (url = 'http://localhost:3000/'): BrowserAdapter & { assignedUrl: string | null } => {
+  const current = new URL(url);
+  const browser = {
+    assignedUrl: null as string | null,
+    location: {
+      get origin() {
+        return current.origin;
+      },
+      get pathname() {
+        return current.pathname;
+      },
+      get search() {
+        return current.search;
+      },
+      get hash() {
+        return current.hash;
+      },
+      assign(next: string) {
+        const resolved = new URL(next, current.origin);
+        browser.assignedUrl = resolved.toString();
+        current.href = resolved.toString();
+      },
+    },
+    replaceUrl(next: string) {
+      const resolved = new URL(next, current.origin);
+      current.href = resolved.toString();
+    },
+  };
+
+  return browser;
 };
 
 const encodeBase64Url = (value: string): string =>
@@ -347,18 +382,20 @@ const renderApp = ({
   storage = createStorage(),
   client = createClient(),
   now,
+  browser,
 }: {
   storage?: MockStorage;
   client?: ReturnType<typeof createClient>;
   now?: () => number;
+  browser?: BrowserAdapter;
 } = {}) => {
   render(
-    <SessionProvider storage={storage} client={client} now={now}>
+    <SessionProvider storage={storage} client={client} now={now} browser={browser}>
       <App />
     </SessionProvider>,
   );
 
-  return { client, storage };
+  return { client, storage, browser };
 };
 
 describe('VirtualRift Dashboard App', () => {
@@ -368,6 +405,59 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByRole('heading', { name: 'Virtualrift' })).toBeInTheDocument();
     expect(screen.getByText('Base pronta para autenticação, gestão de alvos e execução dos primeiros fluxos do produto.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument();
+  });
+
+  it('starts the GitHub OAuth flow when the provider is configured', () => {
+    vi.stubEnv('VITE_GITHUB_OAUTH_START_URL', 'http://localhost:8080/oauth/github/start?redirect_uri={callbackUrl}');
+    const browser = createBrowser('http://localhost:3000/');
+
+    renderApp({ browser });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar com GitHub' }));
+
+    expect(browser.assignedUrl).toBe(
+      'http://localhost:8080/oauth/github/start?redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F%23%2Fauth%2Fcallback',
+    );
+  });
+
+  it('shows a helpful hint when a social provider is not configured in the environment', async () => {
+    renderApp();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar com GitHub' }));
+
+    expect(await screen.findByText('Login com GitHub ainda não foi configurado neste ambiente.')).toBeInTheDocument();
+  });
+
+  it('completes an OAuth callback from the URL and opens the authenticated dashboard', async () => {
+    const exp = Math.floor(Date.now() / 1000) + 300;
+    const browser = createBrowser(
+      `http://localhost:3000/#/auth/callback?provider=github&accessToken=${createAccessToken({
+        tenantId: 'tenant-oauth',
+        userId: 'user-oauth',
+        roles: ['OWNER'],
+        exp,
+      })}&refreshToken=refresh-oauth`,
+    );
+    const storage = createStorage();
+
+    renderApp({ browser, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Sessão pronta' })).toBeInTheDocument();
+    expect(screen.getByText('ID do tenant: tenant-oauth')).toBeInTheDocument();
+    expect(screen.getByText('ID do usuário: user-oauth')).toBeInTheDocument();
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-oauth"');
+    expect(browser.location.hash).toBe('#/overview');
+  });
+
+  it('shows a friendly error when the OAuth callback returns an access denial', async () => {
+    const browser = createBrowser('http://localhost:3000/#/auth/callback?provider=google&error=access_denied');
+
+    renderApp({ browser });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'O login com Google foi cancelado antes da autorização final.',
+    );
+    expect(browser.location.hash).toBe('#/overview');
   });
 
   it('signs in and persists the decoded session', async () => {
