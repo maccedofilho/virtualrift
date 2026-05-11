@@ -4,11 +4,13 @@ import type {
   AuthorizeScanTargetRequest,
   AuthorizeScanTargetResponse,
   BillingSummaryResponse,
+  CreateWorkspaceOnboardingRequest,
   CreatePlanChangeRequestRequest,
   CreateScanRequest,
   CreateTenantRequest,
   LoginRequest,
   LoginResponse,
+  OnboardingAvailabilityResponse,
   Plan,
   PlanChangeRequestResponse,
   ProblemDetailResponse,
@@ -21,6 +23,7 @@ import type {
   TenantQuotaResponse,
   TenantResponse,
   UUID,
+  WorkspaceOnboardingResponse,
 } from '@virtualrift/types';
 
 export const API_VERSION = 'v1';
@@ -232,6 +235,27 @@ const createAuthClient = (request: VirtualRiftRequestExecutor) => ({
     request<LoginResponse>({ method: 'POST', path: '/api/v1/auth/token', body: payload, ...options }),
   refresh: (payload: RefreshTokenRequest, options?: VirtualRiftRequestOptions) =>
     request<LoginResponse>({ method: 'POST', path: '/api/v1/auth/refresh', body: payload, ...options }),
+  getOnboardingAvailability: (
+    email: string,
+    workspaceSlug: string,
+    options?: VirtualRiftRequestOptions,
+  ) =>
+    request<OnboardingAvailabilityResponse>({
+      method: 'GET',
+      path: '/api/v1/auth/onboarding/availability',
+      query: {
+        email,
+        workspace_slug: workspaceSlug,
+      },
+      ...options,
+    }),
+  createWorkspace: (payload: CreateWorkspaceOnboardingRequest, options?: VirtualRiftRequestOptions) =>
+    request<WorkspaceOnboardingResponse>({
+      method: 'POST',
+      path: '/api/v1/auth/onboarding/workspaces',
+      body: payload,
+      ...options,
+    }),
   logout: (payload?: RefreshTokenRequest, options?: VirtualRiftRequestOptions) =>
     request<void>({ method: 'POST', path: '/api/v1/auth/logout', body: payload, ...options }),
   me: (options?: VirtualRiftRequestOptions) =>

@@ -38,9 +38,25 @@ const translateApiError = (error: VirtualRiftApiError): string => {
       return 'Você não tem permissão para concluir esta ação.';
     case 404:
       return 'O recurso solicitado não foi encontrado.';
+    case 409:
+      if (url.includes('/api/v1/auth/onboarding/workspaces') || url.includes('/api/v1/auth/onboarding/availability')) {
+        if (detail.includes('email is already in use')) {
+          return 'Esse e-mail já está em uso.';
+        }
+        if (detail.includes('workspace slug is already in use')) {
+          return 'Esse identificador de workspace já está em uso.';
+        }
+        if (detail.includes('selected plan is not available')) {
+          return 'Esse plano não está disponível para autoatendimento neste momento.';
+        }
+      }
+      return error.message;
     case 429:
       return 'Você atingiu um limite operacional do seu plano ou tentou a ação rápido demais.';
     default:
+      if (error.status === 503 && (url.includes('/api/v1/auth/onboarding/workspaces') || url.includes('/api/v1/auth/onboarding/availability'))) {
+        return 'O onboarding self-service não está disponível neste ambiente agora.';
+      }
       if (error.status >= 500) {
         return 'O backend não conseguiu concluir a solicitação agora. Tente novamente em instantes.';
       }

@@ -1,6 +1,11 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createVirtualRiftClient, type VirtualRiftClient } from '@virtualrift/api-client';
-import type { AuthSession, LoginRequest } from '@virtualrift/types';
+import type {
+  AuthSession,
+  CreateWorkspaceOnboardingRequest,
+  LoginRequest,
+  OnboardingAvailabilityResponse,
+} from '@virtualrift/types';
 import { toErrorMessage } from '../shared/errors';
 import { DASHBOARD_API_BASE_URL } from './constants';
 import { isExpired, toSession } from './jwt';
@@ -132,6 +137,22 @@ export function SessionProvider({
     }
   };
 
+  const createWorkspace = async (payload: CreateWorkspaceOnboardingRequest) => {
+    setError(null);
+    setStatus('refreshing');
+
+    try {
+      const response = await apiClient.auth.createWorkspace(payload);
+      applySession(toSession(response.accessToken, response.refreshToken));
+    } catch (onboardingError) {
+      clearSession();
+      setError(toErrorMessage(onboardingError, 'Não foi possível criar o workspace agora.'));
+    }
+  };
+
+  const checkOnboardingAvailability = (email: string, workspaceSlug: string): Promise<OnboardingAvailabilityResponse> =>
+    apiClient.auth.getOnboardingAvailability(email, workspaceSlug);
+
   const logout = async () => {
     const current = sessionRef.current;
 
@@ -225,11 +246,13 @@ export function SessionProvider({
       session,
       status,
       login,
+      createWorkspace,
+      checkOnboardingAvailability,
       logout,
       refresh,
       startOAuth,
     }),
-    [apiClient, error, oauthProviders, oauthStatus, session, status],
+    [apiClient, checkOnboardingAvailability, createWorkspace, error, oauthProviders, oauthStatus, session, status],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

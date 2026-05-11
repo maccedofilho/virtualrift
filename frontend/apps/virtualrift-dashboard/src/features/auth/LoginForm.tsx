@@ -1,4 +1,5 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
+import type { Plan } from '@virtualrift/types';
 import { useSession } from '../../session';
 import type { OAuthProvider } from '../../session/types';
 
@@ -10,6 +11,20 @@ const HERO_FLOW_STEPS: ReadonlyArray<{ idx: string; label: string; detail: strin
 ];
 
 type AuthMode = 'login' | 'register';
+
+const SELF_SERVICE_PLANS: ReadonlyArray<{ value: Plan; label: string; detail: string }> = [
+  { value: 'TRIAL', label: 'Trial', detail: 'Comece sem custo para validar o workspace.' },
+  { value: 'STARTER', label: 'Starter', detail: 'Melhor para equipes menores iniciando a operação.' },
+  { value: 'PROFESSIONAL', label: 'Professional', detail: 'Mais capacidade para times já em operação contínua.' },
+];
+
+const normalizeWorkspaceSlug = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 const GitHubIcon = () => (
   <svg className="dashboard-social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
@@ -30,12 +45,78 @@ const GoogleIcon = () => (
 );
 
 export function LoginForm() {
-  const { error, login, oauthProviders, oauthStatus, startOAuth, status } = useSession();
+  const { checkOnboardingAvailability, createWorkspace, error, login, oauthProviders, oauthStatus, startOAuth, status } =
+    useSession();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [plan, setPlan] = useState<Plan>('TRIAL');
   const [hint, setHint] = useState<string | null>(null);
+  const [availabilityHint, setAvailabilityHint] = useState<string | null>(null);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const [slugEditedManually, setSlugEditedManually] = useState(false);
+
+  useEffect(() => {
+    if (slugEditedManually) {
+      return;
+    }
+
+    setWorkspaceSlug(normalizeWorkspaceSlug(workspaceName));
+  }, [slugEditedManually, workspaceName]);
+
+  useEffect(() => {
+    if (mode !== 'register') {
+      setAvailabilityHint(null);
+      setIsCheckingAvailability(false);
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedSlug = normalizeWorkspaceSlug(workspaceSlug);
+
+    if (!normalizedEmail || !normalizedSlug) {
+      setAvailabilityHint(null);
+      setIsCheckingAvailability(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setIsCheckingAvailability(true);
+
+      try {
+        const availability = await checkOnboardingAvailability(normalizedEmail, normalizedSlug);
+        if (cancelled) {
+          return;
+        }
+
+        if (availability.emailAvailable && availability.workspaceSlugAvailable) {
+          setAvailabilityHint('E-mail e identificador do workspace estão disponíveis.');
+        } else if (!availability.emailAvailable && !availability.workspaceSlugAvailable) {
+          setAvailabilityHint('Esse e-mail e esse identificador já estão em uso.');
+        } else if (!availability.emailAvailable) {
+          setAvailabilityHint('Esse e-mail já está em uso.');
+        } else {
+          setAvailabilityHint('Esse identificador de workspace já está em uso.');
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailabilityHint('Não foi possível validar a disponibilidade agora. Você ainda pode tentar criar a conta.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCheckingAvailability(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [checkOnboardingAvailability, email, mode, workspaceSlug]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,26 +124,35 @@ export function LoginForm() {
     if (mode === 'login') {
       await login({ email, password });
     } else {
-      setHint('Criação de conta está em beta fechada. Solicite provisionamento ao administrador do tenant.');
+      await createWorkspace({
+        workspaceName: workspaceName.trim(),
+        workspaceSlug: normalizeWorkspaceSlug(workspaceSlug),
+        plan,
+        email: email.trim().toLowerCase(),
+        password,
+      });
     }
   };
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
     setHint(null);
+    setAvailabilityHint(null);
   };
 
   const heading = mode === 'login' ? 'Entrar' : 'Criar conta';
   const description =
     mode === 'login'
       ? 'Conecte-se ao workspace do tenant para gerenciar alvos, validações de autorização e fluxos de execução.'
-      : 'Cadastre uma conta vinculada ao tenant. O acesso é provisionado após validação do administrador.';
+      : 'Crie um novo workspace, defina o plano inicial e já entre como owner da operação.';
   const submitLabel =
     mode === 'login'
       ? status === 'refreshing'
         ? 'Entrando...'
         : 'Entrar com e-mail'
-      : 'Criar conta';
+      : status === 'refreshing'
+        ? 'Criando workspace...'
+        : 'Criar workspace';
 
   const handleOAuthClick = (provider: OAuthProvider) => {
     const config = oauthProviders.find((entry) => entry.provider === provider);
@@ -76,6 +166,14 @@ export function LoginForm() {
 
     startOAuth(provider);
   };
+
+  const registerDisabled =
+    status === 'refreshing' ||
+    isCheckingAvailability ||
+    workspaceName.trim().length === 0 ||
+    normalizeWorkspaceSlug(workspaceSlug).length === 0 ||
+    email.trim().length === 0 ||
+    password.trim().length === 0;
 
   return (
     <section aria-label="login" className="dashboard-login">
@@ -148,19 +246,64 @@ export function LoginForm() {
         </div>
         <form onSubmit={handleSubmit} className="auth-grid">
           {mode === 'register' ? (
-            <div className="field">
-              <label htmlFor="name">Nome</label>
-              <input
-                className="input"
-                id="name"
-                name="name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Como podemos te chamar?"
-                autoComplete="name"
-              />
-            </div>
+            <>
+              <div className="field">
+                <label htmlFor="workspace-name">Nome do workspace</label>
+                <input
+                  className="input"
+                  id="workspace-name"
+                  name="workspace-name"
+                  type="text"
+                  value={workspaceName}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  placeholder="Ex.: Acme Security"
+                  autoComplete="organization"
+                />
+              </div>
+              <div className="field-grid">
+                <div className="field">
+                  <label htmlFor="workspace-slug">Identificador do workspace</label>
+                  <input
+                    className="input"
+                    id="workspace-slug"
+                    name="workspace-slug"
+                    type="text"
+                    value={workspaceSlug}
+                    onChange={(event) => {
+                      setSlugEditedManually(true);
+                      setWorkspaceSlug(normalizeWorkspaceSlug(event.target.value));
+                    }}
+                    placeholder="acme-security"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="plan">Plano inicial</label>
+                  <select
+                    className="select"
+                    id="plan"
+                    name="plan"
+                    value={plan}
+                    onChange={(event) => setPlan(event.target.value as Plan)}
+                  >
+                    {SELF_SERVICE_PLANS.map((entry) => (
+                      <option key={entry.value} value={entry.value}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="form-help">
+                <strong>Autoatendimento</strong>
+                <span>
+                  {SELF_SERVICE_PLANS.find((entry) => entry.value === plan)?.detail ??
+                    'Escolha um plano inicial para abrir o workspace.'}
+                </span>
+              </div>
+            </>
           ) : null}
           <div className="field">
             <label htmlFor="email">E-mail</label>
@@ -188,6 +331,11 @@ export function LoginForm() {
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             />
           </div>
+          {mode === 'register' && availabilityHint ? (
+            <p className="alert alert-info" role="status">
+              {availabilityHint}
+            </p>
+          ) : null}
           {error ? (
             <p className="alert alert-danger" role="alert">
               {error}
@@ -197,7 +345,7 @@ export function LoginForm() {
             <button
               className="button-primary dashboard-login-submit"
               type="submit"
-              disabled={status === 'refreshing'}
+              disabled={mode === 'register' ? registerDisabled : status === 'refreshing'}
             >
               {submitLabel}
             </button>
