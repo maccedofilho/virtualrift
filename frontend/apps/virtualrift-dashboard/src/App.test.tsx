@@ -281,6 +281,8 @@ const createClient = () => {
     auth: {
       login: vi.fn(),
       refresh: vi.fn(),
+      getOnboardingAvailability: vi.fn(),
+      createWorkspace: vi.fn(),
       logout: vi.fn(),
       me: vi.fn(),
     },
@@ -315,6 +317,26 @@ const createClient = () => {
 
   client.tenants.getById.mockResolvedValue(createTenant());
   client.tenants.getQuota.mockResolvedValue(createQuota());
+  client.auth.getOnboardingAvailability.mockResolvedValue({
+    email: 'owner@virtualrift.test',
+    emailAvailable: true,
+    workspaceSlug: 'acme-security',
+    workspaceSlugAvailable: true,
+  });
+  client.auth.createWorkspace.mockResolvedValue({
+    tenantId: 'tenant-signup',
+    tenantName: 'Acme Security',
+    tenantSlug: 'acme-security',
+    plan: 'TRIAL',
+    roles: ['OWNER'],
+    accessToken: createAccessToken({
+      tenantId: 'tenant-signup',
+      userId: 'user-signup',
+      roles: ['OWNER'],
+      exp: Math.floor(Date.now() / 1000) + 300,
+    }),
+    refreshToken: 'refresh-signup',
+  });
   client.auth.me.mockResolvedValue(createAccountProfile());
   client.tenants.getBillingSummary.mockResolvedValue(createBillingSummary());
   client.tenants.listScanTargets.mockResolvedValue([]);
@@ -515,6 +537,50 @@ describe('VirtualRift Dashboard App', () => {
       email: 'owner@virtualrift.test',
       password: 'secret',
     });
+  });
+
+  it('creates a workspace from the onboarding form and opens the authenticated dashboard', async () => {
+    const client = createClient();
+    const storage = createStorage();
+
+    renderApp({ client, storage });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Criar conta' }));
+    fireEvent.change(screen.getByLabelText('Nome do workspace'), { target: { value: 'Acme Security' } });
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'founder@acme.test' } });
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'ValidPassword123!' } });
+
+    await waitFor(() => {
+      expect(client.auth.getOnboardingAvailability).toHaveBeenCalledWith('founder@acme.test', 'acme-security');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Criar workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Sessão pronta' })).toBeInTheDocument();
+    expect(screen.getByText('ID do tenant: tenant-signup')).toBeInTheDocument();
+    expect(screen.getByText('ID do usuário: user-signup')).toBeInTheDocument();
+    expect(client.auth.createWorkspace).toHaveBeenCalledWith({
+      workspaceName: 'Acme Security',
+      workspaceSlug: 'acme-security',
+      plan: 'TRIAL',
+      email: 'founder@acme.test',
+      password: 'ValidPassword123!',
+    });
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-signup"');
+  });
+
+  it('shows availability feedback while preparing workspace onboarding', async () => {
+    const client = createClient();
+
+    renderApp({ client });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Criar conta' }));
+    fireEvent.change(screen.getByLabelText('Nome do workspace'), { target: { value: 'Acme Security' } });
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'owner@virtualrift.test' } });
+
+    expect(
+      await screen.findByText('E-mail e identificador do workspace estão disponíveis.'),
+    ).toBeInTheDocument();
   });
 
   it('hydrates a stored session on boot', async () => {

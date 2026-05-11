@@ -1,5 +1,10 @@
 import type { VirtualRiftClient } from '@virtualrift/api-client';
-import type { AuthSession, LoginRequest } from '@virtualrift/types';
+import type {
+  AuthSession,
+  CreateWorkspaceOnboardingRequest,
+  LoginRequest,
+  OnboardingAvailabilityResponse,
+} from '@virtualrift/types';
 
 export type SessionStatus = 'loading' | 'anonymous' | 'authenticated' | 'refreshing';
 export type OAuthStatus = 'idle' | 'redirecting' | 'processing';
@@ -31,6 +36,8 @@ export type SessionContextValue = {
   session: AuthSession | null;
   status: SessionStatus;
   login: (payload: LoginRequest) => Promise<void>;
+  createWorkspace: (payload: CreateWorkspaceOnboardingRequest) => Promise<void>;
+  checkOnboardingAvailability: (email: string, workspaceSlug: string) => Promise<OnboardingAvailabilityResponse>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   startOAuth: (provider: OAuthProvider) => void;

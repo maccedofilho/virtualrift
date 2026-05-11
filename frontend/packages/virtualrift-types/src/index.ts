@@ -41,6 +41,31 @@ export type LoginResponse = {
   refreshToken: string;
 };
 
+export type OnboardingAvailabilityResponse = {
+  email: string;
+  emailAvailable: boolean;
+  workspaceSlug: string;
+  workspaceSlugAvailable: boolean;
+};
+
+export type CreateWorkspaceOnboardingRequest = {
+  workspaceName: string;
+  workspaceSlug: string;
+  plan: Plan;
+  email: string;
+  password: string;
+};
+
+export type WorkspaceOnboardingResponse = {
+  tenantId: UUID;
+  tenantName: string;
+  tenantSlug: string;
+  plan: Plan;
+  roles: string[];
+  accessToken: string;
+  refreshToken: string;
+};
+
 export type AccountProfile = {
   id: UUID;
   email: string;

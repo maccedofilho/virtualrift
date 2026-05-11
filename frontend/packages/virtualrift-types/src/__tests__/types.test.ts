@@ -21,12 +21,14 @@ import type {
   AuthSession,
   AuthorizeScanTargetRequest,
   BillingSummary,
+  CreateWorkspaceOnboardingRequest,
   CreateScanRequest,
   CreatePlanChangeRequestRequest,
   CreateTenantRequest,
   JwtClaims,
   LoginRequest,
   LoginResponse,
+  OnboardingAvailabilityResponse,
   Plan,
   PlanChangeRequest,
   PlanChangeRequestStatus,
@@ -48,6 +50,7 @@ import type {
   TenantStatus,
   UserStatus,
   VirtualRiftConfig,
+  WorkspaceOnboardingResponse,
 } from '../index';
 
 describe('virtualrift types package', () => {
@@ -76,6 +79,28 @@ describe('virtualrift types package', () => {
   it('keeps auth contracts aligned with the backend DTOs', () => {
     expectTypeOf<LoginRequest>().toEqualTypeOf<{ email: string; password: string }>();
     expectTypeOf<LoginResponse>().toEqualTypeOf<{ accessToken: string; refreshToken: string }>();
+    expectTypeOf<OnboardingAvailabilityResponse>().toEqualTypeOf<{
+      email: string;
+      emailAvailable: boolean;
+      workspaceSlug: string;
+      workspaceSlugAvailable: boolean;
+    }>();
+    expectTypeOf<CreateWorkspaceOnboardingRequest>().toEqualTypeOf<{
+      workspaceName: string;
+      workspaceSlug: string;
+      plan: Plan;
+      email: string;
+      password: string;
+    }>();
+    expectTypeOf<WorkspaceOnboardingResponse>().toEqualTypeOf<{
+      tenantId: string;
+      tenantName: string;
+      tenantSlug: string;
+      plan: Plan;
+      roles: string[];
+      accessToken: string;
+      refreshToken: string;
+    }>();
     expectTypeOf<RefreshTokenRequest>().toEqualTypeOf<{ refreshToken: string }>();
     expectTypeOf<JwtClaims>().toMatchTypeOf<{
       tenant_id: string;

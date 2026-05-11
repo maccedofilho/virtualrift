@@ -54,6 +54,90 @@ describe('API client package', () => {
     expect(headers.get('Content-Type')).toBe('application/json');
   });
 
+  it('checks onboarding availability with the expected query parameters', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          email: 'owner@virtualrift.test',
+          emailAvailable: true,
+          workspaceSlug: 'acme-labs',
+          workspaceSlugAvailable: false,
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.auth.getOnboardingAvailability('owner@virtualrift.test', 'acme-labs');
+
+    expect(response.workspaceSlugAvailable).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/auth/onboarding/availability?email=owner%40virtualrift.test&workspace_slug=acme-labs',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
+  it('creates a workspace through the onboarding endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tenantId: 'tenant-id',
+          tenantName: 'Acme Labs',
+          tenantSlug: 'acme-labs',
+          plan: 'STARTER',
+          roles: ['OWNER'],
+          accessToken: 'access',
+          refreshToken: 'refresh',
+        }),
+        {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.auth.createWorkspace({
+      workspaceName: 'Acme Labs',
+      workspaceSlug: 'acme-labs',
+      plan: 'STARTER',
+      email: 'owner@virtualrift.test',
+      password: 'ValidPassword123!',
+    });
+
+    expect(response.roles).toEqual(['OWNER']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/auth/onboarding/workspaces',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          workspaceName: 'Acme Labs',
+          workspaceSlug: 'acme-labs',
+          plan: 'STARTER',
+          email: 'owner@virtualrift.test',
+          password: 'ValidPassword123!',
+        }),
+      }),
+    );
+  });
+
   it('injects authorization, tenant and user headers from the configured context', async () => {
     fetchMock.mockResolvedValue(
       new Response(
