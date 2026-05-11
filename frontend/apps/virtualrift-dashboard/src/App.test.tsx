@@ -409,14 +409,14 @@ describe('VirtualRift Dashboard App', () => {
 
   it('starts the GitHub OAuth flow when the provider is configured', () => {
     vi.stubEnv('VITE_GITHUB_OAUTH_START_URL', 'http://localhost:8080/oauth/github/start?redirect_uri={callbackUrl}');
-    const browser = createBrowser('http://localhost:3000/');
+    const browser = createBrowser('http://localhost:3000/#/reports');
 
     renderApp({ browser });
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar com GitHub' }));
 
     expect(browser.assignedUrl).toBe(
-      'http://localhost:8080/oauth/github/start?redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F%23%2Fauth%2Fcallback',
+      'http://localhost:8080/oauth/github/start?redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F%23%2Fauth%2Fcallback%3Fprovider%3Dgithub%26next%3D%2523%252Freports',
     );
   });
 
@@ -431,7 +431,7 @@ describe('VirtualRift Dashboard App', () => {
   it('completes an OAuth callback from the URL and opens the authenticated dashboard', async () => {
     const exp = Math.floor(Date.now() / 1000) + 300;
     const browser = createBrowser(
-      `http://localhost:3000/#/auth/callback?provider=github&accessToken=${createAccessToken({
+      `http://localhost:3000/#/auth/callback?provider=github&next=%23%2Freports&accessToken=${createAccessToken({
         tenantId: 'tenant-oauth',
         userId: 'user-oauth',
         roles: ['OWNER'],
@@ -446,18 +446,40 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('ID do tenant: tenant-oauth')).toBeInTheDocument();
     expect(screen.getByText('ID do usuário: user-oauth')).toBeInTheDocument();
     expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-oauth"');
-    expect(browser.location.hash).toBe('#/overview');
+    expect(browser.location.hash).toBe('#/reports');
   });
 
   it('shows a friendly error when the OAuth callback returns an access denial', async () => {
-    const browser = createBrowser('http://localhost:3000/#/auth/callback?provider=google&error=access_denied');
+    const browser = createBrowser('http://localhost:3000/#/auth/callback?provider=google&next=%23%2Fplans&error=access_denied');
 
     renderApp({ browser });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'O login com Google foi cancelado antes da autorização final.',
     );
-    expect(browser.location.hash).toBe('#/overview');
+    expect(browser.location.hash).toBe('#/plans');
+  });
+
+  it('shows a friendly error when the OAuth callback is incomplete', async () => {
+    const browser = createBrowser('http://localhost:3000/#/auth/callback?provider=github&next=%23%2Faccount&accessToken=token-only');
+
+    renderApp({ browser });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'O retorno do login com GitHub veio incompleto. Tente novamente.',
+    );
+    expect(browser.location.hash).toBe('#/account');
+  });
+
+  it('rejects an OAuth callback with an invalid provider', async () => {
+    const browser = createBrowser('http://localhost:3000/#/auth/callback?provider=discord&next=%23%2Freports&error=access_denied');
+
+    renderApp({ browser });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'O retorno do login social veio com um provedor inválido. Tente iniciar a autenticação novamente.',
+    );
+    expect(browser.location.hash).toBe('#/reports');
   });
 
   it('signs in and persists the decoded session', async () => {

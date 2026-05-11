@@ -158,10 +158,18 @@ export function SessionProvider({
       setOAuthStatus('processing');
       setError(null);
 
+      if (!oauthCallback.provider) {
+        clearSession();
+        setError(toOAuthErrorMessage(null, 'invalid_provider'));
+        clearOAuthCallback(runtimeBrowser, oauthCallback.nextHash);
+        setOAuthStatus('idle');
+        return;
+      }
+
       if (oauthCallback.error) {
         clearSession();
         setError(toOAuthErrorMessage(oauthCallback.provider, oauthCallback.error));
-        clearOAuthCallback(runtimeBrowser);
+        clearOAuthCallback(runtimeBrowser, oauthCallback.nextHash);
         setOAuthStatus('idle');
         return;
       }
@@ -173,7 +181,7 @@ export function SessionProvider({
           clearSession();
           setError(toOAuthErrorMessage(oauthCallback.provider, 'callback_incomplete'));
         } finally {
-          clearOAuthCallback(runtimeBrowser);
+          clearOAuthCallback(runtimeBrowser, oauthCallback.nextHash);
           setOAuthStatus('idle');
         }
         return;
@@ -181,7 +189,7 @@ export function SessionProvider({
 
       clearSession();
       setError(toOAuthErrorMessage(oauthCallback.provider, 'callback_incomplete'));
-      clearOAuthCallback(runtimeBrowser);
+      clearOAuthCallback(runtimeBrowser, oauthCallback.nextHash);
       setOAuthStatus('idle');
       return;
     }
