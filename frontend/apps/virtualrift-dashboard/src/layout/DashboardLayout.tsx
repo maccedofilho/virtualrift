@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AccountPanel } from '../features/account/AccountPanel';
 import { SessionOverview } from '../features/overview/SessionOverview';
 import { PlansPanel } from '../features/plans/PlansPanel';
+import { ReportsPanel } from '../features/reports/ReportsPanel';
 import { TenantTargetsPanel } from '../features/targets/TenantTargetsPanel';
 import { ScanCreationPanel } from '../features/scans/ScanCreationPanel';
 import { Sidebar, type NavSection } from './Sidebar';
@@ -12,6 +13,7 @@ const SECTIONS: ReadonlyArray<NavSection> = [
   { id: 'overview', label: 'Visão geral', description: 'Estado da sessão e contexto operacional do tenant.' },
   { id: 'targets', label: 'Alvos', description: 'Cadastre, valide ownership e gerencie alvos do tenant.' },
   { id: 'scans', label: 'Scans', description: 'Dispare e acompanhe scans dentro do escopo verificado.' },
+  { id: 'reports', label: 'Relatórios', description: 'Abra snapshots gerados, findings e risco consolidado.' },
   { id: 'account', label: 'Minha conta', description: 'Suas informações e como você acessa.' },
   { id: 'plans', label: 'Planos', description: 'O que tem no seu plano e quando subir.' },
 ];
@@ -81,6 +83,25 @@ const ROUTE_COPY: Record<Route, RouteCopy> = {
       },
     ],
   },
+  reports: {
+    kicker: '04 · Relatórios',
+    title: 'Relatórios do tenant',
+    description: 'Abra snapshots gerados a partir de scans concluídos, compare severidade, risco e findings persistidos, e mantenha a trilha executiva pronta para compartilhar.',
+    intro: [
+      {
+        label: 'O que aparece aqui',
+        detail: 'Cada relatório é um snapshot persistido do scan, com findings e score de risco congelados no momento da geração.',
+      },
+      {
+        label: 'Quando usar',
+        detail: 'Depois de concluir um scan importante ou quando você precisar compartilhar um artefato mais estável do que o resultado operacional.',
+      },
+      {
+        label: 'Como navegar',
+        detail: 'Selecione um relatório para abrir contexto, findings e vínculo com o scan original. Se ainda não houver relatórios, gere um a partir da área de scans.',
+      },
+    ],
+  },
   account: {
     kicker: 'Conta',
     title: 'Sua conta',
@@ -99,6 +120,7 @@ const ROUTE_COMPONENT: Record<Route, () => ReactNode> = {
   overview: () => <SessionOverview />,
   targets: () => <TenantTargetsPanel />,
   scans: () => <ScanCreationPanel />,
+  reports: () => <ReportsPanel />,
   account: () => <AccountPanel />,
   plans: () => <PlansPanel />,
 };
