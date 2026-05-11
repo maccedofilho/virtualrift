@@ -46,3 +46,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+tenant:
+  internal:
+    api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}

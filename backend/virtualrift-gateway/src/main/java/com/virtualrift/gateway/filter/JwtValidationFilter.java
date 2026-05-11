@@ -39,6 +39,8 @@ public class JwtValidationFilter implements GlobalFilter, Ordered {
             "/actuator/health",
             "/api/v1/auth/token",
             "/api/v1/auth/refresh",
+            "/api/v1/auth/onboarding/availability",
+            "/api/v1/auth/onboarding/workspaces",
             "/api/v1/auth/oauth/github/start",
             "/api/v1/auth/oauth/github/callback",
             "/api/v1/auth/register",
