@@ -64,8 +64,8 @@ const ROUTE_COPY: Record<Route, RouteCopy> = {
   },
   scans: {
     kicker: '03 · Execução',
-    title: 'Disparo e acompanhamento de scans',
-    description: 'Selecione um alvo verificado, ajuste profundidade e timeout dentro dos limites do tenant e acompanhe o estado do scan em tempo real.',
+    title: 'Scans e resultados',
+    description: 'Selecione um alvo verificado, ajuste profundidade e timeout, acompanhe o histórico do tenant e abra o resultado agregado em uma única área.',
     intro: [
       {
         label: 'Quem aparece aqui',
@@ -76,8 +76,8 @@ const ROUTE_COPY: Record<Route, RouteCopy> = {
         detail: 'A profundidade controla quão fundo o crawler vai. O timeout limita o tempo total da execução. Ambos respeitam os limites do plano.',
       },
       {
-        label: 'Acompanhamento do status',
-        detail: 'Scans criados nesta sessão aparecem abaixo do formulário. Use "Atualizar status" para repolar o gateway sob demanda.',
+        label: 'Histórico e resultado',
+        detail: 'A lista agora mostra o histórico real do tenant. Selecione um scan para abrir severidades, risco, findings e gerar relatório quando ele estiver concluído.',
       },
     ],
   },

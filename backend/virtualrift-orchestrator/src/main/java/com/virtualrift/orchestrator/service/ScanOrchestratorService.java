@@ -98,6 +98,12 @@ public class ScanOrchestratorService {
         return getScan(scanId, tenantId);
     }
 
+    public List<ScanResponse> listScans(UUID tenantId) {
+        return scanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public ScanResponse getStatus(UUID scanId, UUID tenantId) {
         return getScan(scanId, tenantId);
     }

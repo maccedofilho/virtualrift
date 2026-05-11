@@ -3,6 +3,7 @@ package com.virtualrift.orchestrator.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.orchestrator.dto.CreateScanRequest;
+import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.exception.ScanTypeNotAllowedException;
@@ -17,6 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
+import java.util.List;
+import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,6 +40,37 @@ class ScanControllerTest {
 
     @MockBean
     private ScanOrchestratorService scanOrchestratorService;
+
+    private ScanResponse createScanResponse(UUID scanId, UUID tenantId, UUID userId) {
+        return new ScanResponse(
+                scanId,
+                tenantId,
+                userId,
+                "https://example.com",
+                ScanType.WEB,
+                com.virtualrift.common.model.ScanStatus.PENDING,
+                3,
+                300,
+                null,
+                Instant.parse("2026-05-06T10:00:00Z"),
+                null,
+                null
+        );
+    }
+
+    @Test
+    @DisplayName("should list scans for reader role")
+    void listScans_quandoReader_retorna200() throws Exception {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        when(scanOrchestratorService.listScans(tenantId)).thenReturn(List.of(createScanResponse(UUID.randomUUID(), tenantId, userId)));
+
+        mockMvc.perform(get("/api/v1/scans")
+                        .header("X-Tenant-Id", tenantId)
+                        .header("X-Roles", "READER"))
+                .andExpect(status().isOk());
+    }
 
     @Test
     @DisplayName("should return 404 when scan is not found")

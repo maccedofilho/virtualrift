@@ -1,8 +1,11 @@
+import { VirtualRiftApiError } from '@virtualrift/api-client';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   isVerifiedScanTarget,
   type CreateScanRequest,
+  type ReportResponse,
   type ScanResponse,
+  type ScanResultResponse,
   type ScanTargetResponse,
   type ScanType,
   type UUID,
@@ -10,7 +13,7 @@ import {
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
-import { canCreateScans } from '../../shared/roles';
+import { canCreateScans, canGenerateReports } from '../../shared/roles';
 
 const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
   switch (target.type) {
@@ -27,7 +30,9 @@ const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
 
 const targetLabel = (target: ScanTargetResponse): string => `${target.target} (${target.type})`;
 
-const scanCreationStatusLabel = (status: 'loading' | 'ready' | 'submitting' | 'refreshing'): string => {
+const scanCreationStatusLabel = (
+  status: 'loading' | 'ready' | 'submitting' | 'refreshing' | 'loading-result' | 'generating-report',
+): string => {
   switch (status) {
     case 'loading':
       return 'carregando';
@@ -37,45 +42,106 @@ const scanCreationStatusLabel = (status: 'loading' | 'ready' | 'submitting' | 'r
       return 'criando';
     case 'refreshing':
       return 'atualizando';
+    case 'loading-result':
+      return 'lendo resultado';
+    case 'generating-report':
+      return 'gerando relatório';
+  }
+};
+
+const scanStatusTone = (status: ScanResponse['status'] | ScanResultResponse['status']): string => {
+  switch (status) {
+    case 'COMPLETED':
+      return 'badge-success';
+    case 'FAILED':
+    case 'CANCELLED':
+      return 'badge-danger';
+    case 'RUNNING':
+      return 'badge-accent';
+    case 'PENDING':
+      return 'badge-warning';
+  }
+};
+
+const severityTone = (count: number, variant: 'critical' | 'high' | 'medium' | 'low' | 'info'): string => {
+  if (count === 0) {
+    return 'badge';
+  }
+
+  switch (variant) {
+    case 'critical':
+      return 'badge-danger';
+    case 'high':
+      return 'badge-warning';
+    case 'medium':
+      return 'badge-accent';
+    case 'low':
+    case 'info':
+      return 'badge-success';
+  }
+};
+
+const findingSeverityTone = (severity: ScanResultResponse['findings'][number]['severity']): string => {
+  switch (severity) {
+    case 'CRITICAL':
+      return 'badge-danger';
+    case 'HIGH':
+      return 'badge-warning';
+    case 'MEDIUM':
+      return 'badge-accent';
+    case 'LOW':
+    case 'INFO':
+      return 'badge-success';
   }
 };
 
 export function ScanCreationPanel() {
   const { client, session } = useSession();
   const [targets, setTargets] = useState<ScanTargetResponse[]>([]);
+  const [scans, setScans] = useState<ScanResponse[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<UUID | ''>('');
   const [requestedTarget, setRequestedTarget] = useState('');
   const [scanType, setScanType] = useState<ScanType>('WEB');
   const [depth, setDepth] = useState('1');
   const [timeout, setTimeoutValue] = useState('30');
-  const [createdScans, setCreatedScans] = useState<ScanResponse[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'submitting' | 'refreshing'>('loading');
+  const [selectedScanId, setSelectedScanId] = useState<UUID | null>(null);
+  const [selectedScanResult, setSelectedScanResult] = useState<ScanResultResponse | null>(null);
+  const [scanTypeFilter, setScanTypeFilter] = useState<ScanType | 'ALL'>('ALL');
+  const [scanStatusFilter, setScanStatusFilter] = useState<ScanResponse['status'] | 'ALL'>('ALL');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'submitting' | 'refreshing' | 'loading-result' | 'generating-report'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
 
   const tenantId = session?.tenantId ?? null;
   const roles = session?.roles ?? [];
   const canCreateNewScans = canCreateScans(roles);
+  const canGenerateNewReports = canGenerateReports(roles);
 
   useEffect(() => {
     if (!tenantId) {
       return;
     }
 
-    const loadTargets = async () => {
+    const loadWorkspace = async () => {
       setStatus('loading');
       setError(null);
 
       try {
-        const nextTargets = await client.tenants.listScanTargets(tenantId);
+        const [nextTargets, nextScans] = await Promise.all([
+          client.tenants.listScanTargets(tenantId),
+          client.scans.list(),
+        ]);
         setTargets(nextTargets);
+        setScans(nextScans);
+        setSelectedScanId((current) => current ?? nextScans[0]?.id ?? null);
         setStatus('ready');
       } catch (loadError) {
         setStatus('ready');
-        setError(toErrorMessage(loadError, 'Não foi possível carregar os alvos para criação de scan.'));
+        setError(toErrorMessage(loadError, 'Não foi possível carregar os dados de execução agora.'));
       }
     };
 
-    void loadTargets();
+    void loadWorkspace();
   }, [client, tenantId]);
 
   const verifiedTargets = useMemo(
@@ -92,6 +158,30 @@ export function ScanCreationPanel() {
     () => (selectedTarget ? scanTypesForTarget(selectedTarget) : []),
     [selectedTarget],
   );
+
+  const selectedScan = useMemo(
+    () => scans.find((scan) => scan.id === selectedScanId) ?? null,
+    [scans, selectedScanId],
+  );
+
+  const filteredScans = useMemo(
+    () =>
+      scans.filter((scan) => {
+        const matchesType = scanTypeFilter === 'ALL' || scan.scanType === scanTypeFilter;
+        const matchesStatus = scanStatusFilter === 'ALL' || scan.status === scanStatusFilter;
+        return matchesType && matchesStatus;
+      }),
+    [scanStatusFilter, scanTypeFilter, scans],
+  );
+
+  const selectedScanIsInProgress = selectedScan?.status === 'PENDING' || selectedScan?.status === 'RUNNING';
+  const scanTypeOptions = useMemo<ScanType[]>(
+    () => Array.from(new Set(scans.map((scan) => scan.scanType))),
+    [scans],
+  );
+  const hasActiveFilters = scanTypeFilter !== 'ALL' || scanStatusFilter !== 'ALL';
+  const runningScans = useMemo(() => scans.filter((scan) => scan.status === 'RUNNING').length, [scans]);
+  const completedScans = useMemo(() => scans.filter((scan) => scan.status === 'COMPLETED').length, [scans]);
 
   useEffect(() => {
     if (verifiedTargets.length === 0) {
@@ -119,6 +209,61 @@ export function ScanCreationPanel() {
     }
   }, [scanType, selectedTarget]);
 
+  useEffect(() => {
+    if (filteredScans.length === 0) {
+      setSelectedScanId(null);
+      return;
+    }
+
+    const hasSelectedScan = filteredScans.some((scan) => scan.id === selectedScanId);
+    if (!hasSelectedScan) {
+      setSelectedScanId(filteredScans[0].id);
+    }
+  }, [filteredScans, selectedScanId]);
+
+  useEffect(() => {
+    if (!selectedScan) {
+      setSelectedScanResult(null);
+      return;
+    }
+
+    const loadScanResult = async () => {
+      setStatus('loading-result');
+      setError(null);
+
+      try {
+        const nextResult = await client.scans.getResult(selectedScan.id);
+        setSelectedScanResult(nextResult);
+        setStatus('ready');
+      } catch (loadError) {
+        setStatus('ready');
+        if (loadError instanceof VirtualRiftApiError && loadError.status === 404 && selectedScan.status !== 'COMPLETED') {
+          setSelectedScanResult(null);
+          return;
+        }
+
+        setSelectedScanResult(null);
+        setError(toErrorMessage(loadError, 'Não foi possível carregar o resultado do scan selecionado.'));
+      }
+    };
+
+    void loadScanResult();
+  }, [client, selectedScan]);
+
+  useEffect(() => {
+    if (!selectedScanIsInProgress || !selectedScanId) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshScan(selectedScanId, { silent: true });
+    }, 15_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [selectedScanId, selectedScanIsInProgress]);
+
   const handleCreateScan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!requestedTarget.trim()) {
@@ -134,10 +279,14 @@ export function ScanCreationPanel() {
 
     setStatus('submitting');
     setError(null);
+    setReportMessage(null);
 
     try {
       const createdScan = await client.scans.create(payload);
-      setCreatedScans((currentScans) => [createdScan, ...currentScans]);
+      setScans((currentScans) => [createdScan, ...currentScans.filter((scan) => scan.id !== createdScan.id)]);
+      setSelectedScanId(createdScan.id);
+      setScanTypeFilter('ALL');
+      setScanStatusFilter('ALL');
       setStatus('ready');
     } catch (createError) {
       setStatus('ready');
@@ -145,19 +294,60 @@ export function ScanCreationPanel() {
     }
   };
 
-  const handleRefreshScan = async (scanId: UUID) => {
-    setStatus('refreshing');
-    setError(null);
+  const refreshScan = async (scanId: UUID, options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setStatus('refreshing');
+      setError(null);
+      setReportMessage(null);
+    }
 
     try {
       const refreshedScan = await client.scans.getStatus(scanId);
-      setCreatedScans((currentScans) =>
+      let refreshedResult: ScanResultResponse | null = null;
+
+      try {
+        refreshedResult = await client.scans.getResult(scanId);
+      } catch (resultError) {
+        if (!(resultError instanceof VirtualRiftApiError && resultError.status === 404 && refreshedScan.status !== 'COMPLETED')) {
+          throw resultError;
+        }
+      }
+
+      setScans((currentScans) =>
         currentScans.map((scan) => (scan.id === refreshedScan.id ? refreshedScan : scan)),
       );
-      setStatus('ready');
+
+      if (selectedScanId === scanId) {
+        setSelectedScanResult(refreshedResult);
+      }
+
+      if (!options?.silent) {
+        setStatus('ready');
+      }
     } catch (refreshError) {
+      if (!options?.silent) {
+        setStatus('ready');
+        setError(toErrorMessage(refreshError, 'Não foi possível atualizar o status do scan.'));
+      }
+    }
+  };
+
+  const handleRefreshScan = async (scanId: UUID) => {
+    await refreshScan(scanId);
+  };
+
+  const handleGenerateReport = async (scanId: UUID) => {
+    setStatus('generating-report');
+    setError(null);
+    setReportMessage(null);
+
+    try {
+      const report: ReportResponse = await client.reports.generateFromScan(scanId);
+      setReportMessage(`Relatório ${report.id} gerado com sucesso para o scan ${scanId}.`);
       setStatus('ready');
-      setError(toErrorMessage(refreshError, 'Não foi possível atualizar o status do scan.'));
+    } catch (reportError) {
+      setStatus('ready');
+      setError(toErrorMessage(reportError, 'Não foi possível gerar o relatório deste scan.'));
     }
   };
 
@@ -166,13 +356,13 @@ export function ScanCreationPanel() {
       <div className="dashboard-panel-header">
         <div className="dashboard-panel-copy">
           <span className="eyebrow">Execução</span>
-          <h2>Criar scan</h2>
-          <p>Este painel expõe os fluxos HTTP de alvo suportados pelo contrato atual do backend nesta branch.</p>
+          <h2>Scans e resultados</h2>
+          <p>Dispare novos scans, acompanhe o histórico do tenant e abra o resultado agregado sem sair desta área.</p>
         </div>
         <span className="status-indicator">
           <span
             className={`status-dot ${
-              status === 'loading' || status === 'submitting' || status === 'refreshing'
+              status === 'loading' || status === 'submitting' || status === 'refreshing' || status === 'loading-result' || status === 'generating-report'
                 ? 'status-dot-pending'
                 : 'status-dot-active'
             }`}
@@ -187,25 +377,35 @@ export function ScanCreationPanel() {
           <span className="stat-value">{verifiedTargets.length}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Tipo solicitado</span>
-          <span className="stat-value">{scanType}</span>
+          <span className="stat-label">Scans do tenant</span>
+          <span className="stat-value">{scans.length}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Profundidade</span>
-          <span className="stat-value">{depth || '1'}</span>
+          <span className="stat-label">Em execução</span>
+          <span className="stat-value">{runningScans}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Timeout</span>
-          <span className="stat-value">{timeout || '30'}s</span>
+          <span className="stat-label">Concluídos</span>
+          <span className="stat-value">{completedScans}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Risco</span>
+          <span className="stat-value">{selectedScanResult?.riskScore ?? '—'}</span>
         </div>
       </div>
 
-      {status === 'loading' ? <p className="alert alert-info">Carregando alvos verificados...</p> : null}
+      {status === 'loading' ? <p className="alert alert-info">Carregando alvos verificados e histórico de scans...</p> : null}
       {error ? (
         <p className="alert alert-danger" role="alert">
           {error}
         </p>
       ) : null}
+      {reportMessage ? (
+        <p className="alert alert-info" role="status">
+          {reportMessage}
+        </p>
+      ) : null}
+
       {verifiedTargets.length === 0 ? (
         <p className="alert alert-info">Nenhum alvo verificado disponível para criação de scan ainda.</p>
       ) : null}
@@ -213,7 +413,10 @@ export function ScanCreationPanel() {
       {verifiedTargets.length > 0 ? (
         <section className="panel-section" aria-label="scan-request">
           <div className="panel-section-header">
-            <h3 className="panel-section-title">Disparar uma solicitação de scan</h3>
+            <div>
+              <h3 className="panel-section-title">Disparar uma solicitação de scan</h3>
+              <p>O formulário segue bloqueando superfícies fora do escopo verificado do tenant.</p>
+            </div>
             <span className="badge badge-accent">Escopo verificado</span>
           </div>
           {canCreateNewScans ? (
@@ -312,7 +515,7 @@ export function ScanCreationPanel() {
                 Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.
               </p>
               <div className="form-actions">
-                <button className="button-primary" type="submit" disabled={status === 'submitting' || status === 'refreshing'}>
+                <button className="button-primary" type="submit" disabled={status !== 'ready'}>
                   {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
                 </button>
               </div>
@@ -325,44 +528,86 @@ export function ScanCreationPanel() {
         </section>
       ) : null}
 
-      <section aria-label="created-scans" className="panel-section">
+      <section aria-label="tenant-scans" className="panel-section">
         <div className="panel-section-header">
           <div>
-            <h3 className="panel-section-title">Scans criados nesta sessão</h3>
-            <p>Os scans exibidos aqui foram criados nesta sessão do dashboard, até que exista um endpoint de listagem completo.</p>
+            <h3 className="panel-section-title">Histórico de scans do tenant</h3>
+            <p>Agora o painel consome a listagem real do backend, em vez de ficar preso ao que foi criado na sessão atual.</p>
           </div>
-          <span className="badge">{createdScans.length} itens</span>
+          <span className="badge">{filteredScans.length} de {scans.length}</span>
         </div>
-        {createdScans.length === 0 ? <p className="alert alert-info">Nenhum scan criado nesta sessão até agora.</p> : null}
+
+        {scans.length > 0 ? (
+          <div className="field-grid scan-history-toolbar">
+            <div className="field">
+              <label htmlFor="scan-type-filter">Filtrar por tipo</label>
+              <select
+                className="select"
+                id="scan-type-filter"
+                value={scanTypeFilter}
+                onChange={(event) => setScanTypeFilter(event.target.value as ScanType | 'ALL')}
+              >
+                <option value="ALL">Todos os tipos</option>
+                {scanTypeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="scan-status-filter">Filtrar por status</label>
+              <select
+                className="select"
+                id="scan-status-filter"
+                value={scanStatusFilter}
+                onChange={(event) => setScanStatusFilter(event.target.value as ScanResponse['status'] | 'ALL')}
+              >
+                <option value="ALL">Todos os status</option>
+                <option value="PENDING">PENDING</option>
+                <option value="RUNNING">RUNNING</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="FAILED">FAILED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
+            </div>
+
+            <div className="scan-history-toolbar-actions">
+              <button
+                className="button-ghost"
+                type="button"
+                onClick={() => {
+                  setScanTypeFilter('ALL');
+                  setScanStatusFilter('ALL');
+                }}
+                disabled={!hasActiveFilters}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {scans.length === 0 ? <p className="alert alert-info">Nenhum scan encontrado para este tenant ainda.</p> : null}
+        {scans.length > 0 && filteredScans.length === 0 ? (
+          <p className="alert alert-info">Nenhum scan combina com os filtros aplicados agora.</p>
+        ) : null}
         <div className="list-stack">
-          {createdScans.map((scan) => (
-            <article key={scan.id} className="list-item-card">
+          {filteredScans.map((scan) => (
+            <article key={scan.id} className={`list-item-card ${scan.id === selectedScanId ? 'list-item-card-active' : ''}`}>
               <div className="list-item-header">
                 <div>
                   <h4 className="list-item-title">{scan.target}</h4>
                   <div className="list-item-subtitle">Tipo: {scan.scanType}</div>
                 </div>
-                <span
-                  className={`badge ${
-                    scan.status === 'COMPLETED'
-                      ? 'badge-success'
-                      : scan.status === 'FAILED'
-                        ? 'badge-danger'
-                        : 'badge-warning'
-                  }`}
-                >
-                  Status: {scan.status}
-                </span>
+                <span className={`badge ${scanStatusTone(scan.status)}`}>Status: {scan.status}</span>
               </div>
 
               <div className="kv-grid">
                 <div className="kv-item">
                   <span className="kv-label">ID do scan</span>
                   <span className="technical-value">ID do scan: {scan.id}</span>
-                </div>
-                <div className="kv-item">
-                  <span className="kv-label">Tipo</span>
-                  <span className="kv-value">Tipo: {scan.scanType}</span>
                 </div>
                 <div className="kv-item">
                   <span className="kv-label">Criado em</span>
@@ -376,18 +621,21 @@ export function ScanCreationPanel() {
                   <span className="kv-label">Concluído em</span>
                   <span className="kv-value">Concluído em: {formatDateTime(scan.completedAt)}</span>
                 </div>
-                <div className="kv-item">
-                  <span className="kv-label">Erro</span>
-                  <span className="kv-value">Erro: {scan.errorMessage ?? 'Sem erro'}</span>
-                </div>
               </div>
 
-              <div className="toolbar">
+              <div className="form-actions">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={() => setSelectedScanId(scan.id)}
+                >
+                  Ver detalhes
+                </button>
                 <button
                   className="button-secondary"
                   type="button"
                   onClick={() => void handleRefreshScan(scan.id)}
-                  disabled={status === 'submitting' || status === 'refreshing'}
+                  disabled={status !== 'ready'}
                 >
                   Atualizar status
                 </button>
@@ -395,6 +643,161 @@ export function ScanCreationPanel() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section aria-label="selected-scan-result" className="panel-section">
+          <div className="panel-section-header">
+            <div>
+              <h3 className="panel-section-title">Resultado do scan selecionado</h3>
+              <p>Abra detalhes, acompanhe severidade, risco e gere relatório quando o scan estiver concluído.</p>
+            </div>
+          <div className="toolbar">
+            <span className={`badge ${selectedScan ? scanStatusTone(selectedScan.status) : ''}`}>
+              {selectedScan ? selectedScan.status : 'Nenhum scan'}
+            </span>
+            {selectedScanIsInProgress ? <span className="badge badge-accent">Atualização automática ativa</span> : null}
+          </div>
+        </div>
+
+        {!selectedScan ? (
+          <p className="alert alert-info">Selecione um scan da lista acima para abrir o detalhe completo.</p>
+        ) : (
+          <>
+            <div className="kv-grid">
+              <div className="kv-item">
+                <span className="kv-label">ID</span>
+                <span className="technical-value">{selectedScan.id}</span>
+              </div>
+              <div className="kv-item">
+                <span className="kv-label">Target</span>
+                <span className="technical-value">{selectedScan.target}</span>
+              </div>
+              <div className="kv-item">
+                <span className="kv-label">Tipo</span>
+                <span className="kv-value">{selectedScan.scanType}</span>
+              </div>
+              <div className="kv-item">
+                <span className="kv-label">Erro</span>
+                <span className="kv-value">{selectedScan.errorMessage ?? 'Sem erro'}</span>
+              </div>
+            </div>
+
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Findings</span>
+                <span className="stat-value">{selectedScanResult?.totalFindings ?? '—'}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Risco</span>
+                <span className="stat-value">{selectedScanResult?.riskScore ?? '—'}</span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Críticos</span>
+                <span className={`badge ${severityTone(selectedScanResult?.criticalCount ?? 0, 'critical')}`}>
+                  {selectedScanResult?.criticalCount ?? 0}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Altos</span>
+                <span className={`badge ${severityTone(selectedScanResult?.highCount ?? 0, 'high')}`}>
+                  {selectedScanResult?.highCount ?? 0}
+                </span>
+              </div>
+            </div>
+
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Médios</span>
+                <span className={`badge ${severityTone(selectedScanResult?.mediumCount ?? 0, 'medium')}`}>
+                  {selectedScanResult?.mediumCount ?? 0}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Baixos</span>
+                <span className={`badge ${severityTone(selectedScanResult?.lowCount ?? 0, 'low')}`}>
+                  {selectedScanResult?.lowCount ?? 0}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Info</span>
+                <span className={`badge ${severityTone(selectedScanResult?.infoCount ?? 0, 'info')}`}>
+                  {selectedScanResult?.infoCount ?? 0}
+                </span>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Concluído em</span>
+                <span className="stat-value">{formatDateTime(selectedScanResult?.completedAt ?? null)}</span>
+              </div>
+            </div>
+
+            {selectedScan.status === 'FAILED' ? (
+              <p className="alert alert-danger">
+                Este scan falhou. {selectedScan.errorMessage ?? 'O backend não retornou um motivo detalhado.'}
+              </p>
+            ) : null}
+
+            {selectedScan.status === 'PENDING' || selectedScan.status === 'RUNNING' ? (
+              <p className="alert alert-info">
+                Este scan ainda está em andamento. O painel faz atualização automática a cada 15 segundos, mas você também pode forçar uma leitura manual.
+              </p>
+            ) : null}
+
+            {selectedScanResult && selectedScanResult.findings.length > 0 ? (
+              <div className="list-stack">
+                {selectedScanResult.findings.map((finding) => (
+                  <article key={finding.id} className="list-item-card">
+                    <div className="list-item-header">
+                      <div>
+                        <h4 className="list-item-title">{finding.title}</h4>
+                        <div className="list-item-subtitle">{finding.category} · {finding.location}</div>
+                      </div>
+                      <span className={`badge ${findingSeverityTone(finding.severity)}`}>
+                        {finding.severity}
+                      </span>
+                    </div>
+                    <div className="kv-grid">
+                      <div className="kv-item">
+                        <span className="kv-label">Evidência</span>
+                        <span className="technical-value">{finding.evidence}</span>
+                      </div>
+                      <div className="kv-item">
+                        <span className="kv-label">Detectado em</span>
+                        <span className="kv-value">{formatDateTime(finding.detectedAt)}</span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : selectedScan.status === 'COMPLETED' ? (
+              <p className="alert alert-info">Este scan concluiu sem findings persistidos até agora.</p>
+            ) : null}
+
+            <div className="form-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void handleRefreshScan(selectedScan.id)}
+                disabled={status !== 'ready'}
+              >
+                Atualizar status e resultado
+              </button>
+              {selectedScan.status === 'COMPLETED' ? (
+                canGenerateNewReports ? (
+                  <button
+                    className="button-primary"
+                    type="button"
+                    onClick={() => void handleGenerateReport(selectedScan.id)}
+                    disabled={status !== 'ready'}
+                  >
+                    Gerar relatório
+                  </button>
+                ) : (
+                  <span className="alert alert-info">Seu perfil pode ler resultados, mas não pode gerar relatórios.</span>
+                )
+              ) : null}
+            </div>
+          </>
+        )}
       </section>
     </section>
   );

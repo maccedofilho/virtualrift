@@ -59,6 +59,20 @@ public class ScanController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
+    @GetMapping
+    @Operation(summary = "Listar scans do tenant", description = "Perfis permitidos: OWNER, ANALYST, READER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Scans retornados"),
+            @ApiResponse(responseCode = "403", description = "Perfil sem permissao de leitura dos scans")
+    })
+    public ResponseEntity<List<ScanResponse>> listScans(
+            @RequestHeader("X-Tenant-Id") UUID tenantId,
+            @RequestHeader("X-Roles") String rolesHeader
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER, UserRole.ANALYST, UserRole.READER);
+        return ResponseEntity.ok(scanOrchestratorService.listScans(tenantId));
+    }
+
     @GetMapping("/{scanId}")
     @Operation(summary = "Buscar scan por id", description = "Perfis permitidos: OWNER, ANALYST, READER.")
     @ApiResponses({

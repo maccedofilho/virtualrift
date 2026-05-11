@@ -287,6 +287,8 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
 const createScanClient = (request: VirtualRiftRequestExecutor) => ({
   create: (payload: CreateScanRequest, options?: VirtualRiftRequestOptions) =>
     request<ScanResponse>({ method: 'POST', path: '/api/v1/scans', body: payload, ...options }),
+  list: (options?: VirtualRiftRequestOptions) =>
+    request<ScanResponse[]>({ method: 'GET', path: '/api/v1/scans', ...options }),
   getById: (scanId: UUID, options?: VirtualRiftRequestOptions) =>
     request<ScanResponse>({ method: 'GET', path: `/api/v1/scans/${scanId}`, ...options }),
   getStatus: (scanId: UUID, options?: VirtualRiftRequestOptions) =>

@@ -106,6 +106,51 @@ describe('API client package', () => {
     expect(headers.get('X-Trace-Id')).toBe('trace-1');
   });
 
+  it('lists scans for the current tenant', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: 'scan-id',
+            tenantId: 'tenant-id',
+            userId: 'user-id',
+            target: 'https://app.test',
+            scanType: 'WEB',
+            status: 'RUNNING',
+            depth: 2,
+            timeout: 45,
+            errorMessage: null,
+            createdAt: '2026-05-06T10:00:00Z',
+            startedAt: '2026-05-06T10:01:00Z',
+            completedAt: null,
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.scans.list({ tenantId: 'tenant-id' });
+
+    expect(response).toHaveLength(1);
+    expect(response[0]?.status).toBe('RUNNING');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/scans',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
   it('allows per-request context overrides', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ authorized: true }), {

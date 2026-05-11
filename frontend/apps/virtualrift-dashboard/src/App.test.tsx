@@ -9,7 +9,9 @@ import type {
   AuthSession,
   BillingSummaryResponse,
   PlanChangeRequestResponse,
+  ReportResponse,
   ScanResponse,
+  ScanResultResponse,
   ScanTargetResponse,
   TenantQuotaResponse,
   TenantResponse,
@@ -18,6 +20,7 @@ import App from './App';
 import { DASHBOARD_API_BASE_URL, SessionProvider, SESSION_STORAGE_KEY } from './session';
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
 });
 
@@ -193,6 +196,49 @@ const createScan = (overrides?: Partial<ScanResponse>): ScanResponse => ({
   ...overrides,
 });
 
+const createScanResult = (overrides?: Partial<ScanResultResponse>): ScanResultResponse => ({
+  scanId: 'scan-created',
+  tenantId: 'tenant-id',
+  status: 'PENDING',
+  totalFindings: 0,
+  criticalCount: 0,
+  highCount: 0,
+  mediumCount: 0,
+  lowCount: 0,
+  infoCount: 0,
+  riskScore: 0,
+  errorMessage: null,
+  startedAt: null,
+  completedAt: null,
+  findings: [],
+  ...overrides,
+});
+
+const createReport = (overrides?: Partial<ReportResponse>): ReportResponse => ({
+  id: 'report-1',
+  tenantId: 'tenant-id',
+  scanId: 'scan-created',
+  userId: 'user-id',
+  target: 'https://app.example.com',
+  scanType: 'WEB',
+  status: 'COMPLETED',
+  totalFindings: 1,
+  criticalCount: 1,
+  highCount: 0,
+  mediumCount: 0,
+  lowCount: 0,
+  infoCount: 0,
+  riskScore: 60,
+  errorMessage: null,
+  scanCreatedAt: '2026-05-06T12:00:00.000Z',
+  scanStartedAt: '2026-05-06T12:01:00.000Z',
+  scanCompletedAt: '2026-05-06T12:05:00.000Z',
+  createdAt: '2026-05-06T12:06:00.000Z',
+  generatedAt: '2026-05-06T12:06:00.000Z',
+  findings: [],
+  ...overrides,
+});
+
 const createClient = () => {
   const client = {
     auth: {
@@ -217,6 +263,7 @@ const createClient = () => {
     },
     scans: {
       create: vi.fn(),
+      list: vi.fn(),
       getById: vi.fn(),
       getStatus: vi.fn(),
       getFindings: vi.fn(),
@@ -269,6 +316,7 @@ const createClient = () => {
       timeout: payload.timeout ?? null,
     }),
   );
+  client.scans.list.mockResolvedValue([]);
   client.scans.getStatus.mockImplementation(async (scanId) =>
     createScan({
       id: scanId,
@@ -276,6 +324,12 @@ const createClient = () => {
       startedAt: '2026-05-06T12:01:00.000Z',
     }),
   );
+  client.scans.getResult.mockImplementation(async (scanId) =>
+    createScanResult({
+      scanId,
+    }),
+  );
+  client.reports.generateFromScan.mockResolvedValue(createReport());
 
   return client;
 };
@@ -645,7 +699,7 @@ describe('VirtualRift Dashboard App', () => {
 
     await screen.findByRole('heading', { name: 'Sessão pronta' });
     goTo('scans');
-    expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Alvo solicitado para o scan'), { target: { value: 'https://app.example.com/login' } });
     fireEvent.change(screen.getByLabelText('Profundidade do scan'), { target: { value: '2' } });
@@ -681,7 +735,7 @@ describe('VirtualRift Dashboard App', () => {
 
     await screen.findByRole('heading', { name: 'Sessão pronta' });
     goTo('scans');
-    expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Criar scan' }));
     expect(await screen.findByText('ID do scan: scan-created')).toBeInTheDocument();
@@ -711,10 +765,243 @@ describe('VirtualRift Dashboard App', () => {
 
     await screen.findByRole('heading', { name: 'Sessão pronta' });
     goTo('scans');
-    expect(await screen.findByRole('heading', { name: 'Criar scan' })).toBeInTheDocument();
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
 
     expect(screen.getByText(/apenas usuários com papel/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Criar scan' })).not.toBeInTheDocument();
+  });
+
+  it('loads real tenant scans and opens the selected scan result detail', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.scans.list.mockResolvedValue([
+      createScan({
+        id: 'scan-history-1',
+        status: 'COMPLETED',
+        completedAt: '2026-05-06T12:05:00.000Z',
+      }),
+    ]);
+    client.scans.getResult.mockResolvedValue(
+      createScanResult({
+        scanId: 'scan-history-1',
+        status: 'COMPLETED',
+        totalFindings: 2,
+        criticalCount: 1,
+        highCount: 1,
+        riskScore: 60,
+        completedAt: '2026-05-06T12:05:00.000Z',
+        findings: [
+          {
+            id: 'finding-1',
+            scanId: 'scan-history-1',
+            tenantId: 'tenant-id',
+            title: 'Token exposto',
+            severity: 'CRITICAL',
+            category: 'Exposure',
+            location: '/admin',
+            evidence: 'Authorization: Bearer ****',
+            detectedAt: '2026-05-06T12:04:00.000Z',
+          },
+          {
+            id: 'finding-2',
+            scanId: 'scan-history-1',
+            tenantId: 'tenant-id',
+            title: 'Versão vulnerável',
+            severity: 'HIGH',
+            category: 'Dependency',
+            location: 'package.json',
+            evidence: 'lodash 4.17.15',
+            detectedAt: '2026-05-06T12:03:00.000Z',
+          },
+        ],
+      }),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
+    expect(screen.getAllByText('https://app.example.com')).toHaveLength(2);
+    expect(await screen.findByText('Token exposto')).toBeInTheDocument();
+    expect(screen.getAllByText('60')).toHaveLength(2);
+    expect(screen.getByText('CRITICAL')).toBeInTheDocument();
+  });
+
+  it('filters the tenant scan history by type and status', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.scans.list.mockResolvedValue([
+      createScan({
+        id: 'scan-web-1',
+        target: 'https://app.example.com',
+        scanType: 'WEB',
+        status: 'COMPLETED',
+        completedAt: '2026-05-06T12:05:00.000Z',
+      }),
+      createScan({
+        id: 'scan-api-1',
+        target: 'https://api.example.com/openapi.json',
+        scanType: 'API',
+        status: 'FAILED',
+        errorMessage: 'Schema inválido',
+      }),
+    ]);
+    client.scans.getResult.mockResolvedValue(createScanResult({ scanId: 'scan-web-1' }));
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filtrar por tipo'), { target: { value: 'API' } });
+    fireEvent.change(screen.getByLabelText('Filtrar por status'), { target: { value: 'FAILED' } });
+
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument();
+    expect(screen.getAllByText('https://api.example.com/openapi.json')).toHaveLength(2);
+    expect(screen.queryAllByText('https://app.example.com')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+    expect(await screen.findByText('2 de 2')).toBeInTheDocument();
+  });
+
+  it('enables auto-refresh for scans that are still in progress', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+    const pendingResultResponse = new Response(JSON.stringify({ title: 'Not Found', detail: 'Result not ready' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/problem+json' },
+    });
+
+    const setIntervalSpy = vi.spyOn(window, 'setInterval').mockImplementation(() => 1 as unknown as number);
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
+
+    client.scans.list.mockResolvedValue([
+      createScan({
+        id: 'scan-running-1',
+        target: 'https://app.example.com',
+        scanType: 'WEB',
+        status: 'RUNNING',
+        startedAt: '2026-05-06T12:01:00.000Z',
+      }),
+    ]);
+    client.scans.getResult
+      .mockRejectedValueOnce(
+        new VirtualRiftApiError(
+          'Not Found',
+          404,
+          { title: 'Not Found', detail: 'Result not ready' },
+          pendingResultResponse,
+        ),
+      )
+      .mockResolvedValueOnce(
+        createScanResult({
+          scanId: 'scan-running-1',
+          status: 'COMPLETED',
+          totalFindings: 1,
+          criticalCount: 1,
+          riskScore: 60,
+          completedAt: '2026-05-06T12:05:00.000Z',
+          findings: [
+            {
+              id: 'finding-auto-1',
+              scanId: 'scan-running-1',
+              tenantId: 'tenant-id',
+              title: 'Segredo exposto',
+              severity: 'CRITICAL',
+              category: 'Exposure',
+              location: '/config',
+              evidence: 'token=****',
+              detectedAt: '2026-05-06T12:04:00.000Z',
+            },
+          ],
+        }),
+      );
+    client.scans.getStatus.mockResolvedValue(
+      createScan({
+        id: 'scan-running-1',
+        target: 'https://app.example.com',
+        scanType: 'WEB',
+        status: 'COMPLETED',
+        startedAt: '2026-05-06T12:01:00.000Z',
+        completedAt: '2026-05-06T12:05:00.000Z',
+      }),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+
+    expect(await screen.findByText('Atualização automática ativa')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(setIntervalSpy).toHaveBeenCalled();
+    });
+  });
+
+  it('generates a report from a completed scan', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.scans.list.mockResolvedValue([
+      createScan({
+        id: 'scan-history-1',
+        status: 'COMPLETED',
+        completedAt: '2026-05-06T12:05:00.000Z',
+      }),
+    ]);
+    client.scans.getResult.mockResolvedValue(
+      createScanResult({
+        scanId: 'scan-history-1',
+        status: 'COMPLETED',
+        totalFindings: 1,
+        criticalCount: 1,
+        riskScore: 50,
+        completedAt: '2026-05-06T12:05:00.000Z',
+        findings: [
+          {
+            id: 'finding-1',
+            scanId: 'scan-history-1',
+            tenantId: 'tenant-id',
+            title: 'Token exposto',
+            severity: 'CRITICAL',
+            category: 'Exposure',
+            location: '/admin',
+            evidence: 'Authorization: Bearer ****',
+            detectedAt: '2026-05-06T12:04:00.000Z',
+          },
+        ],
+      }),
+    );
+    client.reports.generateFromScan.mockResolvedValue(
+      createReport({
+        id: 'report-42',
+        scanId: 'scan-history-1',
+      }),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar relatório' }));
+
+    expect(await screen.findByText(/relatório report-42 gerado com sucesso/i)).toBeInTheDocument();
+    expect(client.reports.generateFromScan).toHaveBeenCalledWith('scan-history-1');
   });
 
   it('shows the account area with tenant context and operator details', async () => {
