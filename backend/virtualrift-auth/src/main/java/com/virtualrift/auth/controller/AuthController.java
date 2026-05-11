@@ -1,11 +1,15 @@
 package com.virtualrift.auth.controller;
 
 import com.virtualrift.auth.dto.AccountProfileResponse;
+import com.virtualrift.auth.dto.CreateWorkspaceOnboardingRequest;
 import com.virtualrift.auth.dto.LoginRequest;
 import com.virtualrift.auth.dto.LoginResponse;
+import com.virtualrift.auth.dto.OnboardingAvailabilityResponse;
 import com.virtualrift.auth.dto.RefreshTokenRequest;
+import com.virtualrift.auth.dto.WorkspaceOnboardingResponse;
 import com.virtualrift.auth.service.AccountService;
 import com.virtualrift.auth.service.LoginService;
+import com.virtualrift.auth.service.OnboardingService;
 import com.virtualrift.auth.service.OAuthLoginService;
 import com.virtualrift.common.security.RoleAccess;
 import com.virtualrift.common.security.UserRole;
@@ -37,11 +41,18 @@ public class AuthController {
 
     private final LoginService loginService;
     private final AccountService accountService;
+    private final OnboardingService onboardingService;
     private final OAuthLoginService oAuthLoginService;
 
-    public AuthController(LoginService loginService, AccountService accountService, OAuthLoginService oAuthLoginService) {
+    public AuthController(
+            LoginService loginService,
+            AccountService accountService,
+            OnboardingService onboardingService,
+            OAuthLoginService oAuthLoginService
+    ) {
         this.loginService = loginService;
         this.accountService = accountService;
+        this.onboardingService = onboardingService;
         this.oAuthLoginService = oAuthLoginService;
     }
 
@@ -63,6 +74,40 @@ public class AuthController {
     public ResponseEntity<LoginResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         LoginResponse response = loginService.refreshToken(request.refreshToken());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/onboarding/availability")
+    @Operation(
+            summary = "Checar disponibilidade de onboarding",
+            description = "Valida se o e-mail e o slug do workspace estão livres para criar uma nova conta owner."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Disponibilidade avaliada"),
+            @ApiResponse(responseCode = "503", description = "Onboarding desabilitado no ambiente")
+    })
+    public ResponseEntity<OnboardingAvailabilityResponse> getOnboardingAvailability(
+            @RequestParam("email") String email,
+            @RequestParam("workspace_slug") String workspaceSlug
+    ) {
+        return ResponseEntity.ok(onboardingService.getAvailability(email, workspaceSlug));
+    }
+
+    @PostMapping("/onboarding/workspaces")
+    @Operation(
+            summary = "Criar workspace e primeiro owner",
+            description = "Provisiona um tenant self-service e já retorna tokens do Virtualrift para a sessão inicial."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Workspace criado e sessão inicial emitida"),
+            @ApiResponse(responseCode = "400", description = "Payload inválido"),
+            @ApiResponse(responseCode = "409", description = "E-mail ou slug já em uso"),
+            @ApiResponse(responseCode = "503", description = "Onboarding desabilitado ou tenant service indisponível")
+    })
+    public ResponseEntity<WorkspaceOnboardingResponse> createWorkspace(
+            @Valid @RequestBody CreateWorkspaceOnboardingRequest request
+    ) {
+        WorkspaceOnboardingResponse response = onboardingService.createWorkspace(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/logout")

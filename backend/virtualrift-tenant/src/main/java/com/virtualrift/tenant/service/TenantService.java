@@ -6,6 +6,7 @@ import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
+import com.virtualrift.tenant.dto.InternalProvisionTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
@@ -59,23 +60,24 @@ public class TenantService {
 
     @Transactional
     public TenantResponse createTenant(CreateTenantRequest request) {
-        if (tenantRepository.existsBySlug(request.slug())) {
-            throw new SlugAlreadyExistsException("Slug already exists: " + request.slug());
-        }
-
-        Tenant tenant = new Tenant(
+        return createTenantInternal(
                 UUID.randomUUID(),
                 request.name(),
                 request.slug(),
                 request.plan(),
                 TenantStatus.PENDING_VERIFICATION
         );
-        tenant = tenantRepository.save(tenant);
+    }
 
-        TenantQuota quota = TenantQuota.forPlan(request.plan(), tenant.getId());
-        quotaRepository.save(quota);
-
-        return toResponse(tenant);
+    @Transactional
+    public TenantResponse provisionTenant(InternalProvisionTenantRequest request) {
+        return createTenantInternal(
+                request.id(),
+                request.name(),
+                request.slug(),
+                request.plan(),
+                request.status()
+        );
     }
 
     public TenantResponse getTenant(UUID id) {
@@ -239,6 +241,39 @@ public class TenantService {
     public void validateQuota(UUID tenantId, String quotaType) {
         quotaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
+    }
+
+    public boolean isSlugAvailable(String slug) {
+        String normalizedSlug = slug == null ? null : slug.trim().toLowerCase(Locale.ROOT);
+        return normalizedSlug != null && !normalizedSlug.isBlank() && !tenantRepository.existsBySlug(normalizedSlug);
+    }
+
+    @Transactional
+    public void deleteTenant(UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
+        tenantRepository.delete(tenant);
+    }
+
+    private TenantResponse createTenantInternal(UUID tenantId, String name, String slug, Plan plan, TenantStatus status) {
+        String normalizedSlug = slug.trim().toLowerCase(Locale.ROOT);
+        if (tenantRepository.existsBySlug(normalizedSlug)) {
+            throw new SlugAlreadyExistsException("Slug already exists: " + normalizedSlug);
+        }
+
+        Tenant tenant = new Tenant(
+                tenantId,
+                name.trim(),
+                normalizedSlug,
+                plan,
+                status
+        );
+        tenant = tenantRepository.save(tenant);
+
+        TenantQuota quota = TenantQuota.forPlan(plan, tenant.getId());
+        quotaRepository.save(quota);
+
+        return toResponse(tenant);
     }
 
     private String normalizeNote(String note) {

@@ -51,6 +51,11 @@ auth:
       user-url: ${AUTH_GITHUB_USER_URL:https://api.github.com/user}
       emails-url: ${AUTH_GITHUB_EMAILS_URL:https://api.github.com/user/emails}
       scope: ${AUTH_GITHUB_SCOPE:read:user user:email}
+  onboarding:
+    enabled: ${AUTH_ONBOARDING_ENABLED:true}
+    allowed-plans: ${AUTH_ONBOARDING_ALLOWED_PLANS:TRIAL,STARTER,PROFESSIONAL}
+    tenant-service-url: ${TENANT_SERVICE_URL:http://localhost:8082}
+    internal-api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
 
 # Server configuration
 server:

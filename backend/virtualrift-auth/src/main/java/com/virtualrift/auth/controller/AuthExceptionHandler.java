@@ -2,7 +2,11 @@ package com.virtualrift.auth.controller;
 
 import com.virtualrift.auth.exception.ExpiredTokenException;
 import com.virtualrift.auth.exception.InvalidCredentialsException;
+import com.virtualrift.auth.exception.InvalidPasswordException;
 import com.virtualrift.auth.exception.InvalidTokenException;
+import com.virtualrift.auth.exception.OnboardingConflictException;
+import com.virtualrift.auth.exception.OnboardingDisabledException;
+import com.virtualrift.auth.exception.OnboardingProvisioningException;
 import com.virtualrift.auth.exception.OAuthCallbackException;
 import com.virtualrift.auth.exception.OAuthConfigurationException;
 import com.virtualrift.auth.exception.OAuthRedirectUriException;
@@ -21,6 +25,11 @@ public class AuthExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     ProblemDetail handleInvalidCredentials(InvalidCredentialsException exception) {
         return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPasswordException.class)
+    ProblemDetail handleInvalidPassword(InvalidPasswordException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid password", exception.getMessage());
     }
 
     @ExceptionHandler({InvalidTokenException.class, ExpiredTokenException.class})
@@ -51,6 +60,21 @@ public class AuthExceptionHandler {
     @ExceptionHandler(OAuthUserProvisioningException.class)
     ProblemDetail handleOAuthProvisioning(OAuthUserProvisioningException exception) {
         return problem(HttpStatus.FORBIDDEN, "OAuth user is not provisioned", exception.getMessage());
+    }
+
+    @ExceptionHandler(OnboardingConflictException.class)
+    ProblemDetail handleOnboardingConflict(OnboardingConflictException exception) {
+        return problem(HttpStatus.CONFLICT, "Onboarding conflict", exception.getMessage());
+    }
+
+    @ExceptionHandler(OnboardingDisabledException.class)
+    ProblemDetail handleOnboardingDisabled(OnboardingDisabledException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Onboarding disabled", exception.getMessage());
+    }
+
+    @ExceptionHandler(OnboardingProvisioningException.class)
+    ProblemDetail handleOnboardingProvisioning(OnboardingProvisioningException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Onboarding provisioning failed", exception.getMessage());
     }
 
     private ProblemDetail problem(HttpStatus status, String title, String detail) {
