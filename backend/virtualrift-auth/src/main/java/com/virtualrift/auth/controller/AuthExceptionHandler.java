@@ -1,0 +1,61 @@
+package com.virtualrift.auth.controller;
+
+import com.virtualrift.auth.exception.ExpiredTokenException;
+import com.virtualrift.auth.exception.InvalidCredentialsException;
+import com.virtualrift.auth.exception.InvalidTokenException;
+import com.virtualrift.auth.exception.OAuthCallbackException;
+import com.virtualrift.auth.exception.OAuthConfigurationException;
+import com.virtualrift.auth.exception.OAuthRedirectUriException;
+import com.virtualrift.auth.exception.OAuthUserProvisioningException;
+import com.virtualrift.auth.exception.UserDeletedException;
+import com.virtualrift.auth.exception.UserPendingVerificationException;
+import com.virtualrift.auth.exception.UserSuspendedException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+public class AuthExceptionHandler {
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    ProblemDetail handleInvalidCredentials(InvalidCredentialsException exception) {
+        return problem(HttpStatus.UNAUTHORIZED, "Unauthorized", exception.getMessage());
+    }
+
+    @ExceptionHandler({InvalidTokenException.class, ExpiredTokenException.class})
+    ProblemDetail handleInvalidToken(RuntimeException exception) {
+        return problem(HttpStatus.FORBIDDEN, "Forbidden", exception.getMessage());
+    }
+
+    @ExceptionHandler({UserPendingVerificationException.class, UserSuspendedException.class, UserDeletedException.class})
+    ProblemDetail handleUserStatus(RuntimeException exception) {
+        return problem(HttpStatus.FORBIDDEN, "Forbidden", exception.getMessage());
+    }
+
+    @ExceptionHandler(OAuthRedirectUriException.class)
+    ProblemDetail handleInvalidRedirect(OAuthRedirectUriException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid redirect URI", exception.getMessage());
+    }
+
+    @ExceptionHandler(OAuthCallbackException.class)
+    ProblemDetail handleOAuthCallback(OAuthCallbackException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid OAuth callback", exception.getMessage());
+    }
+
+    @ExceptionHandler(OAuthConfigurationException.class)
+    ProblemDetail handleOAuthConfiguration(OAuthConfigurationException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "OAuth not configured", exception.getMessage());
+    }
+
+    @ExceptionHandler(OAuthUserProvisioningException.class)
+    ProblemDetail handleOAuthProvisioning(OAuthUserProvisioningException exception) {
+        return problem(HttpStatus.FORBIDDEN, "OAuth user is not provisioned", exception.getMessage());
+    }
+
+    private ProblemDetail problem(HttpStatus status, String title, String detail) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setTitle(title);
+        return problem;
+    }
+}

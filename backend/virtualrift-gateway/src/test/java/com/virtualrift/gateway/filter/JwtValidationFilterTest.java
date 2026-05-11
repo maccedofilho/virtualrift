@@ -58,6 +58,7 @@ class JwtValidationFilterTest {
                 "/actuator/health",
                 "/api/v1/auth/login",
                 "/api/v1/auth/refresh",
+                "/api/v1/auth/oauth/**",
                 "/swagger-ui/**",
                 "/v3/api-docs/**"
         ));
@@ -99,6 +100,18 @@ class JwtValidationFilterTest {
         void filter_quandoRefreshRoute_passaSemAutenticacao() {
             when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
             ServerWebExchange exchange = createExchange("/api/v1/auth/refresh");
+
+            filter.filter(exchange, filterChain).block();
+
+            verify(filterChain).filter(exchange);
+            verify(jwtValidator, never()).validate(any());
+        }
+
+        @Test
+        @DisplayName("should bypass auth for OAuth start route")
+        void filter_quandoOAuthStartRoute_passaSemAutenticacao() {
+            when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
+            ServerWebExchange exchange = createExchange("/api/v1/auth/oauth/github/start");
 
             filter.filter(exchange, filterChain).block();
 
