@@ -29,11 +29,11 @@ beforeEach(() => {
   window.location.hash = '';
 });
 
-const goTo = (route: 'overview' | 'targets' | 'scans' | 'account' | 'plans') => {
+const goTo = (route: 'overview' | 'targets' | 'scans' | 'reports' | 'account' | 'plans') => {
   fireEvent.click(screen.getByRole('link', { name: routeLabel(route) }));
 };
 
-const routeLabel = (route: 'overview' | 'targets' | 'scans' | 'account' | 'plans'): string => {
+const routeLabel = (route: 'overview' | 'targets' | 'scans' | 'reports' | 'account' | 'plans'): string => {
   switch (route) {
     case 'overview':
       return 'Visão geral';
@@ -41,6 +41,8 @@ const routeLabel = (route: 'overview' | 'targets' | 'scans' | 'account' | 'plans
       return 'Alvos';
     case 'scans':
       return 'Scans';
+    case 'reports':
+      return 'Relatórios';
     case 'account':
       return 'Minha conta';
     case 'plans':
@@ -330,6 +332,13 @@ const createClient = () => {
     }),
   );
   client.reports.generateFromScan.mockResolvedValue(createReport());
+  client.reports.list.mockResolvedValue([]);
+  client.reports.getById.mockImplementation(async (reportId) =>
+    createReport({
+      id: reportId,
+      scanId: 'scan-created',
+    }),
+  );
 
   return client;
 };
@@ -1002,6 +1011,105 @@ describe('VirtualRift Dashboard App', () => {
 
     expect(await screen.findByText(/relatório report-42 gerado com sucesso/i)).toBeInTheDocument();
     expect(client.reports.generateFromScan).toHaveBeenCalledWith('scan-history-1');
+  });
+
+  it('shows tenant reports and opens the selected report detail', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.reports.list.mockResolvedValue([
+      createReport({
+        id: 'report-42',
+        scanId: 'scan-history-1',
+        generatedAt: '2026-05-06T12:06:00.000Z',
+      }),
+      createReport({
+        id: 'report-84',
+        scanId: 'scan-history-2',
+        scanType: 'API',
+        target: 'https://api.example.com/openapi.json',
+        riskScore: 20,
+        totalFindings: 1,
+        generatedAt: '2026-05-07T09:00:00.000Z',
+      }),
+    ]);
+    client.reports.getById.mockResolvedValue(
+      createReport({
+        id: 'report-42',
+        scanId: 'scan-history-1',
+        findings: [
+          {
+            id: 'report-finding-1',
+            title: 'Token exposto',
+            severity: 'CRITICAL',
+            category: 'Exposure',
+            location: '/admin',
+            evidence: 'Authorization: Bearer ****',
+            detectedAt: '2026-05-06T12:04:00.000Z',
+          },
+        ],
+      }),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('reports');
+
+    expect(await screen.findByRole('heading', { name: 'Relatórios do tenant' })).toBeInTheDocument();
+    expect(screen.getByText('2 de 2')).toBeInTheDocument();
+    expect(screen.getAllByText('report-42').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Token exposto')).toBeInTheDocument();
+    expect(client.reports.getById).toHaveBeenCalledWith('report-42');
+  });
+
+  it('filters reports by scan type', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+
+    client.reports.list.mockResolvedValue([
+      createReport({
+        id: 'report-42',
+        scanType: 'WEB',
+        target: 'https://app.example.com',
+      }),
+      createReport({
+        id: 'report-84',
+        scanType: 'API',
+        target: 'https://api.example.com/openapi.json',
+      }),
+    ]);
+    client.reports.getById.mockImplementation(async (reportId) =>
+      createReport(
+        reportId === 'report-84'
+          ? {
+              id: 'report-84',
+              scanType: 'API',
+              target: 'https://api.example.com/openapi.json',
+            }
+          : {
+              id: 'report-42',
+              scanType: 'WEB',
+              target: 'https://app.example.com',
+            },
+      ),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('reports');
+
+    expect(await screen.findByRole('heading', { name: 'Relatórios do tenant' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Filtrar por tipo de scan'), { target: { value: 'API' } });
+
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument();
+    expect(screen.getAllByText('https://api.example.com/openapi.json')).toHaveLength(2);
+    expect(screen.queryAllByText('https://app.example.com')).toHaveLength(0);
   });
 
   it('shows the account area with tenant context and operator details', async () => {

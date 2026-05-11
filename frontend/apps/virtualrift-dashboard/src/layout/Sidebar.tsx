@@ -61,6 +61,19 @@ const NavIcon = ({ id }: { id: Route }) => {
           />
         </svg>
       );
+    case 'reports':
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <path
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M7 4h7l5 5v10a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm7 1v5h5M9 13h6M9 17h6"
+          />
+        </svg>
+      );
     case 'plans':
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
