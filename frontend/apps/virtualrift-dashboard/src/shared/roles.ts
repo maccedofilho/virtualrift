@@ -11,6 +11,8 @@ export const canManageTenantTargets = (roles: readonly string[]): boolean => has
 
 export const canCreateScans = (roles: readonly string[]): boolean => hasAnyRole(roles, ['OWNER', 'ANALYST']);
 
+export const canGenerateReports = (roles: readonly string[]): boolean => hasAnyRole(roles, ['OWNER', 'ANALYST']);
+
 export const canRequestPlanChanges = (roles: readonly string[]): boolean => hasAnyRole(roles, ['OWNER']);
 
 export const formatRoleLabel = (role: string): string =>

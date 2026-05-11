@@ -286,6 +286,28 @@ class ScanOrchestratorServiceTest {
     }
 
     @Nested
+    @DisplayName("List scans")
+    class ListScansFlow {
+
+        @Test
+        @DisplayName("should list scans for the current tenant ordered by creation date")
+        void listScans_quandoTenantTemScans_retornaListaMapeada() {
+            UUID firstScanId = UUID.randomUUID();
+            UUID secondScanId = UUID.randomUUID();
+            Scan firstScan = createScan(firstScanId, TENANT_ID, USER_ID, ScanStatus.RUNNING);
+            Scan secondScan = createScan(secondScanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
+
+            when(scanRepository.findByTenantIdOrderByCreatedAtDesc(TENANT_ID)).thenReturn(List.of(firstScan, secondScan));
+
+            List<ScanResponse> response = service.listScans(TENANT_ID);
+
+            assertEquals(2, response.size());
+            assertEquals(firstScanId, response.get(0).id());
+            assertEquals(secondScanId, response.get(1).id());
+        }
+    }
+
+    @Nested
     @DisplayName("Get findings")
     class GetFindingsFlow {
 
