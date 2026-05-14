@@ -3,6 +3,7 @@ package com.virtualrift.auth.service;
 import com.virtualrift.auth.config.OAuthConfig;
 import com.virtualrift.auth.exception.OAuthCallbackException;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class GitHubOAuthClient {
     private final OAuthConfig config;
     private final RestClient restClient;
 
+    @Autowired
     public GitHubOAuthClient(OAuthConfig config) {
         this(config, RestClient.builder().build());
     }

@@ -7,6 +7,7 @@ import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.TenantStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -19,6 +20,7 @@ public class TenantProvisioningClient {
     private final RestClient restClient;
     private final String internalApiKey;
 
+    @Autowired
     public TenantProvisioningClient(OnboardingConfig config) {
         this(
                 RestClient.builder()
