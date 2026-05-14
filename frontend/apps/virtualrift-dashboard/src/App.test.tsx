@@ -312,6 +312,7 @@ const createClient = () => {
       generateFromScan: vi.fn(),
       getById: vi.fn(),
       list: vi.fn(),
+      export: vi.fn(),
     },
   } satisfies VirtualRiftClient;
 
@@ -396,6 +397,11 @@ const createClient = () => {
       scanId: 'scan-created',
     }),
   );
+  client.reports.export.mockResolvedValue({
+    blob: new Blob(['{}'], { type: 'application/json' }),
+    filename: 'virtualrift-report-web-report-1.json',
+    contentType: 'application/json',
+  });
 
   return client;
 };
@@ -1288,6 +1294,60 @@ describe('VirtualRift Dashboard App', () => {
     expect(await screen.findByText('1 de 2')).toBeInTheDocument();
     expect(screen.getAllByText('https://api.example.com/openapi.json')).toHaveLength(2);
     expect(screen.queryAllByText('https://app.example.com')).toHaveLength(0);
+  });
+
+  it('exports the selected report as json and opens an html printable view', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession({ roles: ['READER'] })),
+    });
+    const client = createClient();
+    const createObjectUrl = vi.fn(() => 'blob:virtualrift-report');
+    const revokeObjectUrl = vi.fn();
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    createElementSpy.mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      const element = Document.prototype.createElement.call(document, tagName, options);
+      if (tagName.toLowerCase() === 'a') {
+        element.click = vi.fn();
+      }
+      return element;
+    }) as typeof document.createElement);
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: createObjectUrl,
+      revokeObjectURL: revokeObjectUrl,
+    });
+
+    client.reports.list.mockResolvedValue([createReport({ id: 'report-42' })]);
+    client.reports.getById.mockResolvedValue(createReport({ id: 'report-42' }));
+    client.reports.export
+      .mockResolvedValueOnce({
+        blob: new Blob(['{"report":true}'], { type: 'application/json' }),
+        filename: 'virtualrift-report-web-report-42.json',
+        contentType: 'application/json',
+      })
+      .mockResolvedValueOnce({
+        blob: new Blob(['<html></html>'], { type: 'text/html' }),
+        filename: 'virtualrift-report-web-report-42.html',
+        contentType: 'text/html',
+      });
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('reports');
+
+    expect(await screen.findByRole('heading', { name: 'Relatórios do tenant' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Baixar JSON' }));
+
+    await waitFor(() => expect(client.reports.export).toHaveBeenCalledWith('report-42', 'json'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir versão imprimível' }));
+
+    await waitFor(() => expect(client.reports.export).toHaveBeenCalledWith('report-42', 'html'));
+    expect(createObjectUrl).toHaveBeenCalledTimes(2);
+    expect(openSpy).toHaveBeenCalledWith('blob:virtualrift-report', '_blank', 'noopener,noreferrer');
+    await waitFor(() => expect(revokeObjectUrl).toHaveBeenCalled(), { timeout: 1500 });
   });
 
   it('shows the account area with tenant context and operator details', async () => {

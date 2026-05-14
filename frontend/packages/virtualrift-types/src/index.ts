@@ -31,6 +31,9 @@ export type TargetType = (typeof TARGET_TYPES)[number];
 export const SCAN_TARGET_VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'FAILED'] as const;
 export type ScanTargetVerificationStatus = (typeof SCAN_TARGET_VERIFICATION_STATUSES)[number];
 
+export const REPORT_EXPORT_FORMATS = ['json', 'html'] as const;
+export type ReportExportFormat = (typeof REPORT_EXPORT_FORMATS)[number];
+
 export type LoginRequest = {
   email: string;
   password: string;

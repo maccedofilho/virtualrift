@@ -15,6 +15,7 @@ import type {
   PlanChangeRequestResponse,
   ProblemDetailResponse,
   RefreshTokenRequest,
+  ReportExportFormat,
   ReportResponse,
   ScanFindingResponse,
   ScanResponse,
@@ -48,6 +49,11 @@ export type VirtualRiftRequestOptions = {
 };
 
 export type VirtualRiftApiErrorData = ProblemDetailResponse | Record<string, unknown> | string | null;
+export type VirtualRiftFileDownload = {
+  blob: Blob;
+  filename: string | null;
+  contentType: string | null;
+};
 
 type HttpMethod = 'GET' | 'POST' | 'DELETE';
 
@@ -59,6 +65,7 @@ type RequestConfig = VirtualRiftRequestOptions & {
 };
 
 type VirtualRiftRequestExecutor = <TResponse>(config: RequestConfig) => Promise<TResponse>;
+type VirtualRiftDownloadExecutor = (config: RequestConfig) => Promise<VirtualRiftFileDownload>;
 
 export class VirtualRiftApiError extends Error {
   readonly status: number;
@@ -154,6 +161,25 @@ const extractErrorMessage = (status: number, data: VirtualRiftApiErrorData): str
   return `VirtualRift API request failed with status ${status}`;
 };
 
+const parseFilename = (headerValue: string | null): string | null => {
+  if (!headerValue) {
+    return null;
+  }
+
+  const utf8Match = headerValue.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const quotedMatch = headerValue.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = headerValue.match(/filename\s*=\s*([^;]+)/i);
+  return plainMatch?.[1]?.trim() ?? null;
+};
+
 const createRequestExecutor = (config: VirtualRiftClientConfig): VirtualRiftRequestExecutor => {
   const requestFetch = config.fetch ?? fetch;
 
@@ -227,6 +253,78 @@ const createRequestExecutor = (config: VirtualRiftClientConfig): VirtualRiftRequ
     }
 
     return (await response.text()) as TResponse;
+  };
+};
+
+const createDownloadExecutor = (config: VirtualRiftClientConfig): VirtualRiftDownloadExecutor => {
+  const requestFetch = config.fetch ?? fetch;
+
+  return async ({
+    method,
+    path,
+    body,
+    query,
+    accessToken,
+    tenantId,
+    userId,
+    headers,
+    signal,
+  }: RequestConfig): Promise<VirtualRiftFileDownload> => {
+    const resolvedAccessToken = accessToken ?? (await resolveValue(config.accessToken));
+    const resolvedTenantId = tenantId ?? (await resolveValue(config.tenantId));
+    const resolvedUserId = userId ?? (await resolveValue(config.userId));
+
+    const requestHeaders = normalizeHeaders(config.defaultHeaders);
+    const perRequestHeaders = normalizeHeaders(headers);
+    perRequestHeaders.forEach((value, key) => requestHeaders.set(key, value));
+
+    if (resolvedAccessToken) {
+      requestHeaders.set('Authorization', `Bearer ${resolvedAccessToken}`);
+    }
+
+    if (resolvedTenantId) {
+      requestHeaders.set('X-Tenant-Id', resolvedTenantId);
+    }
+
+    if (resolvedUserId) {
+      requestHeaders.set('X-User-Id', resolvedUserId);
+    }
+
+    let requestBody: BodyInit | undefined;
+    if (body instanceof FormData) {
+      requestBody = body;
+    } else if (shouldSerializeJson(body)) {
+      requestHeaders.set('Content-Type', 'application/json');
+      requestBody = JSON.stringify(body);
+    }
+
+    const response = await requestFetch(buildUrl(config.baseUrl, path, query), {
+      method,
+      headers: requestHeaders,
+      body: requestBody,
+      signal,
+    });
+
+    if (!response.ok) {
+      let data: VirtualRiftApiErrorData = null;
+
+      if (response.status !== 204) {
+        if (isJsonResponse(response)) {
+          data = (await response.json()) as VirtualRiftApiErrorData;
+        } else {
+          const text = await response.text();
+          data = text.length > 0 ? text : null;
+        }
+      }
+
+      throw new VirtualRiftApiError(extractErrorMessage(response.status, data), response.status, data, response);
+    }
+
+    return {
+      blob: await response.blob(),
+      filename: parseFilename(response.headers.get('content-disposition')),
+      contentType: response.headers.get('content-type'),
+    };
   };
 };
 
@@ -323,7 +421,7 @@ const createScanClient = (request: VirtualRiftRequestExecutor) => ({
     request<ScanResultResponse>({ method: 'GET', path: `/api/v1/scans/${scanId}/result`, ...options }),
 });
 
-const createReportClient = (request: VirtualRiftRequestExecutor) => ({
+const createReportClient = (request: VirtualRiftRequestExecutor, download: VirtualRiftDownloadExecutor) => ({
   generateFromScan: (scanId: UUID, options?: VirtualRiftRequestOptions) =>
     request<ReportResponse>({ method: 'POST', path: `/api/v1/reports/scans/${scanId}`, ...options }),
   getById: (reportId: UUID, options?: VirtualRiftRequestOptions) =>
@@ -337,15 +435,23 @@ const createReportClient = (request: VirtualRiftRequestExecutor) => ({
       },
       ...options,
     }),
+  export: (reportId: UUID, format: ReportExportFormat, options?: VirtualRiftRequestOptions) =>
+    download({
+      method: 'GET',
+      path: `/api/v1/reports/${reportId}/export`,
+      query: { format },
+      ...options,
+    }),
 });
 
 export const createVirtualRiftClient = (config: VirtualRiftClientConfig) => {
   const request = createRequestExecutor(config);
+  const download = createDownloadExecutor(config);
 
   return {
     auth: createAuthClient(request),
     tenants: createTenantClient(request),
     scans: createScanClient(request),
-    reports: createReportClient(request),
+    reports: createReportClient(request, download),
   };
 };

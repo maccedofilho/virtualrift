@@ -302,6 +302,35 @@ describe('API client package', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.virtualrift.test/api/v1/reports');
   });
 
+  it('downloads report exports as blobs and preserves filename metadata', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"report":true}', {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'content-disposition': 'attachment; filename="virtualrift-report-web-report-1.json"',
+        },
+      }),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.reports.export('report-1', 'json', { tenantId: 'tenant-id' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/reports/report-1/export?format=json',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+    expect(response.filename).toBe('virtualrift-report-web-report-1.json');
+    expect(response.contentType).toContain('application/json');
+    expect(await response.blob.text()).toBe('{"report":true}');
+  });
+
   it('returns undefined for 204 responses', async () => {
     fetchMock.mockResolvedValue(
       new Response(null, {
