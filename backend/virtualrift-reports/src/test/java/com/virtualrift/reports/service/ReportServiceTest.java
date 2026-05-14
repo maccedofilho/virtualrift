@@ -8,6 +8,7 @@ import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.Severity;
 import com.virtualrift.reports.client.OrchestratorClient;
 import com.virtualrift.reports.dto.OrchestratorScanFindingResponse;
+import com.virtualrift.reports.dto.ReportExportResource;
 import com.virtualrift.reports.dto.OrchestratorScanResponse;
 import com.virtualrift.reports.dto.OrchestratorScanResultResponse;
 import com.virtualrift.reports.dto.ReportFindingResponse;
@@ -16,6 +17,7 @@ import com.virtualrift.reports.exception.ReportGenerationException;
 import com.virtualrift.reports.exception.ReportNotFoundException;
 import com.virtualrift.reports.exception.ReportNotReadyException;
 import com.virtualrift.reports.kafka.ReportEventProducer;
+import com.virtualrift.reports.model.ReportExportFormat;
 import com.virtualrift.reports.model.Report;
 import com.virtualrift.reports.repository.ReportRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -302,6 +305,39 @@ class ReportServiceTest {
 
             assertEquals(1, response.size());
             assertEquals(SCAN_ID, response.getFirst().scanId());
+        }
+
+        @Test
+        @DisplayName("should export report as pretty json")
+        void exportReport_quandoFormatoJson_retornaPayloadPretty() throws Exception {
+            UUID reportId = UUID.randomUUID();
+            Report report = storedReport(reportId, TENANT_ID, SCAN_ID);
+
+            when(reportRepository.findByTenantIdAndId(TENANT_ID, reportId)).thenReturn(Optional.of(report));
+
+            ReportExportResource response = service.exportReport(reportId, TENANT_ID, ReportExportFormat.JSON);
+
+            String payload = new String(response.content());
+            assertEquals("virtualrift-report-web-" + reportId + ".json", response.fileName());
+            assertTrue(payload.contains("\"scanId\""));
+            assertTrue(payload.contains("\"findings\""));
+        }
+
+        @Test
+        @DisplayName("should export report as printable html")
+        void exportReport_quandoFormatoHtml_retornaSnapshotHtml() throws Exception {
+            UUID reportId = UUID.randomUUID();
+            Report report = storedReport(reportId, TENANT_ID, SCAN_ID);
+
+            when(reportRepository.findByTenantIdAndId(TENANT_ID, reportId)).thenReturn(Optional.of(report));
+
+            ReportExportResource response = service.exportReport(reportId, TENANT_ID, ReportExportFormat.HTML);
+
+            String payload = new String(response.content());
+            assertEquals("virtualrift-report-web-" + reportId + ".html", response.fileName());
+            assertTrue(payload.contains("<!DOCTYPE html>"));
+            assertTrue(payload.contains("Relatório de scan"));
+            assertTrue(payload.contains("CRITICAL finding"));
         }
     }
 }

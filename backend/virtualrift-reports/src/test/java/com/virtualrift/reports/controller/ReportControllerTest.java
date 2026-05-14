@@ -2,7 +2,9 @@ package com.virtualrift.reports.controller;
 
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.ScanType;
+import com.virtualrift.reports.dto.ReportExportResource;
 import com.virtualrift.reports.dto.ReportResponse;
+import com.virtualrift.reports.model.ReportExportFormat;
 import com.virtualrift.reports.service.ReportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,9 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -111,6 +115,39 @@ class ReportControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
         verify(reportService).listReports(tenantId, scanId);
+    }
+
+    @Test
+    @DisplayName("should export report as file payload")
+    void exportReport_quandoChamado_delegaParaService() {
+        UUID tenantId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        ReportExportResource resource = new ReportExportResource(
+                "virtualrift-report.json",
+                MediaType.APPLICATION_JSON,
+                "{\"ok\":true}".getBytes(StandardCharsets.UTF_8)
+        );
+
+        when(reportService.exportReport(reportId, tenantId, ReportExportFormat.JSON)).thenReturn(resource);
+
+        ResponseEntity<byte[]> response = controller.exportReport(reportId, "json", tenantId, "READER");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
+        assertEquals("attachment; filename=\"virtualrift-report.json\"", response.getHeaders().getFirst("Content-Disposition"));
+        verify(reportService).exportReport(reportId, tenantId, ReportExportFormat.JSON);
+    }
+
+    @Test
+    @DisplayName("should reject invalid export format")
+    void exportReport_quandoFormatoInvalido_retorna400() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.exportReport(UUID.randomUUID(), "pdf", UUID.randomUUID(), "READER")
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        verifyNoInteractions(reportService);
     }
 
     @Test

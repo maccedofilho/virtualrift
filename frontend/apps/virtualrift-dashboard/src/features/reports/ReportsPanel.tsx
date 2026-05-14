@@ -1,4 +1,4 @@
-import { type ReportFindingResponse, type ReportResponse, type ScanType, type UUID } from '@virtualrift/types';
+import { type ReportExportFormat, type ReportFindingResponse, type ReportResponse, type ScanType, type UUID } from '@virtualrift/types';
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../session';
 import { toErrorMessage } from '../../shared/errors';
@@ -38,8 +38,9 @@ export function ReportsPanel() {
   const [selectedReportId, setSelectedReportId] = useState<UUID | null>(null);
   const [selectedReport, setSelectedReport] = useState<ReportResponse | null>(null);
   const [scanTypeFilter, setScanTypeFilter] = useState<ScanType | 'ALL'>('ALL');
-  const [status, setStatus] = useState<'loading' | 'ready' | 'loading-detail'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'loading-detail' | 'exporting'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadReports = async () => {
@@ -106,6 +107,38 @@ export function ReportsPanel() {
     void loadReportDetail();
   }, [client, selectedReportId]);
 
+  const handleExport = async (format: ReportExportFormat) => {
+    if (!selectedReport) {
+      return;
+    }
+
+    setStatus('exporting');
+    setError(null);
+    setExportMessage(null);
+
+    try {
+      const download = await client.reports.export(selectedReport.id, format);
+      const url = URL.createObjectURL(download.blob);
+
+      if (format === 'html') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setExportMessage('Versão imprimível aberta em uma nova aba. Você já pode salvar como PDF pelo navegador.');
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = download.filename ?? `virtualrift-report-${selectedReport.id}.${format}`;
+        link.click();
+        setExportMessage(`Arquivo ${download.filename ?? `virtualrift-report-${selectedReport.id}.${format}`} preparado para download.`);
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus('ready');
+    } catch (exportError) {
+      setStatus('ready');
+      setError(toErrorMessage(exportError, 'Não foi possível exportar o relatório selecionado.'));
+    }
+  };
+
   const highestRiskReport = useMemo(
     () => reports.reduce<ReportResponse | null>((current, report) => (current === null || report.riskScore > current.riskScore ? report : current), null),
     [reports],
@@ -152,6 +185,7 @@ export function ReportsPanel() {
           {error}
         </p>
       ) : null}
+      {exportMessage ? <p className="alert alert-info">{exportMessage}</p> : null}
 
       <section aria-label="tenant-reports" className="panel-section">
         <div className="panel-section-header">
@@ -331,6 +365,25 @@ export function ReportsPanel() {
                 <span className="stat-label">Scan concluído em</span>
                 <span className="stat-value">{formatDateTime(selectedReport.scanCompletedAt)}</span>
               </div>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => void handleExport('json')}
+                disabled={status === 'exporting'}
+              >
+                Baixar JSON
+              </button>
+              <button
+                className="button-ghost"
+                type="button"
+                onClick={() => void handleExport('html')}
+                disabled={status === 'exporting'}
+              >
+                Abrir versão imprimível
+              </button>
             </div>
 
             {selectedReport.errorMessage ? (
