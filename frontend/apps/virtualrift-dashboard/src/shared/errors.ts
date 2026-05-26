@@ -37,6 +37,9 @@ const translateApiError = (error: VirtualRiftApiError): string => {
       }
       return 'Você não tem permissão para concluir esta ação.';
     case 404:
+      if (url.includes('/api/v1/auth/onboarding/invitations/preview') || url.includes('/api/v1/auth/onboarding/invitations/accept')) {
+        return 'Esse convite não foi encontrado ou já não está mais disponível.';
+      }
       return 'O recurso solicitado não foi encontrado.';
     case 409:
       if (url.includes('/api/v1/auth/onboarding/workspaces') || url.includes('/api/v1/auth/onboarding/availability')) {
@@ -49,6 +52,17 @@ const translateApiError = (error: VirtualRiftApiError): string => {
         if (detail.includes('selected plan is not available')) {
           return 'Esse plano não está disponível para autoatendimento neste momento.';
         }
+      }
+      if (url.includes('/api/v1/auth/onboarding/invitations/preview') || url.includes('/api/v1/auth/onboarding/invitations/accept')) {
+        if (detail.includes('already belongs to an existing account')) {
+          return 'Esse e-mail já pertence a uma conta existente. Entre com ele ou peça outro convite.';
+        }
+        if (detail.includes('no longer available') || detail.includes('expired')) {
+          return 'Esse convite expirou, foi revogado ou já foi usado.';
+        }
+      }
+      if (url.includes('/api/v1/tenants/') && url.includes('/invitations')) {
+        return 'Já existe um convite pendente para esse e-mail neste workspace.';
       }
       return error.message;
     case 429:

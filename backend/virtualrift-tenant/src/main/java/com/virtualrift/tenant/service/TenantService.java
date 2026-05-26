@@ -4,12 +4,18 @@ import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
+import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationResponse;
+import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.InternalProvisionTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
+import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.exception.TenantInvitationConflictException;
+import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
@@ -18,6 +24,8 @@ import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequest;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
+import com.virtualrift.tenant.model.TenantInvitation;
+import com.virtualrift.tenant.model.TenantInvitationStatus;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
@@ -26,35 +34,50 @@ import com.virtualrift.tenant.model.TenantQuota;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
 import com.virtualrift.tenant.repository.PlanChangeRequestRepository;
+import com.virtualrift.tenant.repository.TenantInvitationRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
+import com.virtualrift.common.security.UserRole;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Base64;
+import java.util.HexFormat;
 
 @Service
 public class TenantService {
+
+    private static final SecureRandom INVITATION_RANDOM = new SecureRandom();
+    private static final int DEFAULT_INVITATION_EXPIRY_DAYS = 7;
 
     private final TenantRepository tenantRepository;
     private final TenantQuotaRepository quotaRepository;
     private final ScanTargetRepository scanTargetRepository;
     private final PlanChangeRequestRepository planChangeRequestRepository;
+    private final TenantInvitationRepository tenantInvitationRepository;
     private final ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     public TenantService(TenantRepository tenantRepository,
                         TenantQuotaRepository quotaRepository,
                         ScanTargetRepository scanTargetRepository,
                         PlanChangeRequestRepository planChangeRequestRepository,
+                        TenantInvitationRepository tenantInvitationRepository,
                         ScanTargetOwnershipVerifier scanTargetOwnershipVerifier) {
         this.tenantRepository = tenantRepository;
         this.quotaRepository = quotaRepository;
         this.scanTargetRepository = scanTargetRepository;
         this.planChangeRequestRepository = planChangeRequestRepository;
+        this.tenantInvitationRepository = tenantInvitationRepository;
         this.scanTargetOwnershipVerifier = scanTargetOwnershipVerifier;
     }
 
@@ -172,6 +195,92 @@ public class TenantService {
     }
 
     @Transactional
+    public TenantInvitationResponse createInvitation(
+            UUID tenantId,
+            UUID invitedByUserId,
+            CreateTenantInvitationRequest request
+    ) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
+
+        String normalizedEmail = normalizeEmail(request.email());
+        if (tenantInvitationRepository.existsByTenantIdAndEmailAndStatus(tenantId, normalizedEmail, TenantInvitationStatus.PENDING)) {
+            throw new TenantInvitationConflictException("There is already a pending invitation for this email in the current workspace");
+        }
+
+        String rawToken = generateInvitationToken();
+        TenantInvitation invitation = new TenantInvitation(
+                UUID.randomUUID(),
+                tenant.getId(),
+                normalizedEmail,
+                request.role(),
+                hashToken(rawToken),
+                TenantInvitationStatus.PENDING,
+                invitedByUserId,
+                Instant.now().plusSeconds(resolveExpiryDays(request.expiresInDays()) * 86400L)
+        );
+
+        TenantInvitation savedInvitation = tenantInvitationRepository.save(invitation);
+        return toResponse(savedInvitation, rawToken);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TenantInvitationResponse> listInvitations(UUID tenantId) {
+        requireTenantExists(tenantId);
+        return tenantInvitationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(invitation -> toResponse(invitation, null))
+                .toList();
+    }
+
+    @Transactional
+    public void revokeInvitation(UUID tenantId, UUID invitationId) {
+        TenantInvitation invitation = findInvitationForTenant(tenantId, invitationId);
+        if (invitation.getStatus() != TenantInvitationStatus.PENDING) {
+            throw new TenantInvitationConflictException("Only pending invitations can be revoked");
+        }
+        invitation.markRevoked();
+        tenantInvitationRepository.save(invitation);
+    }
+
+    @Transactional
+    public InternalTenantInvitationPreviewResponse previewInvitation(String token) {
+        TenantInvitation invitation = findPendingInvitationByToken(token);
+        Tenant tenant = tenantRepository.findById(invitation.getTenantId())
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + invitation.getTenantId()));
+
+        return new InternalTenantInvitationPreviewResponse(
+                invitation.getId(),
+                tenant.getId(),
+                tenant.getName(),
+                tenant.getSlug(),
+                tenant.getPlan(),
+                invitation.getEmail(),
+                invitation.getRole(),
+                invitation.getExpiresAt()
+        );
+    }
+
+    @Transactional
+    public InternalAcceptTenantInvitationResponse acceptInvitation(String token) {
+        TenantInvitation invitation = findPendingInvitationByToken(token);
+        Tenant tenant = tenantRepository.findById(invitation.getTenantId())
+                .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + invitation.getTenantId()));
+
+        invitation.markAccepted();
+        tenantInvitationRepository.save(invitation);
+
+        return new InternalAcceptTenantInvitationResponse(
+                invitation.getId(),
+                tenant.getId(),
+                tenant.getName(),
+                tenant.getSlug(),
+                tenant.getPlan(),
+                invitation.getEmail(),
+                invitation.getRole()
+        );
+    }
+
+    @Transactional
     public ScanTargetResponse addScanTarget(UUID tenantId, AddScanTargetRequest request) {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
@@ -255,6 +364,12 @@ public class TenantService {
         tenantRepository.delete(tenant);
     }
 
+    private void requireTenantExists(UUID tenantId) {
+        if (!tenantRepository.existsById(tenantId)) {
+            throw new TenantNotFoundException("Tenant not found: " + tenantId);
+        }
+    }
+
     private TenantResponse createTenantInternal(UUID tenantId, String name, String slug, Plan plan, TenantStatus status) {
         String normalizedSlug = slug.trim().toLowerCase(Locale.ROOT);
         if (tenantRepository.existsBySlug(normalizedSlug)) {
@@ -292,6 +407,34 @@ public class TenantService {
             throw new TenantNotFoundException("Scan target does not belong to tenant");
         }
         return scanTarget;
+    }
+
+    private TenantInvitation findInvitationForTenant(UUID tenantId, UUID invitationId) {
+        TenantInvitation invitation = tenantInvitationRepository.findById(invitationId)
+                .orElseThrow(() -> new TenantInvitationNotFoundException("Invitation not found: " + invitationId));
+
+        if (!invitation.getTenantId().equals(tenantId)) {
+            throw new TenantInvitationNotFoundException("Invitation does not belong to tenant");
+        }
+        return invitation;
+    }
+
+    private TenantInvitation findPendingInvitationByToken(String token) {
+        String tokenHash = hashToken(token);
+        TenantInvitation invitation = tenantInvitationRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new TenantInvitationNotFoundException("Invitation not found"));
+
+        if (invitation.getStatus() != TenantInvitationStatus.PENDING) {
+            throw new TenantInvitationConflictException("Invitation is no longer pending");
+        }
+
+        if (invitation.getExpiresAt().isBefore(Instant.now())) {
+            invitation.markExpired();
+            tenantInvitationRepository.save(invitation);
+            throw new TenantInvitationConflictException("Invitation has expired");
+        }
+
+        return invitation;
     }
 
     private boolean isCompatible(TargetType targetType, String scanType) {
@@ -419,6 +562,45 @@ public class TenantService {
 
     private String normalize(String value) {
         return stripTrailingSlash(value == null ? "" : value.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private int resolveExpiryDays(Integer expiresInDays) {
+        return expiresInDays == null ? DEFAULT_INVITATION_EXPIRY_DAYS : expiresInDays;
+    }
+
+    private String generateInvitationToken() {
+        byte[] bytes = new byte[32];
+        INVITATION_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(token.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
+    private TenantInvitationResponse toResponse(TenantInvitation invitation, String inviteToken) {
+        return new TenantInvitationResponse(
+                invitation.getId(),
+                invitation.getTenantId(),
+                invitation.getEmail(),
+                invitation.getRole(),
+                invitation.getStatus(),
+                invitation.getInvitedByUserId(),
+                invitation.getExpiresAt(),
+                invitation.getAcceptedAt(),
+                invitation.getCreatedAt(),
+                invitation.getUpdatedAt(),
+                inviteToken
+        );
     }
 
     private String stripTrailingSlash(String value) {

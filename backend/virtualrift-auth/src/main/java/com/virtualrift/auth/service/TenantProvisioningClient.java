@@ -3,6 +3,12 @@ package com.virtualrift.auth.service;
 import com.virtualrift.auth.config.OnboardingConfig;
 import com.virtualrift.auth.exception.OnboardingConflictException;
 import com.virtualrift.auth.exception.OnboardingProvisioningException;
+import com.virtualrift.auth.exception.WorkspaceInvitationConflictException;
+import com.virtualrift.auth.exception.WorkspaceInvitationNotFoundException;
+import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationRequest;
+import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationResponse;
+import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
+import com.virtualrift.common.security.UserRole;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.TenantStatus;
@@ -13,6 +19,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.UUID;
+import java.time.Instant;
 
 @Component
 public class TenantProvisioningClient {
@@ -88,6 +95,62 @@ public class TenantProvisioningClient {
         }
     }
 
+    public InvitedWorkspace previewInvitation(String token) {
+        try {
+            InternalTenantInvitationPreviewResponse response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/internal/tenants/invitations/preview").queryParam("token", token).build())
+                    .header("X-Internal-Api-Key", internalApiKey)
+                    .retrieve()
+                    .onStatus(status -> status.value() == 404, (clientRequest, clientResponse) -> {
+                        throw new WorkspaceInvitationNotFoundException("Invitation was not found");
+                    })
+                    .onStatus(status -> status.value() == 409, (clientRequest, clientResponse) -> {
+                        throw new WorkspaceInvitationConflictException("Invitation is no longer available");
+                    })
+                    .body(InternalTenantInvitationPreviewResponse.class);
+
+            if (response == null) {
+                throw new WorkspaceInvitationNotFoundException("Invitation was not found");
+            }
+
+            return new InvitedWorkspace(
+                    response.invitationId(),
+                    response.tenantId(),
+                    response.tenantName(),
+                    response.tenantSlug(),
+                    response.plan(),
+                    response.email(),
+                    response.role(),
+                    response.expiresAt()
+            );
+        } catch (WorkspaceInvitationNotFoundException | WorkspaceInvitationConflictException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new OnboardingProvisioningException("Failed to preview workspace invitation", ex);
+        }
+    }
+
+    public void acceptInvitation(String token) {
+        try {
+            restClient.post()
+                    .uri("/api/internal/tenants/invitations/accept")
+                    .header("X-Internal-Api-Key", internalApiKey)
+                    .body(new InternalAcceptTenantInvitationRequest(token))
+                    .retrieve()
+                    .onStatus(status -> status.value() == 404, (clientRequest, clientResponse) -> {
+                        throw new WorkspaceInvitationNotFoundException("Invitation was not found");
+                    })
+                    .onStatus(status -> status.value() == 409, (clientRequest, clientResponse) -> {
+                        throw new WorkspaceInvitationConflictException("Invitation is no longer available");
+                    })
+                    .body(InternalAcceptTenantInvitationResponse.class);
+        } catch (WorkspaceInvitationNotFoundException | WorkspaceInvitationConflictException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new OnboardingProvisioningException("Failed to accept workspace invitation", ex);
+        }
+    }
+
     private record SlugAvailabilityResponse(String slug, boolean available) {
     }
 
@@ -97,6 +160,18 @@ public class TenantProvisioningClient {
             String slug,
             Plan plan,
             TenantStatus status
+    ) {
+    }
+
+    public record InvitedWorkspace(
+            UUID invitationId,
+            UUID tenantId,
+            String tenantName,
+            String tenantSlug,
+            Plan plan,
+            String email,
+            UserRole role,
+            Instant expiresAt
     ) {
     }
 }

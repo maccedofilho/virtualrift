@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import type { Plan } from '@virtualrift/types';
+import type { Plan, WorkspaceInvitationPreviewResponse } from '@virtualrift/types';
 import { useSession } from '../../session';
 import type { OAuthProvider } from '../../session/types';
 
@@ -10,7 +10,7 @@ const HERO_FLOW_STEPS: ReadonlyArray<{ idx: string; label: string; detail: strin
   { idx: '04', label: 'Findings rastreáveis', detail: 'Relatórios alinhados de ponta a ponta.' },
 ];
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'invite';
 
 const SELF_SERVICE_PLANS: ReadonlyArray<{ value: Plan; label: string; detail: string }> = [
   { value: 'TRIAL', label: 'Trial', detail: 'Comece sem custo para validar o workspace.' },
@@ -25,6 +25,14 @@ const normalizeWorkspaceSlug = (value: string): string =>
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '');
+
+const readInitialInvitationToken = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return new URLSearchParams(window.location.search).get('invite_token') ?? '';
+};
 
 const GitHubIcon = () => (
   <svg className="dashboard-social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
@@ -45,9 +53,20 @@ const GoogleIcon = () => (
 );
 
 export function LoginForm() {
-  const { checkOnboardingAvailability, createWorkspace, error, login, oauthProviders, oauthStatus, startOAuth, status } =
+  const {
+    acceptInvitation,
+    checkOnboardingAvailability,
+    createWorkspace,
+    error,
+    login,
+    oauthProviders,
+    oauthStatus,
+    previewInvitation,
+    startOAuth,
+    status,
+  } =
     useSession();
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(readInitialInvitationToken() ? 'invite' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
@@ -57,6 +76,10 @@ export function LoginForm() {
   const [availabilityHint, setAvailabilityHint] = useState<string | null>(null);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [slugEditedManually, setSlugEditedManually] = useState(false);
+  const [invitationToken, setInvitationToken] = useState(readInitialInvitationToken());
+  const [invitationPreview, setInvitationPreview] = useState<WorkspaceInvitationPreviewResponse | null>(null);
+  const [invitationHint, setInvitationHint] = useState<string | null>(null);
+  const [isLoadingInvitation, setIsLoadingInvitation] = useState(false);
 
   useEffect(() => {
     if (slugEditedManually) {
@@ -118,17 +141,68 @@ export function LoginForm() {
     };
   }, [checkOnboardingAvailability, email, mode, workspaceSlug]);
 
+  useEffect(() => {
+    if (mode !== 'invite') {
+      setInvitationHint(null);
+      setInvitationPreview(null);
+      setIsLoadingInvitation(false);
+      return;
+    }
+
+    const normalizedToken = invitationToken.trim();
+    if (!normalizedToken) {
+      setInvitationHint('Cole o token do convite ou abra o link recebido para entrar no workspace.');
+      setInvitationPreview(null);
+      setIsLoadingInvitation(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setIsLoadingInvitation(true);
+      try {
+        const preview = await previewInvitation(normalizedToken);
+        if (cancelled) {
+          return;
+        }
+
+        setInvitationPreview(preview);
+        setEmail(preview.email);
+        setInvitationHint(`Convite válido para ${preview.tenantName} com perfil ${preview.roles.join(', ')}.`);
+      } catch {
+        if (!cancelled) {
+          setInvitationPreview(null);
+          setInvitationHint('Não foi possível validar esse convite agora. Confira o link recebido ou peça um novo convite.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingInvitation(false);
+        }
+      }
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [invitationToken, mode, previewInvitation]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setHint(null);
     if (mode === 'login') {
       await login({ email, password });
-    } else {
+    } else if (mode === 'register') {
       await createWorkspace({
         workspaceName: workspaceName.trim(),
         workspaceSlug: normalizeWorkspaceSlug(workspaceSlug),
         plan,
         email: email.trim().toLowerCase(),
+        password,
+      });
+    } else {
+      await acceptInvitation({
+        token: invitationToken.trim(),
         password,
       });
     }
@@ -138,21 +212,32 @@ export function LoginForm() {
     setMode(next);
     setHint(null);
     setAvailabilityHint(null);
+    setInvitationHint(null);
   };
 
-  const heading = mode === 'login' ? 'Entrar' : 'Criar conta';
-  const description =
-    mode === 'login'
-      ? 'Conecte-se ao workspace do tenant para gerenciar alvos, validações de autorização e fluxos de execução.'
-      : 'Crie um novo workspace, defina o plano inicial e já entre como owner da operação.';
-  const submitLabel =
-    mode === 'login'
-      ? status === 'refreshing'
-        ? 'Entrando...'
-        : 'Entrar com e-mail'
-      : status === 'refreshing'
-        ? 'Criando workspace...'
-        : 'Criar workspace';
+  const description = (() => {
+    if (mode === 'login') {
+      return 'Conecte-se ao workspace do tenant para gerenciar alvos, validações de autorização e fluxos de execução.';
+    }
+
+    if (mode === 'invite') {
+      return 'Aceite um convite para entrar em um workspace existente com o papel definido pelo owner.';
+    }
+
+    return 'Crie um novo workspace, defina o plano inicial e já entre como owner da operação.';
+  })();
+  const submitLabel = (() => {
+    if (mode === 'login') {
+      return status === 'refreshing' ? 'Entrando...' : 'Entrar com e-mail';
+    }
+
+    if (mode === 'invite') {
+      return status === 'refreshing' ? 'Aceitando convite...' : 'Entrar com convite';
+    }
+
+    return status === 'refreshing' ? 'Criando workspace...' : 'Criar workspace';
+  })();
+  const heading = mode === 'invite' ? 'Aceitar convite' : mode === 'login' ? 'Entrar' : 'Criar conta';
 
   const handleOAuthClick = (provider: OAuthProvider) => {
     const config = oauthProviders.find((entry) => entry.provider === provider);
@@ -174,6 +259,7 @@ export function LoginForm() {
     normalizeWorkspaceSlug(workspaceSlug).length === 0 ||
     email.trim().length === 0 ||
     password.trim().length === 0;
+  const inviteDisabled = status === 'refreshing' || isLoadingInvitation || invitationToken.trim().length === 0 || password.trim().length === 0;
 
   return (
     <section aria-label="login" className="dashboard-login">
@@ -243,6 +329,15 @@ export function LoginForm() {
           >
             Criar conta
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'invite'}
+            className={`dashboard-auth-tab${mode === 'invite' ? ' is-active' : ''}`}
+            onClick={() => switchMode('invite')}
+          >
+            Tenho convite
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="auth-grid">
           {mode === 'register' ? (
@@ -305,6 +400,33 @@ export function LoginForm() {
               </div>
             </>
           ) : null}
+          {mode === 'invite' ? (
+            <>
+              <div className="field">
+                <label htmlFor="invite-token">Token do convite</label>
+                <input
+                  className="input"
+                  id="invite-token"
+                  name="invite-token"
+                  type="text"
+                  value={invitationToken}
+                  onChange={(event) => setInvitationToken(event.target.value)}
+                  placeholder="Cole aqui o token ou use o link recebido"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+              {invitationPreview ? (
+                <div className="form-help">
+                  <strong>{invitationPreview.tenantName}</strong>
+                  <span>
+                    Você vai entrar em <strong>{invitationPreview.tenantSlug}</strong> com papel <strong>{invitationPreview.roles.join(', ')}</strong>.
+                  </span>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <div className="field">
             <label htmlFor="email">E-mail</label>
             <input
@@ -316,6 +438,7 @@ export function LoginForm() {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="owner@virtualrift.test"
               autoComplete="email"
+              readOnly={mode === 'invite'}
             />
           </div>
           <div className="field">
@@ -336,6 +459,11 @@ export function LoginForm() {
               {availabilityHint}
             </p>
           ) : null}
+          {mode === 'invite' && invitationHint ? (
+            <p className="alert alert-info" role="status">
+              {invitationHint}
+            </p>
+          ) : null}
           {error ? (
             <p className="alert alert-danger" role="alert">
               {error}
@@ -345,7 +473,7 @@ export function LoginForm() {
             <button
               className="button-primary dashboard-login-submit"
               type="submit"
-              disabled={mode === 'register' ? registerDisabled : status === 'refreshing'}
+              disabled={mode === 'register' ? registerDisabled : mode === 'invite' ? inviteDisabled : status === 'refreshing'}
             >
               {submitLabel}
             </button>

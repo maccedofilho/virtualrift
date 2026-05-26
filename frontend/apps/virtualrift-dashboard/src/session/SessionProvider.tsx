@@ -1,10 +1,12 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createVirtualRiftClient, type VirtualRiftClient } from '@virtualrift/api-client';
 import type {
+  AcceptWorkspaceInvitationRequest,
   AuthSession,
   CreateWorkspaceOnboardingRequest,
   LoginRequest,
   OnboardingAvailabilityResponse,
+  WorkspaceInvitationPreviewResponse,
 } from '@virtualrift/types';
 import { toErrorMessage } from '../shared/errors';
 import { DASHBOARD_API_BASE_URL } from './constants';
@@ -150,6 +152,22 @@ export function SessionProvider({
     }
   };
 
+  const previewInvitation = (token: string): Promise<WorkspaceInvitationPreviewResponse> => apiClient.auth.previewInvitation(token);
+
+  const acceptInvitation = async (payload: AcceptWorkspaceInvitationRequest) => {
+    setError(null);
+    setStatus('refreshing');
+
+    try {
+      const response = await apiClient.auth.acceptInvitation(payload);
+      applySession(toSession(response.accessToken, response.refreshToken));
+      runtimeBrowser.replaceUrl(`${runtimeBrowser.location.pathname}${runtimeBrowser.location.hash || ''}`);
+    } catch (invitationError) {
+      clearSession();
+      setError(toErrorMessage(invitationError, 'Não foi possível aceitar o convite agora.'));
+    }
+  };
+
   const checkOnboardingAvailability = (email: string, workspaceSlug: string): Promise<OnboardingAvailabilityResponse> =>
     apiClient.auth.getOnboardingAvailability(email, workspaceSlug);
 
@@ -247,12 +265,14 @@ export function SessionProvider({
       status,
       login,
       createWorkspace,
+      previewInvitation,
+      acceptInvitation,
       checkOnboardingAvailability,
       logout,
       refresh,
       startOAuth,
     }),
-    [apiClient, checkOnboardingAvailability, createWorkspace, error, oauthProviders, oauthStatus, session, status],
+    [acceptInvitation, apiClient, checkOnboardingAvailability, createWorkspace, error, oauthProviders, oauthStatus, previewInvitation, session, status],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

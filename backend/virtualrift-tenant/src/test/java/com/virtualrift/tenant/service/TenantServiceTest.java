@@ -18,14 +18,18 @@ import com.virtualrift.tenant.model.PlanChangeRequest;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
+import com.virtualrift.tenant.model.TenantInvitation;
+import com.virtualrift.tenant.model.TenantInvitationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Tenant;
 import com.virtualrift.tenant.model.TenantQuota;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.repository.PlanChangeRequestRepository;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
+import com.virtualrift.tenant.repository.TenantInvitationRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
+import com.virtualrift.common.security.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -60,6 +64,9 @@ class TenantServiceTest {
     private PlanChangeRequestRepository planChangeRequestRepository;
 
     @Mock
+    private TenantInvitationRepository tenantInvitationRepository;
+
+    @Mock
     private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     private TenantService tenantService;
@@ -71,6 +78,7 @@ class TenantServiceTest {
                 quotaRepository,
                 scanTargetRepository,
                 planChangeRequestRepository,
+                tenantInvitationRepository,
                 scanTargetOwnershipVerifier
         );
     }
@@ -102,6 +110,19 @@ class TenantServiceTest {
                 requestedPlan,
                 PlanChangeRequestStatus.PENDING,
                 "Need more capacity"
+        );
+    }
+
+    private TenantInvitation createInvitation(UUID tenantId, UUID invitedByUserId, String email, UserRole role) {
+        return new TenantInvitation(
+                UUID.randomUUID(),
+                tenantId,
+                email,
+                role,
+                "token-hash",
+                TenantInvitationStatus.PENDING,
+                invitedByUserId,
+                java.time.Instant.now().plusSeconds(3600)
         );
     }
 
@@ -142,6 +163,54 @@ class TenantServiceTest {
             assertThrows(SlugAlreadyExistsException.class, () -> tenantService.createTenant(request));
             verify(tenantRepository, never()).save(any(Tenant.class));
             verify(quotaRepository, never()).save(any(TenantQuota.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Workspace invitations")
+    class WorkspaceInvitations {
+
+        @Test
+        @DisplayName("should create a pending invitation for the tenant")
+        void createInvitation_quandoValido_criaConvite() {
+            UUID tenantId = UUID.randomUUID();
+            UUID ownerId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+            when(tenantInvitationRepository.existsByTenantIdAndEmailAndStatus(
+                    tenantId,
+                    "analyst@virtualrift.test",
+                    TenantInvitationStatus.PENDING
+            )).thenReturn(false);
+            when(tenantInvitationRepository.save(any(TenantInvitation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            var response = tenantService.createInvitation(
+                    tenantId,
+                    ownerId,
+                    new com.virtualrift.tenant.dto.CreateTenantInvitationRequest("analyst@virtualrift.test", UserRole.ANALYST, 7)
+            );
+
+            assertEquals("analyst@virtualrift.test", response.email());
+            assertEquals(UserRole.ANALYST, response.role());
+            assertEquals(TenantInvitationStatus.PENDING, response.status());
+            assertNotNull(response.inviteToken());
+        }
+
+        @Test
+        @DisplayName("should list invitations for the tenant")
+        void listInvitations_quandoExiste_retornaConvites() {
+            UUID tenantId = UUID.randomUUID();
+            UUID ownerId = UUID.randomUUID();
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(tenantInvitationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId))
+                    .thenReturn(List.of(createInvitation(tenantId, ownerId, "reader@virtualrift.test", UserRole.READER)));
+
+            var response = tenantService.listInvitations(tenantId);
+
+            assertEquals(1, response.size());
+            assertEquals("reader@virtualrift.test", response.getFirst().email());
+            assertNull(response.getFirst().inviteToken());
         }
     }
 

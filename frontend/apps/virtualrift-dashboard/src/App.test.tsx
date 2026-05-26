@@ -283,6 +283,8 @@ const createClient = () => {
       refresh: vi.fn(),
       getOnboardingAvailability: vi.fn(),
       createWorkspace: vi.fn(),
+      previewInvitation: vi.fn(),
+      acceptInvitation: vi.fn(),
       logout: vi.fn(),
       me: vi.fn(),
     },
@@ -293,6 +295,9 @@ const createClient = () => {
       getQuota: vi.fn(),
       getPlan: vi.fn(),
       getBillingSummary: vi.fn(),
+      listInvitations: vi.fn(),
+      createInvitation: vi.fn(),
+      revokeInvitation: vi.fn(),
       listScanTargets: vi.fn(),
       addScanTarget: vi.fn(),
       authorizeScanTarget: vi.fn(),
@@ -338,8 +343,46 @@ const createClient = () => {
     }),
     refreshToken: 'refresh-signup',
   });
+  client.auth.previewInvitation.mockResolvedValue({
+    tenantId: 'tenant-id',
+    tenantName: 'Acme Security',
+    tenantSlug: 'acme-security',
+    plan: 'PROFESSIONAL',
+    email: 'invitee@virtualrift.test',
+    roles: ['ANALYST'],
+    expiresAt: '2026-05-20T10:00:00.000Z',
+  });
+  client.auth.acceptInvitation.mockResolvedValue({
+    tenantId: 'tenant-id',
+    tenantName: 'Acme Security',
+    tenantSlug: 'acme-security',
+    plan: 'PROFESSIONAL',
+    roles: ['ANALYST'],
+    accessToken: createAccessToken({
+      tenantId: 'tenant-id',
+      userId: 'invited-user',
+      roles: ['ANALYST'],
+      exp: Math.floor(Date.now() / 1000) + 300,
+    }),
+    refreshToken: 'refresh-invite',
+  });
   client.auth.me.mockResolvedValue(createAccountProfile());
   client.tenants.getBillingSummary.mockResolvedValue(createBillingSummary());
+  client.tenants.listInvitations.mockResolvedValue([]);
+  client.tenants.createInvitation.mockImplementation(async (_tenantId, payload) => ({
+    id: 'invite-1',
+    tenantId: 'tenant-id',
+    email: payload.email,
+    role: payload.role,
+    status: 'PENDING',
+    invitedByUserId: 'user-id',
+    expiresAt: '2026-05-20T10:00:00.000Z',
+    acceptedAt: null,
+    createdAt: '2026-05-13T10:00:00.000Z',
+    updatedAt: '2026-05-13T10:00:00.000Z',
+    inviteToken: 'invite-token-1',
+  }));
+  client.tenants.revokeInvitation.mockResolvedValue(undefined);
   client.tenants.listScanTargets.mockResolvedValue([]);
   client.tenants.addScanTarget.mockImplementation(async (_tenantId, payload) =>
     createTarget({
@@ -587,6 +630,28 @@ describe('VirtualRift Dashboard App', () => {
     expect(
       await screen.findByText('E-mail e identificador do workspace estão disponíveis.'),
     ).toBeInTheDocument();
+  });
+
+  it('accepts a workspace invitation from the public auth flow and opens the authenticated dashboard', async () => {
+    const client = createClient();
+    const storage = createStorage();
+    window.history.replaceState(null, '', 'http://localhost:3000/?invite_token=invite-token');
+
+    renderApp({ client, storage });
+
+    expect(await screen.findByRole('heading', { name: 'Aceitar convite' })).toBeInTheDocument();
+    expect(await screen.findByText('Convite válido para Acme Security com perfil ANALYST.')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('invitee@virtualrift.test')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'ValidPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar com convite' }));
+
+    expect(await screen.findByRole('heading', { name: 'Sessão pronta' })).toBeInTheDocument();
+    expect(client.auth.acceptInvitation).toHaveBeenCalledWith({
+      token: 'invite-token',
+      password: 'ValidPassword123!',
+    });
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toContain('"tenantId":"tenant-id"');
   });
 
   it('hydrates a stored session on boot', async () => {
@@ -1366,6 +1431,30 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('ID do tenant: tenant-id')).toBeInTheDocument();
     expect(screen.getByText('Acme Corp (acme)')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Ver planos' })).toBeInTheDocument();
+  });
+
+  it('creates a workspace invitation from the account area for owner profiles', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('account');
+
+    expect(await screen.findByRole('heading', { name: 'Minha conta' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('E-mail do convidado'), { target: { value: 'analyst@empresa.com' } });
+    fireEvent.change(screen.getByLabelText('Perfil'), { target: { value: 'READER' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar convite' }));
+
+    expect(await screen.findByText('Convite criado para analyst@empresa.com. Compartilhe o link abaixo com a pessoa convidada.')).toBeInTheDocument();
+    expect(client.tenants.createInvitation).toHaveBeenCalledWith('tenant-id', {
+      email: 'analyst@empresa.com',
+      role: 'READER',
+      expiresInDays: 7,
+    });
   });
 
   it('shows the plans area with the current tenant plan and pricing catalog', async () => {
