@@ -1,16 +1,20 @@
 package com.virtualrift.auth.controller;
 
 import com.virtualrift.auth.dto.AccountProfileResponse;
+import com.virtualrift.auth.dto.AcceptWorkspaceInvitationRequest;
 import com.virtualrift.auth.dto.CreateWorkspaceOnboardingRequest;
 import com.virtualrift.auth.dto.LoginRequest;
 import com.virtualrift.auth.dto.LoginResponse;
 import com.virtualrift.auth.dto.OnboardingAvailabilityResponse;
 import com.virtualrift.auth.dto.RefreshTokenRequest;
+import com.virtualrift.auth.dto.WorkspaceInvitationAcceptanceResponse;
+import com.virtualrift.auth.dto.WorkspaceInvitationPreviewResponse;
 import com.virtualrift.auth.dto.WorkspaceOnboardingResponse;
 import com.virtualrift.auth.service.AccountService;
 import com.virtualrift.auth.service.LoginService;
 import com.virtualrift.auth.service.OnboardingService;
 import com.virtualrift.auth.service.OAuthLoginService;
+import com.virtualrift.auth.service.WorkspaceInvitationService;
 import com.virtualrift.common.security.RoleAccess;
 import com.virtualrift.common.security.UserRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,17 +47,20 @@ public class AuthController {
     private final AccountService accountService;
     private final OnboardingService onboardingService;
     private final OAuthLoginService oAuthLoginService;
+    private final WorkspaceInvitationService workspaceInvitationService;
 
     public AuthController(
             LoginService loginService,
             AccountService accountService,
             OnboardingService onboardingService,
-            OAuthLoginService oAuthLoginService
+            OAuthLoginService oAuthLoginService,
+            WorkspaceInvitationService workspaceInvitationService
     ) {
         this.loginService = loginService;
         this.accountService = accountService;
         this.onboardingService = onboardingService;
         this.oAuthLoginService = oAuthLoginService;
+        this.workspaceInvitationService = workspaceInvitationService;
     }
 
     private void requireAnyRole(String rolesHeader, UserRole... allowedRoles) {
@@ -108,6 +115,38 @@ public class AuthController {
     ) {
         WorkspaceOnboardingResponse response = onboardingService.createWorkspace(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/onboarding/invitations/preview")
+    @Operation(
+            summary = "Pré-visualizar convite de workspace",
+            description = "Valida o token do convite e retorna o contexto do workspace para o novo membro."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Convite válido"),
+            @ApiResponse(responseCode = "404", description = "Convite não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Convite expirado, revogado ou já aceito")
+    })
+    public ResponseEntity<WorkspaceInvitationPreviewResponse> previewInvitation(
+            @RequestParam("token") String token
+    ) {
+        return ResponseEntity.ok(workspaceInvitationService.previewInvitation(token));
+    }
+
+    @PostMapping("/onboarding/invitations/accept")
+    @Operation(
+            summary = "Aceitar convite de workspace",
+            description = "Cria a conta do usuário convidado, consome o convite e já emite a sessão inicial do Virtualrift."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Convite aceito e sessão inicial emitida"),
+            @ApiResponse(responseCode = "404", description = "Convite não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Convite indisponível ou e-mail já associado a outra conta")
+    })
+    public ResponseEntity<WorkspaceInvitationAcceptanceResponse> acceptInvitation(
+            @Valid @RequestBody AcceptWorkspaceInvitationRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(workspaceInvitationService.acceptInvitation(request));
     }
 
     @PostMapping("/logout")

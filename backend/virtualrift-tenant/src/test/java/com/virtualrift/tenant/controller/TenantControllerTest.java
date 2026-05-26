@@ -6,11 +6,15 @@ import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
+import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
+import com.virtualrift.common.security.UserRole;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
+import com.virtualrift.tenant.model.TenantInvitationStatus;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.service.TenantService;
 import org.junit.jupiter.api.DisplayName;
@@ -147,5 +151,57 @@ class TenantControllerTest {
         ).getBody();
 
         assertEquals(Plan.ENTERPRISE, response.requestedPlan());
+    }
+
+    @Test
+    @DisplayName("should allow invitation creation for owner role")
+    void createInvitation_quandoOwner_criaConvite() {
+        TenantController controller = new TenantController(tenantService);
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        when(tenantService.createInvitation(tenantId, userId, new CreateTenantInvitationRequest("analyst@virtualrift.test", UserRole.ANALYST, 7)))
+                .thenReturn(new TenantInvitationResponse(
+                        UUID.randomUUID(),
+                        tenantId,
+                        "analyst@virtualrift.test",
+                        UserRole.ANALYST,
+                        TenantInvitationStatus.PENDING,
+                        userId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "invite-token"
+                ));
+
+        TenantInvitationResponse response = controller.createInvitation(
+                "OWNER",
+                userId,
+                tenantId,
+                new CreateTenantInvitationRequest("analyst@virtualrift.test", UserRole.ANALYST, 7)
+        ).getBody();
+
+        assertEquals("analyst@virtualrift.test", response.email());
+        assertEquals(UserRole.ANALYST, response.role());
+    }
+
+    @Test
+    @DisplayName("should reject invitation creation for analyst role")
+    void createInvitation_quandoAnalyst_retorna403() {
+        TenantController controller = new TenantController(tenantService);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.createInvitation(
+                        "ANALYST",
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        new CreateTenantInvitationRequest("reader@virtualrift.test", UserRole.READER, 7)
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verifyNoInteractions(tenantService);
     }
 }

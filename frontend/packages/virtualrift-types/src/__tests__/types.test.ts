@@ -21,6 +21,7 @@ import type {
   AuthSession,
   AuthorizeScanTargetRequest,
   BillingSummary,
+  CreateTenantInvitationRequest,
   CreateWorkspaceOnboardingRequest,
   CreateScanRequest,
   CreatePlanChangeRequestRequest,
@@ -46,10 +47,14 @@ import type {
   Severity,
   TargetType,
   Tenant,
+  TenantInvitationResponse,
   TenantQuota,
   TenantStatus,
+  UserRole,
   UserStatus,
   VirtualRiftConfig,
+  WorkspaceInvitationAcceptanceResponse,
+  WorkspaceInvitationPreviewResponse,
   WorkspaceOnboardingResponse,
 } from '../index';
 
@@ -98,6 +103,24 @@ describe('virtualrift types package', () => {
       tenantSlug: string;
       plan: Plan;
       roles: string[];
+      accessToken: string;
+      refreshToken: string;
+    }>();
+    expectTypeOf<WorkspaceInvitationPreviewResponse>().toEqualTypeOf<{
+      tenantId: string;
+      tenantName: string;
+      tenantSlug: string;
+      plan: Plan;
+      email: string;
+      roles: UserRole[];
+      expiresAt: string;
+    }>();
+    expectTypeOf<WorkspaceInvitationAcceptanceResponse>().toEqualTypeOf<{
+      tenantId: string;
+      tenantName: string;
+      tenantSlug: string;
+      plan: Plan;
+      roles: UserRole[];
       accessToken: string;
       refreshToken: string;
     }>();
@@ -167,6 +190,24 @@ describe('virtualrift types package', () => {
     expectTypeOf<CreatePlanChangeRequestRequest>().toEqualTypeOf<{
       requestedPlan: Plan;
       note?: string | null;
+    }>();
+    expectTypeOf<CreateTenantInvitationRequest>().toEqualTypeOf<{
+      email: string;
+      role: UserRole;
+      expiresInDays?: number | null;
+    }>();
+    expectTypeOf<TenantInvitationResponse>().toEqualTypeOf<{
+      id: string;
+      tenantId: string;
+      email: string;
+      role: UserRole;
+      status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+      invitedByUserId: string;
+      expiresAt: string;
+      acceptedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+      inviteToken: string | null;
     }>();
     expectTypeOf<PlanChangeRequest>().toEqualTypeOf<{
       id: string;

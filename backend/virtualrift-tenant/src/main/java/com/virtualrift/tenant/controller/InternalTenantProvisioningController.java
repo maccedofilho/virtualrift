@@ -2,6 +2,9 @@ package com.virtualrift.tenant.controller;
 
 import com.virtualrift.tenant.config.InternalProvisioningConfig;
 import com.virtualrift.tenant.dto.InternalProvisionTenantRequest;
+import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationRequest;
+import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationResponse;
+import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
 import com.virtualrift.tenant.dto.InternalSlugAvailabilityResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.service.TenantService;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,6 +64,24 @@ public class InternalTenantProvisioningController {
         requireInternalApiKey(internalApiKey);
         tenantService.deleteTenant(tenantId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/invitations/preview")
+    public ResponseEntity<InternalTenantInvitationPreviewResponse> previewInvitation(
+            @RequestHeader("X-Internal-Api-Key") String internalApiKey,
+            @RequestParam("token") String token
+    ) {
+        requireInternalApiKey(internalApiKey);
+        return ResponseEntity.ok(tenantService.previewInvitation(token));
+    }
+
+    @PostMapping("/invitations/accept")
+    public ResponseEntity<InternalAcceptTenantInvitationResponse> acceptInvitation(
+            @RequestHeader("X-Internal-Api-Key") String internalApiKey,
+            @Valid @RequestBody InternalAcceptTenantInvitationRequest request
+    ) {
+        requireInternalApiKey(internalApiKey);
+        return ResponseEntity.ok(tenantService.acceptInvitation(request.token()));
     }
 
     private void requireInternalApiKey(String internalApiKey) {

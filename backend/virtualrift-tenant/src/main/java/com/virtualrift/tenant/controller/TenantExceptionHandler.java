@@ -3,6 +3,8 @@ package com.virtualrift.tenant.controller;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
+import com.virtualrift.tenant.exception.TenantInvitationConflictException;
+import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import org.springframework.http.HttpStatus;
@@ -19,7 +21,12 @@ public class TenantExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "Tenant resource not found", exception.getMessage());
     }
 
-    @ExceptionHandler({SlugAlreadyExistsException.class, PlanChangeRequestAlreadyPendingException.class})
+    @ExceptionHandler(TenantInvitationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleInvitationNotFound(TenantInvitationNotFoundException exception) {
+        return build(HttpStatus.NOT_FOUND, "Tenant invitation not found", exception.getMessage());
+    }
+
+    @ExceptionHandler({SlugAlreadyExistsException.class, PlanChangeRequestAlreadyPendingException.class, TenantInvitationConflictException.class})
     public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception) {
         return build(HttpStatus.CONFLICT, "Tenant request conflicts with current state", exception.getMessage());
     }

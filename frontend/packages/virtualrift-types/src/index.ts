@@ -22,6 +22,9 @@ export type TenantStatus = (typeof TENANT_STATUSES)[number];
 export const USER_STATUSES = ['PENDING', 'ACTIVE', 'SUSPENDED', 'DELETED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
+export const USER_ROLES = ['OWNER', 'ANALYST', 'READER'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
 export const PLAN_CHANGE_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 export type PlanChangeRequestStatus = (typeof PLAN_CHANGE_REQUEST_STATUSES)[number];
 
@@ -65,6 +68,31 @@ export type WorkspaceOnboardingResponse = {
   tenantSlug: string;
   plan: Plan;
   roles: string[];
+  accessToken: string;
+  refreshToken: string;
+};
+
+export type WorkspaceInvitationPreviewResponse = {
+  tenantId: UUID;
+  tenantName: string;
+  tenantSlug: string;
+  plan: Plan;
+  email: string;
+  roles: UserRole[];
+  expiresAt: IsoDateTime;
+};
+
+export type AcceptWorkspaceInvitationRequest = {
+  token: string;
+  password: string;
+};
+
+export type WorkspaceInvitationAcceptanceResponse = {
+  tenantId: UUID;
+  tenantName: string;
+  tenantSlug: string;
+  plan: Plan;
+  roles: UserRole[];
   accessToken: string;
   refreshToken: string;
 };
@@ -167,6 +195,29 @@ export type BillingSummary = {
 };
 
 export type BillingSummaryResponse = BillingSummary;
+
+export const TENANT_INVITATION_STATUSES = ['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'] as const;
+export type TenantInvitationStatus = (typeof TENANT_INVITATION_STATUSES)[number];
+
+export type CreateTenantInvitationRequest = {
+  email: string;
+  role: UserRole;
+  expiresInDays?: number | null;
+};
+
+export type TenantInvitationResponse = {
+  id: UUID;
+  tenantId: UUID;
+  email: string;
+  role: UserRole;
+  status: TenantInvitationStatus;
+  invitedByUserId: UUID;
+  expiresAt: IsoDateTime;
+  acceptedAt: Nullable<IsoDateTime>;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  inviteToken: Nullable<string>;
+};
 
 export type AddScanTargetRequest = {
   target: string;

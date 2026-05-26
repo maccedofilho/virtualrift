@@ -8,8 +8,10 @@ import com.virtualrift.tenant.dto.AuthorizeScanTargetResponse;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
+import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
+import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.service.TenantService;
@@ -225,5 +227,52 @@ public class TenantController {
         requireAnyRole(rolesHeader, UserRole.OWNER);
         PlanChangeRequestResponse response = tenantService.createPlanChangeRequest(id, userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{id}/invitations")
+    @Operation(summary = "Listar convites do workspace", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Convites retornados"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode listar convites")
+    })
+    public ResponseEntity<List<TenantInvitationResponse>> listInvitations(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID id
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        return ResponseEntity.ok(tenantService.listInvitations(id));
+    }
+
+    @PostMapping("/{id}/invitations")
+    @Operation(summary = "Criar convite para workspace", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Convite criado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode convidar novos membros"),
+            @ApiResponse(responseCode = "409", description = "Já existe convite pendente para o e-mail informado")
+    })
+    public ResponseEntity<TenantInvitationResponse> createInvitation(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateTenantInvitationRequest request
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        return ResponseEntity.status(HttpStatus.CREATED).body(tenantService.createInvitation(id, userId, request));
+    }
+
+    @DeleteMapping("/{tenantId}/invitations/{invitationId}")
+    @Operation(summary = "Revogar convite do workspace", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Convite revogado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode revogar convites")
+    })
+    public ResponseEntity<Void> revokeInvitation(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID invitationId
+    ) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        tenantService.revokeInvitation(tenantId, invitationId);
+        return ResponseEntity.noContent().build();
     }
 }

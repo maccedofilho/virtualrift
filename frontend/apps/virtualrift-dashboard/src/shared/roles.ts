@@ -15,5 +15,7 @@ export const canGenerateReports = (roles: readonly string[]): boolean => hasAnyR
 
 export const canRequestPlanChanges = (roles: readonly string[]): boolean => hasAnyRole(roles, ['OWNER']);
 
+export const canManageWorkspaceInvites = (roles: readonly string[]): boolean => hasAnyRole(roles, ['OWNER']);
+
 export const formatRoleLabel = (role: string): string =>
   ROLE_LABELS[role] ?? role.charAt(0) + role.slice(1).toLowerCase();

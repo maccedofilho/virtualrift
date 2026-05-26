@@ -138,6 +138,87 @@ describe('API client package', () => {
     );
   });
 
+  it('previews a workspace invitation through the public onboarding endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tenantId: 'tenant-id',
+          tenantName: 'Acme Labs',
+          tenantSlug: 'acme-labs',
+          plan: 'PROFESSIONAL',
+          email: 'analyst@virtualrift.test',
+          roles: ['ANALYST'],
+          expiresAt: '2026-05-20T10:00:00.000Z',
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.auth.previewInvitation('invite-token');
+
+    expect(response.email).toBe('analyst@virtualrift.test');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/auth/onboarding/invitations/preview?token=invite-token',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
+  it('accepts a workspace invitation and returns an authenticated session payload', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tenantId: 'tenant-id',
+          tenantName: 'Acme Labs',
+          tenantSlug: 'acme-labs',
+          plan: 'PROFESSIONAL',
+          roles: ['ANALYST'],
+          accessToken: 'access',
+          refreshToken: 'refresh',
+        }),
+        {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.auth.acceptInvitation({
+      token: 'invite-token',
+      password: 'ValidPassword123!',
+    });
+
+    expect(response.roles).toEqual(['ANALYST']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/auth/onboarding/invitations/accept',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          token: 'invite-token',
+          password: 'ValidPassword123!',
+        }),
+      }),
+    );
+  });
+
   it('injects authorization, tenant and user headers from the configured context', async () => {
     fetchMock.mockResolvedValue(
       new Response(
@@ -427,6 +508,101 @@ describe('API client package', () => {
           requestedPlan: 'ENTERPRISE',
           note: 'Need more capacity',
         }),
+      }),
+    );
+  });
+
+  it('creates, lists and revokes workspace invitations from the tenant API', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'invite-1',
+            tenantId: 'tenant-id',
+            email: 'reader@virtualrift.test',
+            role: 'READER',
+            status: 'PENDING',
+            invitedByUserId: 'user-id',
+            expiresAt: '2026-05-20T10:00:00.000Z',
+            acceptedAt: null,
+            createdAt: '2026-05-13T10:00:00.000Z',
+            updatedAt: '2026-05-13T10:00:00.000Z',
+            inviteToken: 'invite-token',
+          }),
+          {
+            status: 201,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: 'invite-1',
+              tenantId: 'tenant-id',
+              email: 'reader@virtualrift.test',
+              role: 'READER',
+              status: 'PENDING',
+              invitedByUserId: 'user-id',
+              expiresAt: '2026-05-20T10:00:00.000Z',
+              acceptedAt: null,
+              createdAt: '2026-05-13T10:00:00.000Z',
+              updatedAt: '2026-05-13T10:00:00.000Z',
+              inviteToken: null,
+            },
+          ]),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 204,
+        }),
+      );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const created = await client.tenants.createInvitation('tenant-id', {
+      email: 'reader@virtualrift.test',
+      role: 'READER',
+      expiresInDays: 7,
+    });
+    const listed = await client.tenants.listInvitations('tenant-id');
+    const revoked = await client.tenants.revokeInvitation('tenant-id', 'invite-1');
+
+    expect(created.inviteToken).toBe('invite-token');
+    expect(listed).toHaveLength(1);
+    expect(revoked).toBeUndefined();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/invitations',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/invitations',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/invitations/invite-1',
+      expect.objectContaining({
+        method: 'DELETE',
       }),
     );
   });

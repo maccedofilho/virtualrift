@@ -11,6 +11,7 @@ import com.virtualrift.tenant.model.TenantQuota;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.repository.PlanChangeRequestRepository;
 import com.virtualrift.tenant.repository.ScanTargetRepository;
+import com.virtualrift.tenant.repository.TenantInvitationRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
 import com.virtualrift.tenant.service.ScanTargetOwnershipVerifier;
@@ -52,6 +53,9 @@ class TenantIsolationTest {
     private PlanChangeRequestRepository planChangeRequestRepository;
 
     @Mock
+    private TenantInvitationRepository tenantInvitationRepository;
+
+    @Mock
     private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
     private TenantService tenantService;
@@ -63,6 +67,7 @@ class TenantIsolationTest {
                 quotaRepository,
                 scanTargetRepository,
                 planChangeRequestRepository,
+                tenantInvitationRepository,
                 scanTargetOwnershipVerifier
         );
     }

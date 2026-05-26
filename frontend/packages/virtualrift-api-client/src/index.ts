@@ -1,10 +1,12 @@
 import type {
   AccountProfileResponse,
+  AcceptWorkspaceInvitationRequest,
   AddScanTargetRequest,
   AuthorizeScanTargetRequest,
   AuthorizeScanTargetResponse,
   BillingSummaryResponse,
   CreateWorkspaceOnboardingRequest,
+  CreateTenantInvitationRequest,
   CreatePlanChangeRequestRequest,
   CreateScanRequest,
   CreateTenantRequest,
@@ -23,7 +25,10 @@ import type {
   ScanTargetResponse,
   TenantQuotaResponse,
   TenantResponse,
+  TenantInvitationResponse,
   UUID,
+  WorkspaceInvitationAcceptanceResponse,
+  WorkspaceInvitationPreviewResponse,
   WorkspaceOnboardingResponse,
 } from '@virtualrift/types';
 
@@ -354,6 +359,20 @@ const createAuthClient = (request: VirtualRiftRequestExecutor) => ({
       body: payload,
       ...options,
     }),
+  previewInvitation: (token: string, options?: VirtualRiftRequestOptions) =>
+    request<WorkspaceInvitationPreviewResponse>({
+      method: 'GET',
+      path: '/api/v1/auth/onboarding/invitations/preview',
+      query: { token },
+      ...options,
+    }),
+  acceptInvitation: (payload: AcceptWorkspaceInvitationRequest, options?: VirtualRiftRequestOptions) =>
+    request<WorkspaceInvitationAcceptanceResponse>({
+      method: 'POST',
+      path: '/api/v1/auth/onboarding/invitations/accept',
+      body: payload,
+      ...options,
+    }),
   logout: (payload?: RefreshTokenRequest, options?: VirtualRiftRequestOptions) =>
     request<void>({ method: 'POST', path: '/api/v1/auth/logout', body: payload, ...options }),
   me: (options?: VirtualRiftRequestOptions) =>
@@ -402,6 +421,17 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
       body: payload,
       ...options,
     }),
+  listInvitations: (tenantId: UUID, options?: VirtualRiftRequestOptions) =>
+    request<TenantInvitationResponse[]>({ method: 'GET', path: `/api/v1/tenants/${tenantId}/invitations`, ...options }),
+  createInvitation: (tenantId: UUID, payload: CreateTenantInvitationRequest, options?: VirtualRiftRequestOptions) =>
+    request<TenantInvitationResponse>({
+      method: 'POST',
+      path: `/api/v1/tenants/${tenantId}/invitations`,
+      body: payload,
+      ...options,
+    }),
+  revokeInvitation: (tenantId: UUID, invitationId: UUID, options?: VirtualRiftRequestOptions) =>
+    request<void>({ method: 'DELETE', path: `/api/v1/tenants/${tenantId}/invitations/${invitationId}`, ...options }),
   removeScanTarget: (tenantId: UUID, targetId: UUID, options?: VirtualRiftRequestOptions) =>
     request<void>({ method: 'DELETE', path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}`, ...options }),
 });
