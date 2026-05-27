@@ -11,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,28 +28,54 @@ public class JdkWebScannerHttpClient implements HttpClient {
 
     private final java.net.http.HttpClient client;
     private final WebScannerProperties properties;
+    private final Map<String, String> defaultHeaders;
+    private final Map<String, String> defaultCookies;
 
     public JdkWebScannerHttpClient(WebScannerProperties properties) {
+        this(
+                java.net.http.HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(Math.max(1, properties.getRequestTimeoutSeconds())))
+                        .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                        .build(),
+                properties,
+                Map.of(),
+                Map.of()
+        );
+    }
+
+    private JdkWebScannerHttpClient(java.net.http.HttpClient client,
+                                    WebScannerProperties properties,
+                                    Map<String, String> defaultHeaders,
+                                    Map<String, String> defaultCookies) {
+        this.client = client;
         this.properties = properties;
-        this.client = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(timeout())
-                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-                .build();
+        this.defaultHeaders = Map.copyOf(defaultHeaders);
+        this.defaultCookies = Map.copyOf(defaultCookies);
+    }
+
+    @Override
+    public Optional<String> sendRequest(String url, String payload, Map<String, String> headers, Map<String, String> cookies) {
+        return get(appendQuery(url, payload), headers, cookies);
     }
 
     @Override
     public Optional<String> sendRequest(String url, String payload) {
-        return get(appendQuery(url, payload), Map.of());
+        return sendRequest(url, payload, Map.of(), Map.of());
+    }
+
+    @Override
+    public Optional<String> getPage(String url, Map<String, String> headers, Map<String, String> cookies) {
+        return get(url, headers, cookies);
     }
 
     @Override
     public Optional<String> getPage(String url) {
-        return get(url, Map.of());
+        return getPage(url, Map.of(), Map.of());
     }
 
     @Override
     public Optional<String> sendRequestWithCookie(String url, String payload, String cookieName, String cookieValue) {
-        return get(appendQuery(url, payload), Map.of("Cookie", cookieName + "=" + cookieValue));
+        return sendRequest(url, payload, Map.of(), Map.of(cookieName, cookieValue));
     }
 
     @Override
@@ -58,7 +85,7 @@ public class JdkWebScannerHttpClient implements HttpClient {
 
     @Override
     public Optional<String> sendRequestWithHeader(String url, String payload, String headerName, String headerValue) {
-        return get(appendQuery(url, payload), Map.of(headerName, headerValue));
+        return sendRequest(url, payload, Map.of(headerName, headerValue), Map.of());
     }
 
     @Override
@@ -67,16 +94,22 @@ public class JdkWebScannerHttpClient implements HttpClient {
     }
 
     @Override
-    public Optional<String> sendJson(String url, String jsonPayload) {
+    public Optional<String> sendJson(String url, String jsonPayload, Map<String, String> headers, Map<String, String> cookies) {
         HttpRequest.Builder builder = requestBuilder(url)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload == null ? "" : jsonPayload));
+        applyHeaders(builder, headers, cookies);
         return execute(builder.build());
     }
 
     @Override
-    public List<String> fetchJavaScript(String url) {
-        Optional<String> page = getPage(url);
+    public Optional<String> sendJson(String url, String jsonPayload) {
+        return sendJson(url, jsonPayload, Map.of(), Map.of());
+    }
+
+    @Override
+    public List<String> fetchJavaScript(String url, Map<String, String> headers, Map<String, String> cookies) {
+        Optional<String> page = getPage(url, headers, cookies);
         if (page.isEmpty()) {
             return List.of();
         }
@@ -87,12 +120,17 @@ public class JdkWebScannerHttpClient implements HttpClient {
             String src = matcher.group(1);
             String inline = matcher.group(2);
             if (src != null && !src.isBlank()) {
-                get(resolve(url, src), Map.of()).ifPresent(scripts::add);
+                get(resolve(url, src), headers, cookies).ifPresent(scripts::add);
             } else if (inline != null && !inline.isBlank()) {
                 scripts.add(inline);
             }
         }
         return scripts;
+    }
+
+    @Override
+    public List<String> fetchJavaScript(String url) {
+        return fetchJavaScript(url, Map.of(), Map.of());
     }
 
     @Override
@@ -102,9 +140,19 @@ public class JdkWebScannerHttpClient implements HttpClient {
         return System.currentTimeMillis() - start;
     }
 
-    private Optional<String> get(String url, Map<String, String> headers) {
+    @Override
+    public HttpClient withContext(Map<String, String> headers, Map<String, String> cookies) {
+        return new JdkWebScannerHttpClient(
+                client,
+                properties,
+                merge(defaultHeaders, headers),
+                merge(defaultCookies, cookies)
+        );
+    }
+
+    private Optional<String> get(String url, Map<String, String> headers, Map<String, String> cookies) {
         HttpRequest.Builder builder = requestBuilder(url).GET();
-        headers.forEach(builder::header);
+        applyHeaders(builder, headers, cookies);
         return execute(builder.build());
     }
 
@@ -129,6 +177,15 @@ public class JdkWebScannerHttpClient implements HttpClient {
         return HttpRequest.newBuilder(URI.create(url))
                 .timeout(timeout())
                 .header("User-Agent", properties.getUserAgent());
+    }
+
+    private void applyHeaders(HttpRequest.Builder builder, Map<String, String> headers, Map<String, String> cookies) {
+        merge(defaultHeaders, headers).forEach(builder::header);
+
+        Map<String, String> mergedCookies = merge(defaultCookies, cookies);
+        if (!mergedCookies.isEmpty()) {
+            builder.header("Cookie", toCookieHeader(mergedCookies));
+        }
     }
 
     private Duration timeout() {
@@ -158,6 +215,28 @@ public class JdkWebScannerHttpClient implements HttpClient {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private Map<String, String> merge(Map<String, String> base, Map<String, String> overrides) {
+        if ((base == null || base.isEmpty()) && (overrides == null || overrides.isEmpty())) {
+            return Map.of();
+        }
+
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (base != null) {
+            merged.putAll(base);
+        }
+        if (overrides != null) {
+            merged.putAll(overrides);
+        }
+        return Map.copyOf(merged);
+    }
+
+    private String toCookieHeader(Map<String, String> cookies) {
+        return cookies.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("");
     }
 
     private String resolve(String baseUrl, String scriptUrl) {

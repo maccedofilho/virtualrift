@@ -40,6 +40,8 @@ class EventSerializationTest {
                     "WEB",
                     3,
                     300,
+                    Map.of("Authorization", "Bearer token-123"),
+                    Map.of("session", "abc123"),
                     Instant.parse("2024-01-15T10:30:00Z")
             );
 
@@ -52,6 +54,8 @@ class EventSerializationTest {
             assertTrue(json.contains("\"scanType\":\"WEB\""));
             assertTrue(json.contains("\"depth\":3"));
             assertTrue(json.contains("\"timeout\":300"));
+            assertTrue(json.contains("\"Authorization\":\"Bearer token-123\""));
+            assertTrue(json.contains("\"session\":\"abc123\""));
         }
 
         @Test
@@ -65,6 +69,12 @@ class EventSerializationTest {
                         "scanType": "WEB",
                         "depth": 3,
                         "timeout": 300,
+                        "headers": {
+                            "Authorization": "Bearer token-123"
+                        },
+                        "cookies": {
+                            "session": "abc123"
+                        },
                         "requestedAt": "2024-01-15T10:30:00Z"
                     }
                     """;
@@ -77,6 +87,8 @@ class EventSerializationTest {
             assertEquals("WEB", event.scanType());
             assertEquals(3, event.depth());
             assertEquals(300, event.timeout());
+            assertEquals(Map.of("Authorization", "Bearer token-123"), event.headers());
+            assertEquals(Map.of("session", "abc123"), event.cookies());
         }
 
         @Test
@@ -93,6 +105,8 @@ class EventSerializationTest {
                     "API",
                     5,
                     600,
+                    Map.of("X-Api-Key", "test-key"),
+                    Map.of("vr-session", "cookie-value"),
                     requestedAt
             );
 
@@ -105,6 +119,8 @@ class EventSerializationTest {
             assertEquals(original.scanType(), deserialized.scanType());
             assertEquals(original.depth(), deserialized.depth());
             assertEquals(original.timeout(), deserialized.timeout());
+            assertEquals(original.headers(), deserialized.headers());
+            assertEquals(original.cookies(), deserialized.cookies());
             assertEquals(original.requestedAt(), deserialized.requestedAt());
         }
 

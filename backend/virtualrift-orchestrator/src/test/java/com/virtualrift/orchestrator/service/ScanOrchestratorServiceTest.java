@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -119,7 +120,42 @@ class ScanOrchestratorServiceTest {
                     eq(TARGET_URL),
                     eq(ScanType.WEB.name()),
                     eq(3),
-                    eq(300)
+                    eq(300),
+                    eq(Map.of()),
+                    eq(Map.of())
+            );
+        }
+
+        @Test
+        @DisplayName("should forward authenticated scan credentials to the worker event")
+        void createScan_quandoComCredenciais_repassaHeadersECookies() {
+            CreateScanRequest request = new CreateScanRequest(
+                    TARGET_URL,
+                    ScanType.WEB,
+                    3,
+                    300,
+                    Map.of("Authorization", "Bearer token-123"),
+                    Map.of("session", "cookie-1")
+            );
+
+            when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
+            when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
+            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
+            when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
+            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
+            when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanResponse response = service.createScan(request, TENANT_ID, USER_ID);
+
+            verify(eventProducer).publishScanRequested(
+                    eq(response.id()),
+                    any(TenantId.class),
+                    eq(TARGET_URL),
+                    eq(ScanType.WEB.name()),
+                    eq(3),
+                    eq(300),
+                    eq(Map.of("Authorization", "Bearer token-123")),
+                    eq(Map.of("session", "cookie-1"))
             );
         }
 
@@ -156,8 +192,32 @@ class ScanOrchestratorServiceTest {
                     eq("https://github.com/acme/platform"),
                     eq(ScanType.SAST.name()),
                     eq(3),
-                    eq(300)
+                    eq(300),
+                    eq(Map.of()),
+                    eq(Map.of())
             );
+        }
+
+        @Test
+        @DisplayName("should reject cookies for SAST scans")
+        void createScan_quandoSastComCookies_lancaExcecao() {
+            CreateScanRequest request = new CreateScanRequest(
+                    "https://github.com/acme/platform",
+                    ScanType.SAST,
+                    3,
+                    300,
+                    Map.of("Authorization", "Bearer token-123"),
+                    Map.of("session", "cookie-1")
+            );
+
+            when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
+            when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.PROFESSIONAL);
+
+            assertThrows(
+                    com.virtualrift.orchestrator.exception.InvalidScanCredentialsException.class,
+                    () -> service.createScan(request, TENANT_ID, USER_ID)
+            );
+            verify(scanRepository, never()).save(any(Scan.class));
         }
 
         @Test
@@ -171,7 +231,7 @@ class ScanOrchestratorServiceTest {
 
             assertThrows(ScanTargetNotAuthorizedException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
             verify(scanRepository, never()).save(any(Scan.class));
-            verify(eventProducer, never()).publishScanRequested(any(), any(), any(), any(), any(), any());
+            verify(eventProducer, never()).publishScanRequested(any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -49,6 +50,7 @@ class SastTargetResolverTest {
             assertTrue(Files.exists(repositoryPath.resolve("Example.java")));
             assertEquals(URI.create("https://github.com/acme/repo.git"), gitClient.repositoryUri);
             assertEquals(Duration.ofSeconds(7), gitClient.timeout);
+            assertEquals(Map.of(), gitClient.headers);
         }
 
         assertFalse(Files.exists(repositoryPath.getParent()));
@@ -148,11 +150,13 @@ class SastTargetResolverTest {
         private Duration timeout;
         private int cloneCalls;
         private String content = "class Example {}";
+        private Map<String, String> headers = Map.of();
 
         @Override
-        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout) {
+        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout, Map<String, String> headers) {
             this.repositoryUri = repositoryUri;
             this.timeout = timeout;
+            this.headers = headers == null ? Map.of() : Map.copyOf(headers);
             cloneCalls++;
             try {
                 Files.createDirectories(destination);

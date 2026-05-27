@@ -11,6 +11,7 @@ import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,13 +20,29 @@ public class JdkApiClient implements ApiClient {
 
     private final java.net.http.HttpClient httpClient;
     private final ApiScannerProperties properties;
+    private final Map<String, String> defaultHeaders;
+    private final Map<String, String> defaultCookies;
 
     public JdkApiClient(ApiScannerProperties properties) {
+        this(
+                java.net.http.HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(Math.max(1, properties.getRequestTimeoutSeconds())))
+                        .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                        .build(),
+                properties,
+                Map.of(),
+                Map.of()
+        );
+    }
+
+    private JdkApiClient(java.net.http.HttpClient httpClient,
+                         ApiScannerProperties properties,
+                         Map<String, String> defaultHeaders,
+                         Map<String, String> defaultCookies) {
+        this.httpClient = httpClient;
         this.properties = properties;
-        this.httpClient = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(timeout())
-                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-                .build();
+        this.defaultHeaders = Map.copyOf(defaultHeaders);
+        this.defaultCookies = Map.copyOf(defaultCookies);
     }
 
     @Override
@@ -56,17 +73,31 @@ public class JdkApiClient implements ApiClient {
         return sendRequest(url, method, Map.of("Authorization", "Bearer " + token));
     }
 
+    @Override
+    public ApiClient withContext(Map<String, String> headers, Map<String, String> cookies) {
+        return new JdkApiClient(
+                httpClient,
+                properties,
+                merge(defaultHeaders, headers),
+                merge(defaultCookies, cookies)
+        );
+    }
+
     private HttpRequest.Builder requestBuilder(String url, Map<String, String> headers) {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .timeout(timeout())
                 .header("User-Agent", properties.getUserAgent())
                 .header("Accept", "application/json, text/plain, */*");
 
-        headers.forEach((name, value) -> {
+        merge(defaultHeaders, headers).forEach((name, value) -> {
             if (name != null && !name.isBlank() && value != null && !value.isBlank()) {
                 builder.header(name, value);
             }
         });
+
+        if (!defaultCookies.isEmpty()) {
+            builder.header("Cookie", toCookieHeader(defaultCookies));
+        }
 
         return builder;
     }
@@ -95,6 +126,28 @@ public class JdkApiClient implements ApiClient {
 
     private HttpResponse<String> emptyResponse(HttpRequest request, int statusCode) {
         return new SimpleHttpResponse(statusCode, "", HttpHeaders.of(Map.of(), (name, value) -> true), request);
+    }
+
+    private Map<String, String> merge(Map<String, String> base, Map<String, String> overrides) {
+        if ((base == null || base.isEmpty()) && (overrides == null || overrides.isEmpty())) {
+            return Map.of();
+        }
+
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (base != null) {
+            merged.putAll(base);
+        }
+        if (overrides != null) {
+            merged.putAll(overrides);
+        }
+        return Map.copyOf(merged);
+    }
+
+    private String toCookieHeader(Map<String, String> cookies) {
+        return cookies.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("");
     }
 
     private record SimpleHttpResponse(

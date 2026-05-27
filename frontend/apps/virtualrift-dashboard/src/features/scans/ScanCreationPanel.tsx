@@ -15,6 +15,8 @@ import { toErrorMessage } from '../../shared/errors';
 import { formatDateTime } from '../../shared/format';
 import { canCreateScans, canGenerateReports } from '../../shared/roles';
 
+type ScanAuthMode = 'NONE' | 'BEARER' | 'BASIC' | 'CUSTOM_HEADER';
+
 const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
   switch (target.type) {
     case 'URL':
@@ -29,6 +31,29 @@ const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
 };
 
 const targetLabel = (target: ScanTargetResponse): string => `${target.target} (${target.type})`;
+
+const supportsAuthenticationHeaders = (scanType: ScanType): boolean => scanType === 'WEB' || scanType === 'API' || scanType === 'SAST';
+
+const supportsAuthenticationCookies = (scanType: ScanType): boolean => scanType === 'WEB' || scanType === 'API';
+
+const authenticationHint = (scanType: ScanType): string => {
+  switch (scanType) {
+    case 'WEB':
+      return 'Headers e cookies serão reaplicados durante as requisições do scanner web.';
+    case 'API':
+      return 'Use headers para Bearer, Basic, API keys ou headers customizados da API.';
+    case 'SAST':
+      return 'Headers HTTP serão enviados ao clone do repositório, úteis para Authorization, PRIVATE-TOKEN ou x-api-key.';
+    case 'NETWORK':
+      return 'Scans de rede não aceitam credenciais HTTP.';
+  }
+};
+
+const encodeBase64 = (value: string): string => {
+  const encodedBytes = new TextEncoder().encode(value);
+  const binary = Array.from(encodedBytes, (byte) => String.fromCharCode(byte)).join('');
+  return window.btoa(binary);
+};
 
 const scanCreationStatusLabel = (
   status: 'loading' | 'ready' | 'submitting' | 'refreshing' | 'loading-result' | 'generating-report',
@@ -108,6 +133,14 @@ export function ScanCreationPanel() {
   const [selectedScanResult, setSelectedScanResult] = useState<ScanResultResponse | null>(null);
   const [scanTypeFilter, setScanTypeFilter] = useState<ScanType | 'ALL'>('ALL');
   const [scanStatusFilter, setScanStatusFilter] = useState<ScanResponse['status'] | 'ALL'>('ALL');
+  const [authMode, setAuthMode] = useState<ScanAuthMode>('NONE');
+  const [bearerToken, setBearerToken] = useState('');
+  const [basicUsername, setBasicUsername] = useState('');
+  const [basicPassword, setBasicPassword] = useState('');
+  const [customHeaderName, setCustomHeaderName] = useState('');
+  const [customHeaderValue, setCustomHeaderValue] = useState('');
+  const [cookieName, setCookieName] = useState('');
+  const [cookieValue, setCookieValue] = useState('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'submitting' | 'refreshing' | 'loading-result' | 'generating-report'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [reportMessage, setReportMessage] = useState<string | null>(null);
@@ -182,6 +215,9 @@ export function ScanCreationPanel() {
   const hasActiveFilters = scanTypeFilter !== 'ALL' || scanStatusFilter !== 'ALL';
   const runningScans = useMemo(() => scans.filter((scan) => scan.status === 'RUNNING').length, [scans]);
   const completedScans = useMemo(() => scans.filter((scan) => scan.status === 'COMPLETED').length, [scans]);
+  const canUseAuthenticationHeaders = useMemo(() => supportsAuthenticationHeaders(scanType), [scanType]);
+  const canUseAuthenticationCookies = useMemo(() => supportsAuthenticationCookies(scanType), [scanType]);
+  const authHint = useMemo(() => authenticationHint(scanType), [scanType]);
 
   useEffect(() => {
     if (verifiedTargets.length === 0) {
@@ -208,6 +244,24 @@ export function ScanCreationPanel() {
       setScanType(nextScanTypes[0]);
     }
   }, [scanType, selectedTarget]);
+
+  useEffect(() => {
+    if (!canUseAuthenticationHeaders) {
+      setAuthMode('NONE');
+      setBearerToken('');
+      setBasicUsername('');
+      setBasicPassword('');
+      setCustomHeaderName('');
+      setCustomHeaderValue('');
+    }
+  }, [canUseAuthenticationHeaders]);
+
+  useEffect(() => {
+    if (!canUseAuthenticationCookies) {
+      setCookieName('');
+      setCookieValue('');
+    }
+  }, [canUseAuthenticationCookies]);
 
   useEffect(() => {
     if (filteredScans.length === 0) {
@@ -266,15 +320,55 @@ export function ScanCreationPanel() {
 
   const handleCreateScan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!requestedTarget.trim()) {
+    const trimmedTarget = requestedTarget.trim();
+    if (!trimmedTarget) {
       return;
     }
 
+    const headers: Record<string, string> = {};
+    const cookies: Record<string, string> = {};
+
+    if (authMode === 'BEARER') {
+      if (!bearerToken.trim()) {
+        setError('Informe o token Bearer para continuar com o scan autenticado.');
+        return;
+      }
+      headers.Authorization = `Bearer ${bearerToken.trim()}`;
+    }
+
+    if (authMode === 'BASIC') {
+      if (!basicUsername.trim() || !basicPassword.trim()) {
+        setError('Informe usuário e senha para a autenticação Basic.');
+        return;
+      }
+      headers.Authorization = `Basic ${encodeBase64(`${basicUsername.trim()}:${basicPassword}`)}`;
+    }
+
+    if (authMode === 'CUSTOM_HEADER') {
+      if (!customHeaderName.trim() || !customHeaderValue.trim()) {
+        setError('Preencha nome e valor do header customizado.');
+        return;
+      }
+      headers[customHeaderName.trim()] = customHeaderValue.trim();
+    }
+
+    const trimmedCookieName = cookieName.trim();
+    const trimmedCookieValue = cookieValue.trim();
+    if ((trimmedCookieName && !trimmedCookieValue) || (!trimmedCookieName && trimmedCookieValue)) {
+      setError('Preencha nome e valor do cookie de sessão para usar autenticação por cookie.');
+      return;
+    }
+    if (trimmedCookieName && trimmedCookieValue) {
+      cookies[trimmedCookieName] = trimmedCookieValue;
+    }
+
     const payload: CreateScanRequest = {
-      target: requestedTarget.trim(),
+      target: trimmedTarget,
       scanType,
       depth: depth.trim().length > 0 ? Number(depth) : null,
       timeout: timeout.trim().length > 0 ? Number(timeout) : null,
+      headers: Object.keys(headers).length > 0 ? headers : null,
+      cookies: Object.keys(cookies).length > 0 ? cookies : null,
     };
 
     setStatus('submitting');
@@ -495,6 +589,136 @@ export function ScanCreationPanel() {
                     onChange={(event) => setTimeoutValue(event.target.value)}
                   />
                 </div>
+
+                <div className="field">
+                  <label htmlFor="scan-auth-mode">Autenticação do scan</label>
+                  <select
+                    className="select"
+                    id="scan-auth-mode"
+                    name="scan-auth-mode"
+                    value={authMode}
+                    onChange={(event) => setAuthMode(event.target.value as ScanAuthMode)}
+                    disabled={!canUseAuthenticationHeaders}
+                  >
+                    <option value="NONE">Sem autenticação</option>
+                    <option value="BEARER">Bearer token</option>
+                    <option value="BASIC">Basic auth</option>
+                    <option value="CUSTOM_HEADER">Header customizado</option>
+                  </select>
+                </div>
+
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>Contexto autenticado</label>
+                  <p className="form-help" style={{ margin: 0 }}>
+                    <strong>Como este scan usa credenciais</strong>
+                    {` ${authHint}`}
+                  </p>
+                </div>
+
+                {authMode === 'BEARER' ? (
+                  <div className="field" style={{ gridColumn: '1 / -1' }}>
+                    <label htmlFor="scan-bearer-token">Token Bearer</label>
+                    <input
+                      className="input"
+                      id="scan-bearer-token"
+                      name="scan-bearer-token"
+                      type="password"
+                      value={bearerToken}
+                      onChange={(event) => setBearerToken(event.target.value)}
+                      placeholder="eyJhbGciOi..."
+                    />
+                  </div>
+                ) : null}
+
+                {authMode === 'BASIC' ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="scan-basic-username">Usuário</label>
+                      <input
+                        className="input"
+                        id="scan-basic-username"
+                        name="scan-basic-username"
+                        type="text"
+                        value={basicUsername}
+                        onChange={(event) => setBasicUsername(event.target.value)}
+                        placeholder="scanner@tenant"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="scan-basic-password">Senha</label>
+                      <input
+                        className="input"
+                        id="scan-basic-password"
+                        name="scan-basic-password"
+                        type="password"
+                        value={basicPassword}
+                        onChange={(event) => setBasicPassword(event.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {authMode === 'CUSTOM_HEADER' ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="scan-custom-header-name">Nome do header</label>
+                      <input
+                        className="input"
+                        id="scan-custom-header-name"
+                        name="scan-custom-header-name"
+                        type="text"
+                        value={customHeaderName}
+                        onChange={(event) => setCustomHeaderName(event.target.value)}
+                        placeholder="X-Api-Key"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="scan-custom-header-value">Valor do header</label>
+                      <input
+                        className="input"
+                        id="scan-custom-header-value"
+                        name="scan-custom-header-value"
+                        type="password"
+                        value={customHeaderValue}
+                        onChange={(event) => setCustomHeaderValue(event.target.value)}
+                        placeholder="secret-key"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {canUseAuthenticationCookies ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="scan-cookie-name">Cookie de sessão (nome)</label>
+                      <input
+                        className="input"
+                        id="scan-cookie-name"
+                        name="scan-cookie-name"
+                        type="text"
+                        value={cookieName}
+                        onChange={(event) => setCookieName(event.target.value)}
+                        placeholder="session"
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="scan-cookie-value">Cookie de sessão (valor)</label>
+                      <input
+                        className="input"
+                        id="scan-cookie-value"
+                        name="scan-cookie-value"
+                        type="password"
+                        value={cookieValue}
+                        onChange={(event) => setCookieValue(event.target.value)}
+                        placeholder="session-token"
+                      />
+                    </div>
+                  </>
+                ) : null}
               </div>
 
               <div className="meta-grid">

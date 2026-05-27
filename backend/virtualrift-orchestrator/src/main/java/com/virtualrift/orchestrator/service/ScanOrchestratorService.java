@@ -8,6 +8,7 @@ import com.virtualrift.orchestrator.dto.CreateScanRequest;
 import com.virtualrift.orchestrator.dto.ScanFindingResponse;
 import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.dto.ScanResultResponse;
+import com.virtualrift.orchestrator.exception.InvalidScanCredentialsException;
 import com.virtualrift.orchestrator.exception.ScanNotFoundException;
 import com.virtualrift.orchestrator.exception.ScanQuotaExceededException;
 import com.virtualrift.orchestrator.exception.ScanTargetNotAuthorizedException;
@@ -26,13 +27,32 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class ScanOrchestratorService {
 
     private static final Logger log = LoggerFactory.getLogger(ScanOrchestratorService.class);
+    private static final Pattern TOKEN_NAME_PATTERN = Pattern.compile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$");
+    private static final Pattern CONTROL_CHARACTER_PATTERN = Pattern.compile("[\\r\\n\\u0000]");
+    private static final Set<String> BLOCKED_HEADER_NAMES = Set.of(
+            "connection",
+            "content-length",
+            "cookie",
+            "host",
+            "transfer-encoding"
+    );
+    private static final int MAX_HEADERS = 10;
+    private static final int MAX_COOKIES = 10;
+    private static final int MAX_NAME_LENGTH = 64;
+    private static final int MAX_VALUE_LENGTH = 4096;
 
     private final ScanRepository scanRepository;
     private final ScanFindingRepository scanFindingRepository;
@@ -53,6 +73,7 @@ public class ScanOrchestratorService {
     public ScanResponse createScan(CreateScanRequest request, UUID tenantId, UUID userId) {
         TenantQuota quota = tenantClient.getQuota(tenantId);
         Plan plan = tenantClient.getPlan(tenantId);
+        ScanAuthenticationContext authenticationContext = normalizeAuthenticationContext(request);
 
         validateScanTypeAllowed(request.scanType(), plan);
         validateTargetAuthorized(tenantId, request.target(), request.scanType());
@@ -77,7 +98,9 @@ public class ScanOrchestratorService {
                 scan.getTarget(),
                 scan.getScanType().name(),
                 scan.getDepth(),
-                scan.getTimeout()
+                scan.getTimeout(),
+                authenticationContext.headers(),
+                authenticationContext.cookies()
         );
 
         return toResponse(scan);
@@ -189,6 +212,117 @@ public class ScanOrchestratorService {
         }
     }
 
+    private ScanAuthenticationContext normalizeAuthenticationContext(CreateScanRequest request) {
+        Map<String, String> headers = normalizeHeaders(request.headers());
+        Map<String, String> cookies = normalizeCookies(request.cookies());
+
+        switch (request.scanType()) {
+            case NETWORK -> {
+                if (!headers.isEmpty() || !cookies.isEmpty()) {
+                    throw new InvalidScanCredentialsException("NETWORK scans do not support authentication headers or cookies");
+                }
+            }
+            case SAST -> {
+                if (!cookies.isEmpty()) {
+                    throw new InvalidScanCredentialsException("SAST scans do not support cookies");
+                }
+            }
+            case WEB, API -> {
+                // WEB and API scans may use both headers and cookies.
+            }
+        }
+
+        return new ScanAuthenticationContext(headers, cookies);
+    }
+
+    private Map<String, String> normalizeHeaders(Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return Map.of();
+        }
+        if (headers.size() > MAX_HEADERS) {
+            throw new InvalidScanCredentialsException("Too many authentication headers were provided");
+        }
+
+        Map<String, String> normalized = new LinkedHashMap<>();
+        Set<String> seenNames = new HashSet<>();
+
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String name = normalizeName(entry.getKey(), "header");
+            String lowerCaseName = name.toLowerCase(Locale.ROOT);
+            if (!seenNames.add(lowerCaseName)) {
+                throw new InvalidScanCredentialsException("Duplicate authentication header: " + name);
+            }
+            if (BLOCKED_HEADER_NAMES.contains(lowerCaseName)) {
+                throw new InvalidScanCredentialsException("Header is not allowed for scan authentication: " + name);
+            }
+
+            normalized.put(name, normalizeValue(entry.getValue(), "header " + name));
+        }
+
+        return Map.copyOf(normalized);
+    }
+
+    private Map<String, String> normalizeCookies(Map<String, String> cookies) {
+        if (cookies == null || cookies.isEmpty()) {
+            return Map.of();
+        }
+        if (cookies.size() > MAX_COOKIES) {
+            throw new InvalidScanCredentialsException("Too many authentication cookies were provided");
+        }
+
+        Map<String, String> normalized = new LinkedHashMap<>();
+        Set<String> seenNames = new HashSet<>();
+
+        for (Map.Entry<String, String> entry : cookies.entrySet()) {
+            String name = normalizeName(entry.getKey(), "cookie");
+            if (!seenNames.add(name)) {
+                throw new InvalidScanCredentialsException("Duplicate authentication cookie: " + name);
+            }
+
+            normalized.put(name, normalizeValue(entry.getValue(), "cookie " + name));
+        }
+
+        return Map.copyOf(normalized);
+    }
+
+    private String normalizeName(String rawName, String fieldLabel) {
+        if (rawName == null) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " name cannot be null");
+        }
+
+        String normalized = rawName.trim();
+        if (normalized.isEmpty()) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " name cannot be blank");
+        }
+        if (normalized.length() > MAX_NAME_LENGTH) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " name is too long");
+        }
+        if (!TOKEN_NAME_PATTERN.matcher(normalized).matches()) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " name contains invalid characters");
+        }
+
+        return normalized;
+    }
+
+    private String normalizeValue(String rawValue, String fieldLabel) {
+        if (rawValue == null) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " value cannot be null");
+        }
+
+        String normalized = rawValue.trim();
+        if (normalized.isEmpty()) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " value cannot be blank");
+        }
+        if (normalized.length() > MAX_VALUE_LENGTH) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " value is too long");
+        }
+        if (CONTROL_CHARACTER_PATTERN.matcher(normalized).find()) {
+            throw new InvalidScanCredentialsException("Authentication " + fieldLabel + " value contains control characters");
+        }
+
+        return normalized;
+    }
+
     private ScanResponse toResponse(Scan scan) {
         return new ScanResponse(
                 scan.getId(),
@@ -240,5 +374,8 @@ public class ScanOrchestratorService {
             return 50;
         }
         return normalized;
+    }
+
+    private record ScanAuthenticationContext(Map<String, String> headers, Map<String, String> cookies) {
     }
 }

@@ -241,6 +241,8 @@ describe('virtualrift types package', () => {
       scanType: ScanType;
       depth?: number | null;
       timeout?: number | null;
+      headers?: Record<string, string> | null;
+      cookies?: Record<string, string> | null;
     }>();
     expectTypeOf<Scan>().toEqualTypeOf<{
       id: string;

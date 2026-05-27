@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ApiScanEngine {
@@ -19,6 +20,14 @@ public class ApiScanEngine {
     }
 
     public List<VulnerabilityFinding> scan(String targetUrl) {
+        return scan(targetUrl, detector);
+    }
+
+    public List<VulnerabilityFinding> scan(String targetUrl, Map<String, String> headers, Map<String, String> cookies) {
+        return scan(targetUrl, detector.withContext(headers, cookies));
+    }
+
+    private List<VulnerabilityFinding> scan(String targetUrl, ApiVulnerabilityDetector detector) {
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
         if (isLimitReached(findings)) {

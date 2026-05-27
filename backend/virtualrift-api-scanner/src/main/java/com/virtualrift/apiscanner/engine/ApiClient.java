@@ -14,4 +14,8 @@ public interface ApiClient {
     HttpResponse<String> sendRequestWithBody(String url, String method, String body, Map<String, String> headers);
 
     HttpResponse<String> sendRequestWithAuth(String url, String method, String token);
+
+    default ApiClient withContext(Map<String, String> headers, Map<String, String> cookies) {
+        return this;
+    }
 }

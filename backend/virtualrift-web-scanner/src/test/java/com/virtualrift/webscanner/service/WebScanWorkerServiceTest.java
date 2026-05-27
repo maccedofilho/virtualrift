@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,7 +52,7 @@ class WebScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://example.com", ScanType.WEB.name());
-        when(engine.scan("https://example.com")).thenReturn(List.of(
+        when(engine.scan("https://example.com", Map.of(), Map.of())).thenReturn(List.of(
                 finding("Reflected XSS", Severity.HIGH, "XSS", "Payload: token=abcdefghijklmnopqrstuvwxyz")
         ));
 
@@ -79,7 +80,7 @@ class WebScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://example.com", ScanType.WEB.name());
-        when(engine.scan("https://example.com")).thenReturn(List.of(
+        when(engine.scan("https://example.com", Map.of(), Map.of())).thenReturn(List.of(
                 finding("Low finding", Severity.LOW, "INFO", "low"),
                 finding("Critical finding", Severity.CRITICAL, "XSS", "critical")
         ));
@@ -112,7 +113,7 @@ class WebScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "http://localhost:8080", ScanType.WEB.name());
-        when(engine.scan("http://localhost:8080")).thenThrow(new IllegalArgumentException("SSRF protection"));
+        when(engine.scan("http://localhost:8080", Map.of(), Map.of())).thenThrow(new IllegalArgumentException("SSRF protection"));
 
         service.process(event);
 
@@ -133,7 +134,7 @@ class WebScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://example.com", ScanType.WEB.name());
-        when(engine.scan("https://example.com")).thenThrow(new IllegalStateException("scanner failed"));
+        when(engine.scan("https://example.com", Map.of(), Map.of())).thenThrow(new IllegalStateException("scanner failed"));
 
         service.process(event);
 
@@ -141,6 +142,30 @@ class WebScanWorkerServiceTest {
         verify(publisher).publishFailed(captor.capture());
 
         assertEquals("WEB_PROCESSING_FAILED", captor.getValue().errorCode());
+    }
+
+    @Test
+    @DisplayName("should pass authentication context to WEB engine")
+    void process_quandoComCredenciais_repassaContextoParaEngine() {
+        UUID scanId = UUID.randomUUID();
+        TenantId tenantId = TenantId.generate();
+        ScanRequestedEvent event = new ScanRequestedEvent(
+                scanId,
+                tenantId,
+                "https://example.com",
+                ScanType.WEB.name(),
+                1,
+                300,
+                Map.of("Authorization", "Bearer token-123"),
+                Map.of("session", "cookie-1"),
+                Instant.now()
+        );
+        when(engine.scan("https://example.com", Map.of("Authorization", "Bearer token-123"), Map.of("session", "cookie-1")))
+                .thenReturn(List.of());
+
+        service.process(event);
+
+        verify(engine).scan("https://example.com", Map.of("Authorization", "Bearer token-123"), Map.of("session", "cookie-1"));
     }
 
     private ScanRequestedEvent requestedEvent(UUID scanId, TenantId tenantId, String target, String scanType) {

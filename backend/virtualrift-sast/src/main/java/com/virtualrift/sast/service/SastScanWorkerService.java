@@ -40,7 +40,7 @@ public class SastScanWorkerService {
 
         Instant startedAt = Instant.now();
 
-        try (SastTarget target = targetResolver.resolve(event.target(), event.scanId(), event.timeout())) {
+        try (SastTarget target = targetResolver.resolve(event.target(), event.scanId(), event.timeout(), event.headers())) {
             List<VulnerabilityFinding> findings = analyze(target.path()).stream()
                     .map(finding -> remapFinding(event, finding))
                     .sorted(VulnerabilityFinding.bySeverity())

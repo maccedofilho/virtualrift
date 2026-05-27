@@ -8,6 +8,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -23,7 +24,9 @@ public class ScanEventProducer {
     }
 
     public void publishScanRequested(UUID scanId, TenantId tenantId, String target, String scanType,
-                                     Integer depth, Integer timeout) {
+                                     Integer depth, Integer timeout,
+                                     Map<String, String> headers,
+                                     Map<String, String> cookies) {
         ScanRequestedEvent event = new ScanRequestedEvent(
                 scanId,
                 tenantId,
@@ -31,6 +34,8 @@ public class ScanEventProducer {
                 scanType,
                 depth,
                 timeout,
+                headers,
+                cookies,
                 Instant.now()
         );
 
