@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class WebScanEngine {
@@ -23,6 +24,20 @@ public class WebScanEngine {
     }
 
     public List<VulnerabilityFinding> scan(String targetUrl) {
+        return scan(targetUrl, xssDetector, sqlInjectionDetector);
+    }
+
+    public List<VulnerabilityFinding> scan(String targetUrl, Map<String, String> headers, Map<String, String> cookies) {
+        return scan(
+                targetUrl,
+                xssDetector.withContext(headers, cookies),
+                sqlInjectionDetector.withContext(headers, cookies)
+        );
+    }
+
+    private List<VulnerabilityFinding> scan(String targetUrl,
+                                            XssDetector xssDetector,
+                                            SqlInjectionDetector sqlInjectionDetector) {
         List<VulnerabilityFinding> findings = new ArrayList<>();
 
         if (properties.isDomXssEnabled()) {

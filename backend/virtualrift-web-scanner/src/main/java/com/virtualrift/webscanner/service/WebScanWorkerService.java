@@ -35,7 +35,7 @@ public class WebScanWorkerService {
         Instant startedAt = Instant.now();
 
         try {
-            List<VulnerabilityFinding> findings = engine.scan(event.target()).stream()
+            List<VulnerabilityFinding> findings = engine.scan(event.target(), event.headers(), event.cookies()).stream()
                     .map(finding -> remapFinding(event, finding))
                     .sorted(VulnerabilityFinding.bySeverity())
                     .toList();

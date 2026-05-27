@@ -253,6 +253,8 @@ export type CreateScanRequest = {
   scanType: ScanType;
   depth?: Nullable<number>;
   timeout?: Nullable<number>;
+  headers?: Nullable<Record<string, string>>;
+  cookies?: Nullable<Record<string, string>>;
 };
 
 export type Scan = {

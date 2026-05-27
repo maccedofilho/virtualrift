@@ -259,6 +259,12 @@ describe('API client package', () => {
     const response = await client.scans.create({
       target: 'https://app.test',
       scanType: 'WEB',
+      headers: {
+        Authorization: 'Bearer token-123',
+      },
+      cookies: {
+        session: 'cookie-1',
+      },
     });
 
     expect(response.status).toBe('PENDING');
@@ -269,6 +275,18 @@ describe('API client package', () => {
     expect(headers.get('X-Tenant-Id')).toBe('tenant-id');
     expect(headers.get('X-User-Id')).toBe('user-id');
     expect(headers.get('X-Trace-Id')).toBe('trace-1');
+    expect(requestInit?.body).toBe(
+      JSON.stringify({
+        target: 'https://app.test',
+        scanType: 'WEB',
+        headers: {
+          Authorization: 'Bearer token-123',
+        },
+        cookies: {
+          session: 'cookie-1',
+        },
+      }),
+    );
   });
 
   it('lists scans for the current tenant', async () => {

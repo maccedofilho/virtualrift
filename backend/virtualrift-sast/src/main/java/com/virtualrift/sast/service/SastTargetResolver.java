@@ -13,6 +13,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -41,19 +42,23 @@ public class SastTargetResolver {
     }
 
     public SastTarget resolve(String target, UUID scanId, Integer requestedTimeout) {
+        return resolve(target, scanId, requestedTimeout, Map.of());
+    }
+
+    public SastTarget resolve(String target, UUID scanId, Integer requestedTimeout, Map<String, String> headers) {
         if (target == null || target.isBlank()) {
             throw new IllegalArgumentException("SAST target cannot be blank");
         }
 
         URI uri = parseUri(target.trim());
         if (uri.getScheme() != null) {
-            return resolveRepository(uri, scanId, requestedTimeout);
+            return resolveRepository(uri, scanId, requestedTimeout, headers);
         }
 
         return resolveLocalPath(target);
     }
 
-    private SastTarget resolveRepository(URI repositoryUri, UUID scanId, Integer requestedTimeout) {
+    private SastTarget resolveRepository(URI repositoryUri, UUID scanId, Integer requestedTimeout, Map<String, String> headers) {
         validateRepositoryUri(repositoryUri);
 
         Path scanWorkspace = null;
@@ -63,7 +68,7 @@ public class SastTargetResolver {
             scanWorkspace = Files.createTempDirectory(workspaceRoot, "scan-" + scanId + "-");
             Path repositoryPath = scanWorkspace.resolve("repo");
 
-            gitClient.cloneRepository(repositoryUri, repositoryPath, properties.cloneTimeout(requestedTimeout));
+            gitClient.cloneRepository(repositoryUri, repositoryPath, properties.cloneTimeout(requestedTimeout), headers == null ? Map.of() : headers);
             validateRepositoryLimits(repositoryPath);
 
             Path cleanupRoot = scanWorkspace;

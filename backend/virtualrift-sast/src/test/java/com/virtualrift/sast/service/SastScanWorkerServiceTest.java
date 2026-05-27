@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,12 +44,14 @@ class SastScanWorkerServiceTest {
     private Path tempDir;
 
     private SastScanWorkerService service;
+    private TestGitClient gitClient;
 
     @BeforeEach
     void setUp() {
         SastProperties properties = new SastProperties();
         properties.setWorkspaceRoot(tempDir.resolve("workspace"));
-        SastTargetResolver targetResolver = new SastTargetResolver(properties, new TestGitClient());
+        gitClient = new TestGitClient();
+        SastTargetResolver targetResolver = new SastTargetResolver(properties, gitClient);
         service = new SastScanWorkerService(new SastAnalyzer(), targetResolver, publisher);
     }
 
@@ -90,7 +93,17 @@ class SastScanWorkerServiceTest {
     void process_quandoTargetRepositorio_publicaEventoCompleted() {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
-        ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://github.com/acme/vulnerable.git", ScanType.SAST.name());
+        ScanRequestedEvent event = new ScanRequestedEvent(
+                scanId,
+                tenantId,
+                "https://github.com/acme/vulnerable.git",
+                ScanType.SAST.name(),
+                1,
+                300,
+                Map.of("Authorization", "Bearer repo-token"),
+                Map.of(),
+                Instant.now()
+        );
 
         service.process(event);
 
@@ -102,6 +115,7 @@ class SastScanWorkerServiceTest {
         assertEquals(tenantId, completed.tenantId());
         assertEquals(1, completed.totalFindings());
         assertTrue(completed.findings().get(0).location().contains("RepoExample.java"));
+        assertEquals(Map.of("Authorization", "Bearer repo-token"), gitClient.headers);
     }
 
     @Test
@@ -166,8 +180,11 @@ class SastScanWorkerServiceTest {
 
     private static class TestGitClient implements GitClient {
 
+        private Map<String, String> headers = Map.of();
+
         @Override
-        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout) {
+        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout, Map<String, String> headers) {
+            this.headers = headers == null ? Map.of() : Map.copyOf(headers);
             try {
                 Files.createDirectories(destination);
                 Files.writeString(destination.resolve("RepoExample.java"), """

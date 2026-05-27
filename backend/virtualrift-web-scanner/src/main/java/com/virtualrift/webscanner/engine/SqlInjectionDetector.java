@@ -113,6 +113,10 @@ public class SqlInjectionDetector {
         this.httpClient = httpClient;
     }
 
+    public SqlInjectionDetector withContext(java.util.Map<String, String> headers, java.util.Map<String, String> cookies) {
+        return new SqlInjectionDetector(httpClient.withContext(headers, cookies));
+    }
+
     public List<VulnerabilityFinding> scan(String targetUrl, String paramName, String payload) {
         validateUrl(targetUrl);
         if (paramName == null || paramName.isBlank()) {

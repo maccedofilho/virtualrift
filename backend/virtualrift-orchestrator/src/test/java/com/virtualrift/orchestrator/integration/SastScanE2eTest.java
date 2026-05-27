@@ -312,7 +312,7 @@ class SastScanE2eTest {
         private URI lastRepositoryUri;
 
         @Override
-        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout) {
+        public void cloneRepository(URI repositoryUri, Path destination, Duration timeout, Map<String, String> headers) {
             lastRepositoryUri = repositoryUri;
             try {
                 Files.createDirectories(destination);

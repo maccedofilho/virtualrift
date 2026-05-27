@@ -971,6 +971,50 @@ describe('VirtualRift Dashboard App', () => {
       scanType: 'WEB',
       depth: 2,
       timeout: 45,
+      headers: null,
+      cookies: null,
+    });
+  });
+
+  it('creates an authenticated scan with bearer token and cookie context', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'verified-target',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Autenticação do scan'), { target: { value: 'BEARER' } });
+    fireEvent.change(screen.getByLabelText('Token Bearer'), { target: { value: 'token-123' } });
+    fireEvent.change(screen.getByLabelText('Cookie de sessão (nome)'), { target: { value: 'session' } });
+    fireEvent.change(screen.getByLabelText('Cookie de sessão (valor)'), { target: { value: 'cookie-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Criar scan' }));
+
+    expect(await screen.findByText('ID do scan: scan-created')).toBeInTheDocument();
+    expect(client.scans.create).toHaveBeenCalledWith({
+      target: 'https://app.example.com',
+      scanType: 'WEB',
+      depth: 1,
+      timeout: 30,
+      headers: {
+        Authorization: 'Bearer token-123',
+      },
+      cookies: {
+        session: 'cookie-1',
+      },
     });
   });
 

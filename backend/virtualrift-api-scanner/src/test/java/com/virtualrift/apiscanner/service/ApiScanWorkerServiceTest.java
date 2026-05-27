@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,7 +52,7 @@ class ApiScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://api.example.com/users", ScanType.API.name());
-        when(engine.scan("https://api.example.com/users")).thenReturn(List.of(
+        when(engine.scan("https://api.example.com/users", Map.of(), Map.of())).thenReturn(List.of(
                 finding("Excessive Data Exposure - PASSWORD", Severity.HIGH, "API_SECURITY", "token=abcdefghijklmnopqrstuvwxyz")
         ));
 
@@ -78,7 +79,7 @@ class ApiScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://api.example.com/users", ScanType.API.name());
-        when(engine.scan("https://api.example.com/users")).thenReturn(List.of(
+        when(engine.scan("https://api.example.com/users", Map.of(), Map.of())).thenReturn(List.of(
                 finding("Missing Rate Limiting", Severity.MEDIUM, "API_SECURITY", "medium"),
                 finding("SQL Injection", Severity.CRITICAL, "API_SECURITY", "critical")
         ));
@@ -111,7 +112,7 @@ class ApiScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "http://localhost:8080", ScanType.API.name());
-        when(engine.scan("http://localhost:8080")).thenThrow(new IllegalArgumentException("SSRF protection"));
+        when(engine.scan("http://localhost:8080", Map.of(), Map.of())).thenThrow(new IllegalArgumentException("SSRF protection"));
 
         service.process(event);
 
@@ -132,7 +133,7 @@ class ApiScanWorkerServiceTest {
         UUID scanId = UUID.randomUUID();
         TenantId tenantId = TenantId.generate();
         ScanRequestedEvent event = requestedEvent(scanId, tenantId, "https://api.example.com", ScanType.API.name());
-        when(engine.scan("https://api.example.com")).thenThrow(new IllegalStateException("scanner failed"));
+        when(engine.scan("https://api.example.com", Map.of(), Map.of())).thenThrow(new IllegalStateException("scanner failed"));
 
         service.process(event);
 
@@ -140,6 +141,30 @@ class ApiScanWorkerServiceTest {
         verify(publisher).publishFailed(captor.capture());
 
         assertEquals("API_PROCESSING_FAILED", captor.getValue().errorCode());
+    }
+
+    @Test
+    @DisplayName("should pass authentication context to API engine")
+    void process_quandoComCredenciais_repassaContextoParaEngine() {
+        UUID scanId = UUID.randomUUID();
+        TenantId tenantId = TenantId.generate();
+        ScanRequestedEvent event = new ScanRequestedEvent(
+                scanId,
+                tenantId,
+                "https://api.example.com/users",
+                ScanType.API.name(),
+                1,
+                300,
+                Map.of("Authorization", "Bearer token-123"),
+                Map.of("session", "cookie-1"),
+                Instant.now()
+        );
+        when(engine.scan("https://api.example.com/users", Map.of("Authorization", "Bearer token-123"), Map.of("session", "cookie-1")))
+                .thenReturn(List.of());
+
+        service.process(event);
+
+        verify(engine).scan("https://api.example.com/users", Map.of("Authorization", "Bearer token-123"), Map.of("session", "cookie-1"));
     }
 
     private ScanRequestedEvent requestedEvent(UUID scanId, TenantId tenantId, String target, String scanType) {
