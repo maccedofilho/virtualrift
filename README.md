@@ -36,41 +36,47 @@ The product is planned to support multiple languages and frameworks.
 
 The initial target is to start with the five most-used frontend ecosystems and the five most-used backend ecosystems, then expand based on demand and detection quality.
 
-At this stage, the repository does not claim full language coverage yet. The backend platform is being prepared first so new analyzers can be added on top of a stable orchestration and tenancy model.
+At this stage, the repository does not claim full language coverage yet. The backend platform remains the technical core so new analyzers can be added on top of a stable orchestration, tenancy and reporting model, while the frontend beta now exposes the first operational workflows on top of that backend.
 
 ## Current Delivery Phase
 
-VirtualRift is currently in backend construction.
+VirtualRift is currently in a backend-first beta phase.
 
 That means:
 
-- the backend services are the active implementation focus right now
-- the frontend is intentionally not the current delivery focus
-- UI, dashboards and polished beta workflows will be shaped after the backend reaches a stronger beta-ready state
-
-The frontend workspace exists, but it should be treated as preparatory structure rather than the finished product experience.
+- the backend services still define the main delivery pace and product boundaries
+- the frontend is no longer just preparatory structure; it already exposes the first real beta workflows
+- auth, tenancy, scan orchestration, reporting and scanner workers are already connected by real contracts
+- some product surfaces are still foundational and not yet at a polished GA experience
 
 ## Repository Status
 
-This monorepo already contains the backend foundation of the platform and the supporting project governance needed to keep the security scope coherent.
+This monorepo already contains a working backend platform, an operational frontend beta and the supporting project governance needed to keep the security scope coherent.
 
 ### What is implemented now
 
 - Java 21 Spring Boot backend organized as a Maven multi-module system
-- API Gateway, Auth, Tenant and Orchestrator services
-- scanner modules for web, API, network and SAST analysis at different maturity levels
+- API Gateway, Auth, Tenant, Orchestrator and Reports services
+- scanner workers for web, API, network and SAST analysis over Kafka
 - shared backend types and domain primitives in `backend/virtualrift-common`
+- tenant-aware scan creation, status, findings, aggregated results and report snapshots
+- workspace onboarding, workspace invitations, JWT session refresh/logout and GitHub OAuth login foundation
+- frontend dashboard with login in PT-BR, onboarding, targets, scans, reports, account and plan areas
+- shared frontend packages for API client and TypeScript contracts
+- initial CI with backend test/package and frontend test/lint/build
 - repository rules, commands, agents and skills in `.claude`
-- real backend tests with `mvn test`
-- real frontend `test` and `lint` scripts for workspace hygiene, without claiming frontend feature completeness
+- real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
+- real frontend `test`, `lint` and `build` scripts
 
 ### What is not complete yet
 
 - full repository ingestion and end-to-end scan onboarding flow
-- mature frontend product experience
-- complete CI workflows in `.github/workflows/`
+- complete ownership verification coverage across all target types
+- final frontend product polish and broader beta UX hardening
+- full CI/release/security automation coverage in `.github/workflows/`
 - full production infrastructure promised by the long-term platform vision
 - complete scanner depth across all desired languages and frameworks
+- final report export/storage pipeline beyond the current JSON and printable HTML foundation
 
 ## Architecture
 
@@ -79,9 +85,9 @@ Current repository structure:
 ```text
 virtualrift/
 ├── backend/          Java 21 + Spring Boot 3 microservices
-├── frontend/         workspace kept ready for the future beta UI
-├── infra/            infrastructure documentation and future deployment assets
-├── libs/             shared libraries area, still mostly placeholder
+├── frontend/         React 18 + TypeScript + Vite dashboard beta and shared packages
+├── infra/            infrastructure documentation, Helm and Terraform assets
+├── libs/             shared Java library area, still mostly placeholder
 └── .claude/          project rules, agents, commands and skills
 ```
 
@@ -99,6 +105,13 @@ Current scanner modules:
 - `virtualrift-api-scanner`
 - `virtualrift-network-scanner`
 - `virtualrift-sast`
+
+Current frontend application and packages:
+
+- `frontend/apps/virtualrift-dashboard`
+- `frontend/packages/virtualrift-api-client`
+- `frontend/packages/virtualrift-types`
+- `frontend/packages/virtualrift-ui`
 
 ## Local Development
 
@@ -118,26 +131,29 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 mvn test
 ```
 
-### Frontend workspace checks
+`mvn test` covers the real backend suite. The Testcontainers end-to-end flows run when Docker is available.
 
-The frontend is not the active product surface yet, but the workspace tooling is already validated:
+### Frontend workspace
+
+The frontend already contains the dashboard beta and shared packages used by that application:
 
 ```bash
 cd frontend
 corepack pnpm install
 corepack pnpm test
 corepack pnpm lint
+corepack pnpm build
 ```
 
 ## Roadmap Direction
 
 The current sequence is:
 
-1. finish stabilizing the backend platform
-2. improve scan orchestration, tenancy, auth and reporting flows
-3. grow analyzer coverage across the first target language groups
-4. move into a beta phase with a real frontend experience
-5. evolve the platform into a broader multi-surface security product
+1. keep hardening the backend platform and scanner safety boundaries
+2. deepen scan orchestration, ownership verification, tenancy, auth and reporting flows
+3. expand analyzer coverage across the first target language groups
+4. evolve the frontend beta from operational console to a stronger product experience
+5. grow into a broader multi-surface security platform
 
 ## Claude Code
 
@@ -160,7 +176,9 @@ Current backend direction already assumes:
 
 - tenant-aware isolation boundaries
 - JWT-based authentication across service boundaries
+- RBAC across `OWNER`, `ANALYST` and `READER` flows
 - rate limiting and denylist controls at the gateway edge
+- masked evidence before persistence/exposure
 - review rules for auth, authz, data exposure, injection and scanner abuse
 
 ## License
