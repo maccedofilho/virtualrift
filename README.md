@@ -62,6 +62,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - tenant-aware scan creation, status, findings, aggregated results and report snapshots
 - workspace onboarding, workspace invitations, JWT session refresh/logout and GitHub OAuth login foundation
 - frontend dashboard with login in PT-BR, onboarding, targets, scans, reports, account and plan areas
+- repository onboarding and authenticated SAST ingestion across HTTPS, scheme-less, SSH-short and provider page URLs
 - shared frontend packages for API client and TypeScript contracts
 - initial CI with backend test/package and frontend test/lint/build
 - repository rules, commands, agents and skills in `.claude`
@@ -70,8 +71,8 @@ This monorepo already contains a working backend platform, an operational fronte
 
 ### What is not complete yet
 
-- full repository ingestion and end-to-end scan onboarding flow
 - final frontend product polish and broader beta UX hardening
+- deeper repository provider integrations beyond the current normalized clone-based onboarding flow
 - full CI/release/security automation coverage in `.github/workflows/`
 - full production infrastructure promised by the long-term platform vision
 - complete scanner depth across all desired languages and frameworks

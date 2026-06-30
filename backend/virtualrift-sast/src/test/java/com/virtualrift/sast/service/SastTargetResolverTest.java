@@ -57,6 +57,36 @@ class SastTargetResolverTest {
     }
 
     @Test
+    @DisplayName("should normalize scheme-less repository targets before cloning")
+    void resolve_quandoRepositorioSemEsquema_clonaUrlCanonica() {
+        UUID scanId = UUID.randomUUID();
+
+        try (SastTarget ignored = resolver.resolve("github.com/acme/repo", scanId, 7)) {
+            assertEquals(URI.create("https://github.com/acme/repo"), gitClient.repositoryUri);
+        }
+    }
+
+    @Test
+    @DisplayName("should normalize ssh short repository targets before cloning")
+    void resolve_quandoRepositorioSshCurto_clonaUrlCanonica() {
+        UUID scanId = UUID.randomUUID();
+
+        try (SastTarget ignored = resolver.resolve("git@github.com:acme/repo.git", scanId, 7)) {
+            assertEquals(URI.create("https://github.com/acme/repo.git"), gitClient.repositoryUri);
+        }
+    }
+
+    @Test
+    @DisplayName("should collapse browser repository urls to repository root before cloning")
+    void resolve_quandoRepositorioTreeGithub_clonaRaizDoRepositorio() {
+        UUID scanId = UUID.randomUUID();
+
+        try (SastTarget ignored = resolver.resolve("https://github.com/acme/repo/tree/main/src", scanId, 7)) {
+            assertEquals(URI.create("https://github.com/acme/repo"), gitClient.repositoryUri);
+        }
+    }
+
+    @Test
     @DisplayName("should reject repository scheme outside allowlist")
     void resolve_quandoSchemeNaoPermitido_rejeitaTarget() {
         IllegalArgumentException exception = assertThrows(

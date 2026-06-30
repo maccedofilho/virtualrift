@@ -119,6 +119,35 @@ class SastScanWorkerServiceTest {
     }
 
     @Test
+    @DisplayName("should normalize ssh short repository target before cloning")
+    void process_quandoTargetRepositorioSshCurto_clonaRepositorioCanonico() {
+        UUID scanId = UUID.randomUUID();
+        TenantId tenantId = TenantId.generate();
+        ScanRequestedEvent event = new ScanRequestedEvent(
+                scanId,
+                tenantId,
+                "git@github.com:acme/vulnerable.git",
+                ScanType.SAST.name(),
+                1,
+                300,
+                Map.of("PRIVATE-TOKEN", "repo-token"),
+                Map.of(),
+                Instant.now()
+        );
+
+        service.process(event);
+
+        ArgumentCaptor<ScanCompletedEvent> captor = ArgumentCaptor.forClass(ScanCompletedEvent.class);
+        verify(publisher).publishCompleted(captor.capture());
+
+        ScanCompletedEvent completed = captor.getValue();
+        assertEquals(scanId, completed.scanId());
+        assertEquals(tenantId, completed.tenantId());
+        assertEquals(URI.create("https://github.com/acme/vulnerable.git"), gitClient.repositoryUri);
+        assertEquals(Map.of("PRIVATE-TOKEN", "repo-token"), gitClient.headers);
+    }
+
+    @Test
     @DisplayName("should ignore non SAST scan requested events")
     void process_quandoScanNaoSast_ignoraEvento() {
         ScanRequestedEvent event = requestedEvent(UUID.randomUUID(), TenantId.generate(), "/missing", ScanType.WEB.name());
@@ -181,9 +210,11 @@ class SastScanWorkerServiceTest {
     private static class TestGitClient implements GitClient {
 
         private Map<String, String> headers = Map.of();
+        private URI repositoryUri;
 
         @Override
         public void cloneRepository(URI repositoryUri, Path destination, Duration timeout, Map<String, String> headers) {
+            this.repositoryUri = repositoryUri;
             this.headers = headers == null ? Map.of() : Map.copyOf(headers);
             try {
                 Files.createDirectories(destination);

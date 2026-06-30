@@ -1081,6 +1081,48 @@ describe('VirtualRift Dashboard App', () => {
     });
   });
 
+  it('creates a SAST scan from a repository target using custom auth headers', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'repo-target',
+        target: 'git@github.com:acme/platform.git',
+        type: 'REPOSITORY',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('scans');
+    expect(await screen.findByText('Histórico de scans do tenant')).toBeInTheDocument();
+    expect(screen.getByText(/normaliza tudo para o clone HTTPS da branch default/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Autenticação do scan'), { target: { value: 'CUSTOM_HEADER' } });
+    fireEvent.change(screen.getByLabelText('Nome do header'), { target: { value: 'PRIVATE-TOKEN' } });
+    fireEvent.change(screen.getByLabelText('Valor do header'), { target: { value: 'repo-token' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Criar scan' }));
+
+    expect(await screen.findByText('ID do scan: scan-created')).toBeInTheDocument();
+    expect(client.scans.create).toHaveBeenCalledWith({
+      target: 'git@github.com:acme/platform.git',
+      scanType: 'SAST',
+      depth: 1,
+      timeout: 30,
+      headers: {
+        'PRIVATE-TOKEN': 'repo-token',
+      },
+      cookies: null,
+    });
+  });
+
   it('refreshes the status of a created scan from the session list', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
