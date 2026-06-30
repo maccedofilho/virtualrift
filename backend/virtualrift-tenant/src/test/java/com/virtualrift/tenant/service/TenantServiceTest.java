@@ -421,6 +421,30 @@ class TenantServiceTest {
         }
 
         @Test
+        @DisplayName("should canonicalize repository targets during onboarding")
+        void addScanTarget_quandoRepositorioSsh_curtoSalvaUrlCanonica() {
+            UUID tenantId = UUID.randomUUID();
+            Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
+            TenantQuota quota = createQuota(tenantId);
+            AddScanTargetRequest request = new AddScanTargetRequest("git@github.com:acme/platform.git", TargetType.REPOSITORY, "core repo");
+
+            when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
+            when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://github.com/acme/platform.git")).thenReturn(false);
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.addScanTarget(tenantId, request);
+
+            assertEquals("https://github.com/acme/platform.git", response.target());
+            verify(scanTargetRepository).existsByTenantIdAndTarget(tenantId, "https://github.com/acme/platform.git");
+            verify(scanTargetRepository).save(argThat(target ->
+                    target.getType() == TargetType.REPOSITORY
+                            && target.getTarget().equals("https://github.com/acme/platform.git")
+            ));
+        }
+
+        @Test
         @DisplayName("should reject duplicate target for same tenant")
         void addScanTarget_quandoDuplicado_lancaSlugAlreadyExistsException() {
             UUID tenantId = UUID.randomUUID();
@@ -711,6 +735,18 @@ class TenantServiceTest {
             when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
 
             assertTrue(tenantService.isScanTargetAuthorized(tenantId, "https://github.com/acme/app", "SAST"));
+        }
+
+        @Test
+        @DisplayName("should match repository targets across browser urls and clone urls")
+        void isScanTargetAuthorized_quandoRepositorioRegistradoComoTreeUrl_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = createVerifiedScanTarget(tenantId, "https://github.com/acme/app/tree/main/src", TargetType.REPOSITORY);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "git@github.com:acme/app.git", "SAST"));
         }
     }
 }

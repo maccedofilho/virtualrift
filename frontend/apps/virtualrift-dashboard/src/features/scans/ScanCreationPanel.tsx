@@ -49,6 +49,36 @@ const authenticationHint = (scanType: ScanType): string => {
   }
 };
 
+const requestedTargetPlaceholder = (target: ScanTargetResponse | null): string => {
+  switch (target?.type) {
+    case 'REPOSITORY':
+      return 'https://github.com/org/repo, github.com/org/repo ou git@github.com:org/repo.git';
+    case 'API_SPEC':
+      return 'https://api.example.com/openapi.json';
+    case 'URL':
+      return 'https://app.example.com/login';
+    case 'IP_RANGE':
+      return '203.0.113.10:443';
+    default:
+      return 'https://app.example.com/login';
+  }
+};
+
+const requestedTargetHint = (target: ScanTargetResponse | null): string | null => {
+  switch (target?.type) {
+    case 'REPOSITORY':
+      return 'Aceita URLs HTTPS, sem esquema, SSH curto e links de página do provedor. O worker normaliza tudo para o clone HTTPS da branch default.';
+    case 'API_SPEC':
+      return 'Você pode ajustar o caminho final do contrato desde que ele permaneça dentro do host já verificado.';
+    case 'URL':
+      return 'O caminho pode variar, mas o host continua preso ao escopo já validado para o tenant.';
+    case 'IP_RANGE':
+      return 'Scans de rede usam host:porta dentro da faixa aprovada manualmente.';
+    default:
+      return null;
+  }
+};
+
 const encodeBase64 = (value: string): string => {
   const encodedBytes = new TextEncoder().encode(value);
   const binary = Array.from(encodedBytes, (byte) => String.fromCharCode(byte)).join('');
@@ -559,9 +589,15 @@ export function ScanCreationPanel() {
                     type="text"
                     value={requestedTarget}
                     onChange={(event) => setRequestedTarget(event.target.value)}
-                    placeholder="https://app.example.com/login"
+                    placeholder={requestedTargetPlaceholder(selectedTarget)}
                     required
                   />
+                  {requestedTargetHint(selectedTarget) ? (
+                    <p className="form-help" style={{ marginTop: '0.5rem' }}>
+                      <strong>Como esse alvo é interpretado</strong>
+                      {` ${requestedTargetHint(selectedTarget)}`}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="field">

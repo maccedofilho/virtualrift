@@ -1,5 +1,6 @@
 package com.virtualrift.sast.service;
 
+import com.virtualrift.common.repository.RepositoryTargetNormalizer;
 import com.virtualrift.sast.config.SastProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -50,9 +52,15 @@ public class SastTargetResolver {
             throw new IllegalArgumentException("SAST target cannot be blank");
         }
 
-        URI uri = parseUri(target.trim());
-        if (uri.getScheme() != null) {
-            return resolveRepository(uri, scanId, requestedTimeout, headers);
+        String trimmedTarget = target.trim();
+        URI explicitUri = tryParseUri(trimmedTarget);
+        Optional<URI> repositoryUri = canonicalRepositoryUri(trimmedTarget, explicitUri);
+        if (repositoryUri.isPresent()) {
+            return resolveRepository(repositoryUri.get(), scanId, requestedTimeout, headers);
+        }
+
+        if (explicitUri != null && explicitUri.getScheme() != null) {
+            throw new IllegalArgumentException("Repository scheme is not allowed: " + explicitUri.getScheme().toLowerCase(Locale.ROOT));
         }
 
         return resolveLocalPath(target);
@@ -95,12 +103,22 @@ public class SastTargetResolver {
         return SastTarget.local(path);
     }
 
-    private URI parseUri(String target) {
+    private URI tryParseUri(String target) {
         try {
             return new URI(target);
         } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Invalid SAST target: " + target, e);
+            return null;
         }
+    }
+
+    private Optional<URI> canonicalRepositoryUri(String target, URI explicitUri) {
+        if (explicitUri != null && explicitUri.getScheme() != null && !explicitUri.getScheme().equalsIgnoreCase("ssh")) {
+            if (explicitUri.getUserInfo() != null) {
+                throw new IllegalArgumentException("Repository URL credentials are not allowed");
+            }
+        }
+
+        return RepositoryTargetNormalizer.toCanonicalRemoteUri(target);
     }
 
     private void validateRepositoryUri(URI repositoryUri) {

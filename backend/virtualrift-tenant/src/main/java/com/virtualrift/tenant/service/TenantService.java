@@ -1,5 +1,6 @@
 package com.virtualrift.tenant.service;
 
+import com.virtualrift.common.repository.RepositoryTargetNormalizer;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.BillingUsageResponse;
@@ -295,14 +296,15 @@ public class TenantService {
             throw new TenantQuotaExceededException("Maximum scan targets limit reached");
         }
 
-        if (scanTargetRepository.existsByTenantIdAndTarget(tenantId, request.target())) {
-            throw new SlugAlreadyExistsException("Target already exists: " + request.target());
+        String normalizedTarget = normalizeTargetForPersistence(request.target(), request.type());
+        if (scanTargetRepository.existsByTenantIdAndTarget(tenantId, normalizedTarget)) {
+            throw new SlugAlreadyExistsException("Target already exists: " + normalizedTarget);
         }
 
         ScanTarget scanTarget = new ScanTarget(
                 UUID.randomUUID(),
                 tenantId,
-                request.target(),
+                normalizedTarget,
                 request.type(),
                 request.description()
         );
@@ -571,30 +573,7 @@ public class TenantService {
     }
 
     private String normalizeRepository(String value) {
-        String normalized = normalize(value);
-        try {
-            String normalizedUriValue = normalizeRepositoryUriValue(normalized);
-            URI uri = normalizedUriValue.contains("://")
-                    ? URI.create(normalizedUriValue)
-                    : URI.create("https://" + normalizedUriValue);
-            String host = uri.getHost();
-            String path = uri.getPath();
-            if (host == null || path == null || path.isBlank()) {
-                return normalized;
-            }
-            String normalizedPath = path.endsWith(".git") ? path.substring(0, path.length() - 4) : path;
-            return host.toLowerCase(Locale.ROOT) + stripTrailingSlash(normalizedPath);
-        } catch (IllegalArgumentException e) {
-            return normalized;
-        }
-    }
-
-    private String normalizeRepositoryUriValue(String value) {
-        if (value.matches("^[^@/\\s]+@[^:/\\s]+:.+$")) {
-            int separator = value.indexOf(':');
-            return "ssh://" + value.substring(0, separator) + "/" + value.substring(separator + 1);
-        }
-        return value;
+        return RepositoryTargetNormalizer.toComparableKey(value);
     }
 
     private String normalize(String value) {
@@ -603,6 +582,18 @@ public class TenantService {
 
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeTargetForPersistence(String target, TargetType targetType) {
+        String trimmedTarget = target == null ? null : target.trim();
+        if (trimmedTarget == null || targetType != TargetType.REPOSITORY) {
+            return trimmedTarget;
+        }
+
+        return RepositoryTargetNormalizer.toCanonicalRemoteUri(trimmedTarget)
+                .filter(uri -> uri.getUserInfo() == null)
+                .map(URI::toString)
+                .orElse(trimmedTarget);
     }
 
     private int resolveExpiryDays(Integer expiresInDays) {

@@ -147,6 +147,36 @@ class SastScanE2eTest {
         assertEquals(URI.create("https://github.com/acme/vulnerable.git"), fakeGitClient.lastRepositoryUri);
     }
 
+    @Test
+    @DisplayName("should normalize ssh short repository targets across the full SAST flow")
+    void sastScan_quandoRepositorioSshCurto_persisteResultadoCompleto() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        TenantQuota quota = new TenantQuota(tenantId, 100, 10, 100, 300, true);
+
+        when(tenantClient.getQuota(tenantId)).thenReturn(quota);
+        when(tenantClient.getPlan(tenantId)).thenReturn(Plan.ENTERPRISE);
+        when(tenantClient.isScanTargetAuthorized(
+                tenantId,
+                "git@github.com:acme/vulnerable.git",
+                ScanType.SAST
+        )).thenReturn(true);
+
+        waitForKafkaAssignments();
+
+        var response = scanOrchestratorService.createScan(
+                new CreateScanRequest("git@github.com:acme/vulnerable.git", ScanType.SAST, 1, 30),
+                tenantId,
+                userId
+        );
+
+        ScanResultResponse result = waitForCompletedResult(response.id(), tenantId);
+
+        assertEquals(ScanStatus.COMPLETED, result.status());
+        assertEquals(1, result.totalFindings());
+        assertEquals(URI.create("https://github.com/acme/vulnerable.git"), fakeGitClient.lastRepositoryUri);
+    }
+
     private void waitForKafkaAssignments() {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
 

@@ -340,7 +340,7 @@ export function TenantTargetsPanel() {
             </div>
             <p className="form-help">
               <strong>Tipos de alvo</strong>
-              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato, repositórios para onboarding SAST e IP ranges quando sua operação já tiver um processo manual de aprovação para NETWORK scan.
+              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato, repositórios em HTTPS, sem esquema ou `git@...` para onboarding SAST e IP ranges quando sua operação já tiver um processo manual de aprovação para NETWORK scan.
             </p>
             <div className="form-actions">
               <button className="button-primary" type="submit" disabled={status === 'submitting'}>
