@@ -156,14 +156,33 @@ public class TenantController {
     @Operation(summary = "Verificar ownership de alvo", description = "Perfis permitidos: OWNER.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Alvo verificado"),
-            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode verificar ownership")
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode verificar ownership"),
+            @ApiResponse(responseCode = "409", description = "O alvo exige aprovacao manual de ownership")
     })
     public ResponseEntity<ScanTargetResponse> verifyScanTarget(
             @RequestHeader("X-Roles") String rolesHeader,
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID tenantId,
             @PathVariable UUID targetId) {
         requireAnyRole(rolesHeader, UserRole.OWNER);
-        ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+        ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{tenantId}/scan-targets/{targetId}/approve")
+    @Operation(summary = "Aprovar ownership manual de alvo", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alvo aprovado manualmente"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode aprovar ownership"),
+            @ApiResponse(responseCode = "409", description = "O alvo suporta verificacao automatizada")
+    })
+    public ResponseEntity<ScanTargetResponse> approveScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID targetId) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        ScanTargetResponse response = tenantService.approveScanTarget(tenantId, targetId, userId);
         return ResponseEntity.ok(response);
     }
 

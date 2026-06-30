@@ -1,6 +1,7 @@
 package com.virtualrift.apiscanner.engine;
 
 import com.virtualrift.apiscanner.config.ApiScannerProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.net.ssl.SSLSession;
@@ -23,6 +24,7 @@ public class JdkApiClient implements ApiClient {
     private final Map<String, String> defaultHeaders;
     private final Map<String, String> defaultCookies;
 
+    @Autowired
     public JdkApiClient(ApiScannerProperties properties) {
         this(
                 java.net.http.HttpClient.newBuilder()

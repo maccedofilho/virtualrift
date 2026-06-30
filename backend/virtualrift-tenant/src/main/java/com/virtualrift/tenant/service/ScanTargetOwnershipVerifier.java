@@ -1,8 +1,11 @@
 package com.virtualrift.tenant.service;
 
+import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.model.ScanTarget;
 
 public interface ScanTargetOwnershipVerifier {
 
     ScanTargetOwnershipVerificationResult verify(ScanTarget scanTarget);
+
+    ScanTargetVerificationGuideResponse describe(ScanTarget scanTarget);
 }

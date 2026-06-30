@@ -213,7 +213,15 @@ const createTarget = (overrides?: Partial<ScanTargetResponse>): ScanTargetRespon
   verificationToken: 'token-123',
   verificationCheckedAt: null,
   verifiedAt: null,
+  verifiedByUserId: null,
   createdAt: '2026-05-06T10:00:00.000Z',
+  verificationGuide: {
+    supported: true,
+    method: 'HTTP_WELL_KNOWN_OR_DNS_TXT',
+    location: 'https://app.example.com/.well-known/virtualrift-verification.txt',
+    instructions: ['Publique o token no arquivo well-known.'],
+  },
+  verificationFailureReason: null,
   ...overrides,
 });
 
@@ -302,6 +310,7 @@ const createClient = () => {
       addScanTarget: vi.fn(),
       authorizeScanTarget: vi.fn(),
       verifyScanTarget: vi.fn(),
+      approveScanTarget: vi.fn(),
       requestPlanChange: vi.fn(),
       removeScanTarget: vi.fn(),
     },
@@ -401,6 +410,24 @@ const createClient = () => {
       verificationToken: null,
       verificationCheckedAt: '2026-05-06T11:00:00.000Z',
       verifiedAt: '2026-05-06T11:00:00.000Z',
+      verifiedByUserId: 'user-id',
+    }),
+  );
+  client.tenants.approveScanTarget.mockImplementation(async (_tenantId, targetId) =>
+    createTarget({
+      id: targetId,
+      type: 'IP_RANGE',
+      target: '203.0.113.0/24',
+      verificationStatus: 'VERIFIED',
+      verificationCheckedAt: '2026-05-06T11:00:00.000Z',
+      verifiedAt: '2026-05-06T11:00:00.000Z',
+      verifiedByUserId: 'user-id',
+      verificationGuide: {
+        supported: false,
+        method: 'MANUAL_REVIEW',
+        location: null,
+        instructions: ['Faixas IP exigem revisão manual antes de habilitar scans NETWORK.'],
+      },
     }),
   );
   client.tenants.requestPlanChange.mockImplementation(async (_tenantId, payload) =>
@@ -834,6 +861,41 @@ describe('VirtualRift Dashboard App', () => {
     expect(client.tenants.verifyScanTarget).toHaveBeenCalledWith('tenant-id', 'target-1');
   });
 
+  it('shows manual review guidance for IP range targets and allows manual approval', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'target-ip-range',
+        target: '203.0.113.0/24',
+        type: 'IP_RANGE',
+        verificationGuide: {
+          supported: false,
+          method: 'MANUAL_REVIEW',
+          location: null,
+          instructions: ['Faixas IP exigem revisão manual antes de habilitar scans NETWORK.'],
+        },
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
+    expect(await screen.findByText('203.0.113.0/24')).toBeInTheDocument();
+    expect(screen.getByText('Revisão manual')).toBeInTheDocument();
+    expect(screen.getByText('Fluxo operacional manual')).toBeInTheDocument();
+    expect(screen.getByText(/revisão manual antes de poder ser usado em scans/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verificar ownership' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Aprovar ownership manualmente' }));
+
+    expect(await screen.findByText('Status: VERIFIED')).toBeInTheDocument();
+    expect(client.tenants.approveScanTarget).toHaveBeenCalledWith('tenant-id', 'target-ip-range');
+  });
+
   it('removes a registered target from the workspace list', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
@@ -872,6 +934,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText(/apenas um usuário com papel/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Adicionar alvo' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Verificar ownership' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprovar ownership manualmente' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover alvo' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Token de verificação:/)).not.toBeInTheDocument();
   });

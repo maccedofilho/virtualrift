@@ -184,7 +184,15 @@ describe('virtualrift types package', () => {
       verificationToken: string | null;
       verificationCheckedAt: string | null;
       verifiedAt: string | null;
+      verifiedByUserId: string | null;
       createdAt: string;
+      verificationGuide: {
+        supported: boolean;
+        method: 'HTTP_WELL_KNOWN_OR_DNS_TXT' | 'REPOSITORY_RAW_FILE' | 'MANUAL_REVIEW';
+        location: string | null;
+        instructions: string[];
+      };
+      verificationFailureReason: string | null;
     }>();
     expectTypeOf<AuthorizeScanTargetRequest>().toEqualTypeOf<{ target: string; scanType: ScanType }>();
     expectTypeOf<CreatePlanChangeRequestRequest>().toEqualTypeOf<{

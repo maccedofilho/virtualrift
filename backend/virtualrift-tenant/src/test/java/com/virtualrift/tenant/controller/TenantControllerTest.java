@@ -8,9 +8,13 @@ import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
+import com.virtualrift.tenant.dto.ScanTargetResponse;
+import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.common.security.UserRole;
+import com.virtualrift.tenant.model.ScanTargetVerificationMethod;
+import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
@@ -60,11 +64,45 @@ class TenantControllerTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> controller.verifyScanTarget("ANALYST", UUID.randomUUID(), UUID.randomUUID())
+                () -> controller.verifyScanTarget("ANALYST", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
         );
 
         assertEquals(403, exception.getStatusCode().value());
         verifyNoInteractions(tenantService);
+    }
+
+    @Test
+    @DisplayName("should allow manual target approval for owner role")
+    void approveScanTarget_quandoOwner_aprovaOwnershipManual() {
+        TenantController controller = new TenantController(tenantService);
+        UUID tenantId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        when(tenantService.approveScanTarget(tenantId, targetId, userId)).thenReturn(new ScanTargetResponse(
+                targetId,
+                "203.0.113.0/24",
+                TargetType.IP_RANGE,
+                "range",
+                ScanTargetVerificationStatus.VERIFIED,
+                "token-123",
+                null,
+                null,
+                userId,
+                null,
+                new ScanTargetVerificationGuideResponse(
+                        false,
+                        ScanTargetVerificationMethod.MANUAL_REVIEW,
+                        null,
+                        java.util.List.of("Manual review")
+                ),
+                null
+        ));
+
+        ScanTargetResponse response = controller.approveScanTarget("OWNER", userId, tenantId, targetId).getBody();
+
+        assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
+        assertEquals(userId, response.verifiedByUserId());
     }
 
     @Test

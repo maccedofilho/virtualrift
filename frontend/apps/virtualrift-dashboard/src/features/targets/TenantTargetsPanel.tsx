@@ -4,6 +4,7 @@ import {
   TARGET_TYPES,
   isVerifiedScanTarget,
   type AddScanTargetRequest,
+  type ScanTargetVerificationMethod,
   type ScanTargetResponse,
   type ScanType,
   type TargetType,
@@ -34,7 +35,21 @@ const workspaceStatusLabel = (status: 'loading' | 'ready' | 'submitting'): strin
 };
 
 const canVerifyTarget = (target: ScanTargetResponse): boolean =>
-  target.type !== 'IP_RANGE' && !isVerifiedScanTarget(target.verificationStatus);
+  target.verificationGuide.supported && !isVerifiedScanTarget(target.verificationStatus);
+
+const canApproveTarget = (target: ScanTargetResponse): boolean =>
+  target.verificationGuide.method === 'MANUAL_REVIEW' && !isVerifiedScanTarget(target.verificationStatus);
+
+const verificationMethodLabel = (method: ScanTargetVerificationMethod): string => {
+  switch (method) {
+    case 'HTTP_WELL_KNOWN_OR_DNS_TXT':
+      return 'Arquivo well-known ou DNS TXT';
+    case 'REPOSITORY_RAW_FILE':
+      return 'Arquivo raw no repositório';
+    case 'MANUAL_REVIEW':
+      return 'Revisão manual';
+  }
+};
 
 export function TenantTargetsPanel() {
   const { client, session } = useSession();
@@ -152,6 +167,26 @@ export function TenantTargetsPanel() {
     } catch (removeError) {
       setStatus('ready');
       setError(toErrorMessage(removeError, 'Não foi possível remover o alvo.'));
+    }
+  };
+
+  const handleApproveTarget = async (targetId: UUID) => {
+    if (!tenantId) {
+      return;
+    }
+
+    setStatus('submitting');
+    setError(null);
+
+    try {
+      const approvedTarget = await client.tenants.approveScanTarget(tenantId, targetId);
+      setTargets((currentTargets) =>
+        currentTargets.map((currentTarget) => (currentTarget.id === targetId ? approvedTarget : currentTarget)),
+      );
+      setStatus('ready');
+    } catch (approveError) {
+      setStatus('ready');
+      setError(toErrorMessage(approveError, 'Não foi possível aprovar manualmente o ownership do alvo.'));
     }
   };
 
@@ -305,7 +340,7 @@ export function TenantTargetsPanel() {
             </div>
             <p className="form-help">
               <strong>Tipos de alvo</strong>
-              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato e repositórios para onboarding SAST.
+              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato, repositórios para onboarding SAST e IP ranges quando sua operação já tiver um processo manual de aprovação para NETWORK scan.
             </p>
             <div className="form-actions">
               <button className="button-primary" type="submit" disabled={status === 'submitting'}>
@@ -408,9 +443,23 @@ export function TenantTargetsPanel() {
                   <span className="kv-label">Verificado em</span>
                   <span className="kv-value">Verificado em: {formatDateTime(target.verifiedAt)}</span>
                 </div>
+                {target.verifiedByUserId ? (
+                  <div className="kv-item">
+                    <span className="kv-label">Verificado por</span>
+                    <span className="kv-value">{target.verifiedByUserId}</span>
+                  </div>
+                ) : null}
                 <div className="kv-item">
                   <span className="kv-label">Última checagem</span>
                   <span className="kv-value">Última checagem: {formatDateTime(target.verificationCheckedAt)}</span>
+                </div>
+                <div className="kv-item">
+                  <span className="kv-label">Método de verificação</span>
+                  <span className="kv-value">{verificationMethodLabel(target.verificationGuide.method)}</span>
+                </div>
+                <div className="kv-item">
+                  <span className="kv-label">Publicar em</span>
+                  <span className="kv-value">{target.verificationGuide.location ?? 'Fluxo operacional manual'}</span>
                 </div>
                 {target.verificationToken && canManageTargets ? (
                   <div className="kv-item" style={{ gridColumn: '1 / -1' }}>
@@ -420,12 +469,36 @@ export function TenantTargetsPanel() {
                     </span>
                   </div>
                 ) : null}
+                <div className="kv-item" style={{ gridColumn: '1 / -1' }}>
+                  <span className="kv-label">Como verificar</span>
+                  <ul className="kv-value" style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                    {target.verificationGuide.instructions.map((instruction) => (
+                      <li key={`${target.id}-${instruction}`}>{instruction}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
+
+              {target.verificationFailureReason ? (
+                <p className="alert alert-danger" role="alert">
+                  Última falha de verificação: {target.verificationFailureReason}
+                </p>
+              ) : null}
+              {!target.verificationGuide.supported ? (
+                <p className="alert alert-info">
+                  Este alvo depende de revisão manual antes de poder ser usado em scans.
+                </p>
+              ) : null}
 
               <div className="toolbar">
                 {canManageTargets && canVerifyTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleVerifyTarget(target.id)} disabled={status === 'submitting'}>
                     Verificar ownership
+                  </button>
+                ) : null}
+                {canManageTargets && canApproveTarget(target) ? (
+                  <button className="button-secondary" type="button" onClick={() => void handleApproveTarget(target.id)} disabled={status === 'submitting'}>
+                    Aprovar ownership manualmente
                   </button>
                 ) : null}
                 {canManageTargets ? (
