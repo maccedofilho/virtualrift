@@ -71,7 +71,6 @@ This monorepo already contains a working backend platform, an operational fronte
 ### What is not complete yet
 
 - full repository ingestion and end-to-end scan onboarding flow
-- complete ownership verification coverage across all target types
 - final frontend product polish and broader beta UX hardening
 - full CI/release/security automation coverage in `.github/workflows/`
 - full production infrastructure promised by the long-term platform vision

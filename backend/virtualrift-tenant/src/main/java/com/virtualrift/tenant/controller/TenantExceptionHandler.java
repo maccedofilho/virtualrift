@@ -2,6 +2,7 @@ package com.virtualrift.tenant.controller;
 
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
+import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
 import com.virtualrift.tenant.exception.TenantInvitationConflictException;
 import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
@@ -26,7 +27,12 @@ public class TenantExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "Tenant invitation not found", exception.getMessage());
     }
 
-    @ExceptionHandler({SlugAlreadyExistsException.class, PlanChangeRequestAlreadyPendingException.class, TenantInvitationConflictException.class})
+    @ExceptionHandler({
+            SlugAlreadyExistsException.class,
+            PlanChangeRequestAlreadyPendingException.class,
+            TenantInvitationConflictException.class,
+            ScanTargetVerificationConflictException.class
+    })
     public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception) {
         return build(HttpStatus.CONFLICT, "Tenant request conflicts with current state", exception.getMessage());
     }

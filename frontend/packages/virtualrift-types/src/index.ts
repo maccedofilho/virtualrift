@@ -34,6 +34,13 @@ export type TargetType = (typeof TARGET_TYPES)[number];
 export const SCAN_TARGET_VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'FAILED'] as const;
 export type ScanTargetVerificationStatus = (typeof SCAN_TARGET_VERIFICATION_STATUSES)[number];
 
+export const SCAN_TARGET_VERIFICATION_METHODS = [
+  'HTTP_WELL_KNOWN_OR_DNS_TXT',
+  'REPOSITORY_RAW_FILE',
+  'MANUAL_REVIEW',
+] as const;
+export type ScanTargetVerificationMethod = (typeof SCAN_TARGET_VERIFICATION_METHODS)[number];
+
 export const REPORT_EXPORT_FORMATS = ['json', 'html'] as const;
 export type ReportExportFormat = (typeof REPORT_EXPORT_FORMATS)[number];
 
@@ -234,7 +241,15 @@ export type ScanTarget = {
   verificationToken: Nullable<string>;
   verificationCheckedAt: Nullable<IsoDateTime>;
   verifiedAt: Nullable<IsoDateTime>;
+  verifiedByUserId: Nullable<UUID>;
   createdAt: IsoDateTime;
+  verificationGuide: {
+    supported: boolean;
+    method: ScanTargetVerificationMethod;
+    location: Nullable<string>;
+    instructions: string[];
+  };
+  verificationFailureReason: Nullable<string>;
 };
 
 export type ScanTargetResponse = ScanTarget;

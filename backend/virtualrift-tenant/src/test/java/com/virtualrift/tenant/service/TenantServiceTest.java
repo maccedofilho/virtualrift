@@ -6,10 +6,12 @@ import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
+import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
+import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
@@ -17,6 +19,7 @@ import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequest;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
 import com.virtualrift.tenant.model.ScanTarget;
+import com.virtualrift.tenant.model.ScanTargetVerificationMethod;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TenantInvitation;
 import com.virtualrift.tenant.model.TenantInvitationStatus;
@@ -81,6 +84,7 @@ class TenantServiceTest {
                 tenantInvitationRepository,
                 scanTargetOwnershipVerifier
         );
+        lenient().when(scanTargetOwnershipVerifier.describe(any(ScanTarget.class))).thenReturn(defaultVerificationGuide());
     }
 
     private Tenant createTenant(UUID tenantId, String slug, Plan plan, TenantStatus status) {
@@ -123,6 +127,24 @@ class TenantServiceTest {
                 TenantInvitationStatus.PENDING,
                 invitedByUserId,
                 java.time.Instant.now().plusSeconds(3600)
+        );
+    }
+
+    private ScanTargetVerificationGuideResponse defaultVerificationGuide() {
+        return new ScanTargetVerificationGuideResponse(
+                true,
+                ScanTargetVerificationMethod.HTTP_WELL_KNOWN_OR_DNS_TXT,
+                "https://example.com/.well-known/virtualrift-verification.txt",
+                List.of("Publish token")
+        );
+    }
+
+    private ScanTargetVerificationGuideResponse manualVerificationGuide() {
+        return new ScanTargetVerificationGuideResponse(
+                false,
+                ScanTargetVerificationMethod.MANUAL_REVIEW,
+                null,
+                List.of("Manual review")
         );
     }
 
@@ -390,6 +412,7 @@ class TenantServiceTest {
             assertEquals(TargetType.URL, response.type());
             assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
             assertNotNull(response.verificationToken());
+            assertNotNull(response.verificationGuide());
             verify(scanTargetRepository).save(argThat(target ->
                     target.getTenantId().equals(tenantId) &&
                     target.getTarget().equals("https://acme.example") &&
@@ -586,16 +609,19 @@ class TenantServiceTest {
         void verifyScanTarget_quandoProvaValida_marcaComoVerificado() {
             UUID tenantId = UUID.randomUUID();
             UUID targetId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
 
             when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.success());
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId, userId);
 
             assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
             assertNotNull(response.verifiedAt());
+            assertEquals(userId, response.verifiedByUserId());
+            assertNull(response.verificationFailureReason());
             verify(scanTargetRepository).save(target);
         }
 
@@ -604,17 +630,87 @@ class TenantServiceTest {
         void verifyScanTarget_quandoProvaFalha_marcaComoFalhou() {
             UUID tenantId = UUID.randomUUID();
             UUID targetId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
 
             when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.failed("missing token"));
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId);
+            ScanTargetResponse response = tenantService.verifyScanTarget(tenantId, targetId, userId);
 
             assertEquals(ScanTargetVerificationStatus.FAILED, response.verificationStatus());
             assertNotNull(response.verificationCheckedAt());
+            assertNull(response.verifiedByUserId());
+            assertEquals("missing token", response.verificationFailureReason());
             verify(scanTargetRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("should require manual approval for IP range verification endpoint")
+        void verifyScanTarget_quandoIpRange_lancaConflito() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetOwnershipVerifier.describe(target)).thenReturn(manualVerificationGuide());
+
+            assertThrows(
+                    ScanTargetVerificationConflictException.class,
+                    () -> tenantService.verifyScanTarget(tenantId, targetId, userId)
+            );
+            verify(scanTargetRepository, never()).save(any(ScanTarget.class));
+        }
+
+        @Test
+        @DisplayName("should approve ownership manually for IP range targets")
+        void approveScanTarget_quandoIpRange_marcaComoVerificado() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetOwnershipVerifier.describe(target)).thenReturn(manualVerificationGuide());
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.approveScanTarget(tenantId, targetId, userId);
+
+            assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
+            assertEquals(userId, response.verifiedByUserId());
+            assertNull(response.verificationFailureReason());
+            verify(scanTargetRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("should reject manual approval for targets with automated verification")
+        void approveScanTarget_quandoTargetAutomatico_lancaConflito() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            UUID userId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+
+            assertThrows(
+                    ScanTargetVerificationConflictException.class,
+                    () -> tenantService.approveScanTarget(tenantId, targetId, userId)
+            );
+            verify(scanTargetRepository, never()).save(any(ScanTarget.class));
+        }
+
+        @Test
+        @DisplayName("should match repository targets across HTTPS and SSH formats")
+        void isScanTargetAuthorized_quandoRepositorioRegistradoEmSsh_retornaTrue() {
+            UUID tenantId = UUID.randomUUID();
+            ScanTarget target = createVerifiedScanTarget(tenantId, "git@github.com:acme/app.git", TargetType.REPOSITORY);
+
+            when(tenantRepository.existsById(tenantId)).thenReturn(true);
+            when(scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(target));
+
+            assertTrue(tenantService.isScanTargetAuthorized(tenantId, "https://github.com/acme/app", "SAST"));
         }
     }
 }

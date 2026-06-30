@@ -10,6 +10,7 @@ import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.InternalProvisionTenantRequest;
+import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
@@ -18,6 +19,7 @@ import com.virtualrift.tenant.exception.TenantInvitationConflictException;
 import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
+import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
@@ -330,14 +332,38 @@ public class TenantService {
     }
 
     @Transactional
-    public ScanTargetResponse verifyScanTarget(UUID tenantId, UUID targetId) {
+    public ScanTargetResponse verifyScanTarget(UUID tenantId, UUID targetId, UUID userId) {
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        ScanTargetVerificationGuideResponse verificationGuide = scanTargetOwnershipVerifier.describe(scanTarget);
+        if (!verificationGuide.supported()) {
+            throw new ScanTargetVerificationConflictException(
+                    "Target requires manual ownership approval before it can be used in scans"
+            );
+        }
         ScanTargetOwnershipVerificationResult verification = scanTargetOwnershipVerifier.verify(scanTarget);
         if (verification.verified()) {
-            scanTarget.markVerified();
+            scanTarget.markVerified(userId);
         } else {
-            scanTarget.markFailed();
+            scanTarget.markFailed(verification.detail());
         }
+        return toResponse(scanTargetRepository.save(scanTarget));
+    }
+
+    @Transactional
+    public ScanTargetResponse approveScanTarget(UUID tenantId, UUID targetId, UUID userId) {
+        ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        ScanTargetVerificationGuideResponse verificationGuide = scanTargetOwnershipVerifier.describe(scanTarget);
+        if (verificationGuide.supported()) {
+            throw new ScanTargetVerificationConflictException(
+                    "Target supports automated ownership verification and should not be approved manually"
+            );
+        }
+
+        if (scanTarget.getVerificationStatus() == ScanTargetVerificationStatus.VERIFIED) {
+            return toResponse(scanTarget);
+        }
+
+        scanTarget.markVerified(userId);
         return toResponse(scanTargetRepository.save(scanTarget));
     }
 
@@ -547,17 +573,28 @@ public class TenantService {
     private String normalizeRepository(String value) {
         String normalized = normalize(value);
         try {
-            URI uri = normalized.contains("://") ? URI.create(normalized) : URI.create("https://" + normalized);
+            String normalizedUriValue = normalizeRepositoryUriValue(normalized);
+            URI uri = normalizedUriValue.contains("://")
+                    ? URI.create(normalizedUriValue)
+                    : URI.create("https://" + normalizedUriValue);
             String host = uri.getHost();
             String path = uri.getPath();
             if (host == null || path == null || path.isBlank()) {
                 return normalized;
             }
             String normalizedPath = path.endsWith(".git") ? path.substring(0, path.length() - 4) : path;
-            return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + host.toLowerCase(Locale.ROOT) + stripTrailingSlash(normalizedPath);
+            return host.toLowerCase(Locale.ROOT) + stripTrailingSlash(normalizedPath);
         } catch (IllegalArgumentException e) {
             return normalized;
         }
+    }
+
+    private String normalizeRepositoryUriValue(String value) {
+        if (value.matches("^[^@/\\s]+@[^:/\\s]+:.+$")) {
+            int separator = value.indexOf(':');
+            return "ssh://" + value.substring(0, separator) + "/" + value.substring(separator + 1);
+        }
+        return value;
     }
 
     private String normalize(String value) {
@@ -633,7 +670,10 @@ public class TenantService {
                 scanTarget.getVerificationToken(),
                 scanTarget.getVerificationCheckedAt(),
                 scanTarget.getVerifiedAt(),
-                scanTarget.getCreatedAt()
+                scanTarget.getVerifiedByUserId(),
+                scanTarget.getCreatedAt(),
+                scanTargetOwnershipVerifier.describe(scanTarget),
+                scanTarget.getVerificationFailureReason()
         );
     }
 

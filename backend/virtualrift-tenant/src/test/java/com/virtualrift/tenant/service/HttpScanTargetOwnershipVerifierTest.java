@@ -10,8 +10,10 @@ import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,11 +44,31 @@ class HttpScanTargetOwnershipVerifierTest {
         try {
             ScanTarget target = scanTarget("http://127.0.0.1:" + server.getAddress().getPort(), TargetType.URL);
             target.setVerificationToken("virtualrift-token");
-            HttpScanTargetOwnershipVerifier verifier = verifierAllowingLocalTargets();
+            HttpScanTargetOwnershipVerifier verifier = verifierAllowingLocalTargets(recordName -> List.of());
 
             ScanTargetOwnershipVerificationResult result = verifier.verify(target);
 
             assertFalse(result.verified());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("should verify URL target when DNS TXT record contains token")
+    void verify_quandoDnsTxtContemToken_retornaVerified() throws Exception {
+        HttpServer server = startServer("other-token");
+        try {
+            ScanTarget target = scanTarget("http://127.0.0.1:" + server.getAddress().getPort(), TargetType.URL);
+            target.setVerificationToken("virtualrift-token");
+            HttpScanTargetOwnershipVerifier verifier = verifierAllowingLocalTargets(recordName -> {
+                assertEquals("_virtualrift-verification.127.0.0.1", recordName);
+                return List.of("\"virtualrift-token\"");
+            });
+
+            ScanTargetOwnershipVerificationResult result = verifier.verify(target);
+
+            assertTrue(result.verified());
         } finally {
             server.stop(0);
         }
@@ -64,13 +86,30 @@ class HttpScanTargetOwnershipVerifierTest {
     }
 
     @Test
-    @DisplayName("should not support IP range verification yet")
+    @DisplayName("should require manual review for IP range verification")
     void verify_quandoIpRange_retornaFalha() {
         ScanTarget target = scanTarget("203.0.113.0/24", TargetType.IP_RANGE);
 
         ScanTargetOwnershipVerificationResult result = verifierAllowingLocalTargets().verify(target);
 
         assertFalse(result.verified());
+        assertEquals("IP range ownership requires manual review before NETWORK scans can run", result.detail());
+    }
+
+    @Test
+    @DisplayName("should verify repository target from supported raw endpoint")
+    void verify_quandoRepositorioComArquivoRaw_retornaVerified() throws Exception {
+        HttpServer server = startRepositoryServer("virtualrift-token");
+        try {
+            ScanTarget target = scanTarget("http://127.0.0.1:" + server.getAddress().getPort() + "/acme/app", TargetType.REPOSITORY);
+            target.setVerificationToken("virtualrift-token");
+
+            ScanTargetOwnershipVerificationResult result = verifierAllowingLocalTargets().verify(target);
+
+            assertTrue(result.verified());
+        } finally {
+            server.stop(0);
+        }
     }
 
     private HttpServer startServer(String body) throws Exception {
@@ -85,14 +124,30 @@ class HttpScanTargetOwnershipVerifierTest {
         return server;
     }
 
+    private HttpServer startRepositoryServer(String body) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/acme/app/-/raw/HEAD/.well-known/virtualrift-verification.txt", exchange -> {
+            byte[] response = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
     private ScanTarget scanTarget(String target, TargetType targetType) {
         return new ScanTarget(UUID.randomUUID(), UUID.randomUUID(), target, targetType, null);
     }
 
     private HttpScanTargetOwnershipVerifier verifierAllowingLocalTargets() {
+        return verifierAllowingLocalTargets(recordName -> List.of());
+    }
+
+    private HttpScanTargetOwnershipVerifier verifierAllowingLocalTargets(DnsTxtRecordResolver dnsTxtRecordResolver) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(1))
                 .build();
-        return new HttpScanTargetOwnershipVerifier(httpClient, true);
+        return new HttpScanTargetOwnershipVerifier(httpClient, dnsTxtRecordResolver, true);
     }
 }

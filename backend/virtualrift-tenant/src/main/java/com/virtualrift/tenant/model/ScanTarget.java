@@ -45,6 +45,12 @@ public class ScanTarget {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
+    @Column(name = "verified_by_user_id")
+    private UUID verifiedByUserId;
+
+    @Column(name = "verification_failure_reason")
+    private String verificationFailureReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -84,6 +90,8 @@ public class ScanTarget {
     public String getVerificationToken() { return verificationToken; }
     public Instant getVerificationCheckedAt() { return verificationCheckedAt; }
     public Instant getVerifiedAt() { return verifiedAt; }
+    public UUID getVerifiedByUserId() { return verifiedByUserId; }
+    public String getVerificationFailureReason() { return verificationFailureReason; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setId(UUID id) { this.id = id; }
@@ -94,15 +102,23 @@ public class ScanTarget {
     public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
 
     public void markVerified() {
+        markVerified(null);
+    }
+
+    public void markVerified(UUID verifiedByUserId) {
         Instant now = Instant.now();
         this.verificationStatus = ScanTargetVerificationStatus.VERIFIED;
         this.verificationCheckedAt = now;
         this.verifiedAt = now;
+        this.verifiedByUserId = verifiedByUserId;
+        this.verificationFailureReason = null;
     }
 
-    public void markFailed() {
+    public void markFailed(String reason) {
         this.verificationStatus = ScanTargetVerificationStatus.FAILED;
         this.verificationCheckedAt = Instant.now();
         this.verifiedAt = null;
+        this.verifiedByUserId = null;
+        this.verificationFailureReason = reason;
     }
 }

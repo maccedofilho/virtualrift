@@ -1,6 +1,7 @@
 package com.virtualrift.webscanner.engine;
 
 import com.virtualrift.webscanner.config.WebScannerProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ public class JdkWebScannerHttpClient implements HttpClient {
     private final Map<String, String> defaultHeaders;
     private final Map<String, String> defaultCookies;
 
+    @Autowired
     public JdkWebScannerHttpClient(WebScannerProperties properties) {
         this(
                 java.net.http.HttpClient.newBuilder()

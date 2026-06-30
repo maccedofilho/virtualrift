@@ -414,6 +414,12 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
       path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}/verify`,
       ...options,
     }),
+  approveScanTarget: (tenantId: UUID, targetId: UUID, options?: VirtualRiftRequestOptions) =>
+    request<ScanTargetResponse>({
+      method: 'POST',
+      path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}/approve`,
+      ...options,
+    }),
   requestPlanChange: (tenantId: UUID, payload: CreatePlanChangeRequestRequest, options?: VirtualRiftRequestOptions) =>
     request<PlanChangeRequestResponse>({
       method: 'POST',

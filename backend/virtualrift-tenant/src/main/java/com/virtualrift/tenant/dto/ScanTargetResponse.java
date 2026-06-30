@@ -15,6 +15,9 @@ public record ScanTargetResponse(
         String verificationToken,
         Instant verificationCheckedAt,
         Instant verifiedAt,
-        Instant createdAt
+        UUID verifiedByUserId,
+        Instant createdAt,
+        ScanTargetVerificationGuideResponse verificationGuide,
+        String verificationFailureReason
 ) {
 }
