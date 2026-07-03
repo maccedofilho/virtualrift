@@ -18,6 +18,7 @@ import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.dto.UpdateScanTargetRequest;
 import com.virtualrift.tenant.exception.TenantInvitationConflictException;
 import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
@@ -357,6 +358,30 @@ public class TenantService {
                 .toList();
     }
 
+    @Transactional
+    public ScanTargetResponse updateScanTarget(UUID tenantId, UUID targetId, UpdateScanTargetRequest request) {
+        ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        String normalizedTarget = normalizeTargetForPersistence(request.target(), scanTarget.getType());
+        String normalizedDescription = normalizeDescription(request.description());
+        boolean targetChanged = !normalizedTarget.equals(scanTarget.getTarget());
+
+        if (targetChanged && scanTargetRepository.existsByTenantIdAndTarget(tenantId, normalizedTarget)) {
+            throw new SlugAlreadyExistsException("Target already exists: " + normalizedTarget);
+        }
+
+        scanTarget.setTarget(normalizedTarget);
+        scanTarget.setDescription(normalizedDescription);
+
+        if (targetChanged && scanTarget.getType() == TargetType.REPOSITORY) {
+            validateRepositoryOnboardingAccess(scanTarget);
+        }
+        if (targetChanged) {
+            scanTarget.resetVerificationChallenge();
+        }
+
+        return toResponse(scanTargetRepository.save(scanTarget));
+    }
+
     public boolean isScanTargetAuthorized(UUID tenantId, String target, String scanType) {
         return resolveScanTarget(tenantId, target, scanType).authorized();
     }
@@ -475,6 +500,14 @@ public class TenantService {
             return null;
         }
         String trimmed = note.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeDescription(String description) {
+        if (description == null) {
+            return null;
+        }
+        String trimmed = description.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 

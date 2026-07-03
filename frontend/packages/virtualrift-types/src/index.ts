@@ -243,6 +243,11 @@ export type RepositoryCredentialsRequest = {
   secret?: Nullable<string>;
 };
 
+export type UpdateScanTargetRequest = {
+  target: string;
+  description?: Nullable<string>;
+};
+
 export type ScanTarget = {
   id: UUID;
   target: string;
