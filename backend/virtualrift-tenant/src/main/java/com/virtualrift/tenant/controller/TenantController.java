@@ -15,6 +15,7 @@ import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.dto.UpdateScanTargetRequest;
 import com.virtualrift.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -137,6 +138,23 @@ public class TenantController {
         requireAnyRole(rolesHeader, UserRole.OWNER);
         ScanTargetResponse response = tenantService.addScanTarget(id, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/{tenantId}/scan-targets/{targetId}")
+    @Operation(summary = "Editar alvo de scan", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alvo atualizado"),
+            @ApiResponse(responseCode = "400", description = "Configuracao invalida"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode editar alvos")
+    })
+    public ResponseEntity<ScanTargetResponse> updateScanTarget(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID targetId,
+            @Valid @RequestBody UpdateScanTargetRequest request) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        ScanTargetResponse response = tenantService.updateScanTarget(tenantId, targetId, request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{id}/scan-targets/authorize")

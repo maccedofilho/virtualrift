@@ -27,6 +27,7 @@ import type {
   TenantQuotaResponse,
   TenantResponse,
   TenantInvitationResponse,
+  UpdateScanTargetRequest,
   UUID,
   WorkspaceInvitationAcceptanceResponse,
   WorkspaceInvitationPreviewResponse,
@@ -399,6 +400,13 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
     request<ScanTargetResponse>({
       method: 'POST',
       path: `/api/v1/tenants/${tenantId}/scan-targets`,
+      body: payload,
+      ...options,
+    }),
+  updateScanTarget: (tenantId: UUID, targetId: UUID, payload: UpdateScanTargetRequest, options?: VirtualRiftRequestOptions) =>
+    request<ScanTargetResponse>({
+      method: 'PUT',
+      path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}`,
       body: payload,
       ...options,
     }),

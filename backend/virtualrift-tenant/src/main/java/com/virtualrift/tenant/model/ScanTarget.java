@@ -150,4 +150,9 @@ public class ScanTarget {
         this.verifiedByUserId = null;
         this.verificationFailureReason = null;
     }
+
+    public void resetVerificationChallenge() {
+        this.verificationToken = UUID.randomUUID().toString();
+        markPendingVerification();
+    }
 }

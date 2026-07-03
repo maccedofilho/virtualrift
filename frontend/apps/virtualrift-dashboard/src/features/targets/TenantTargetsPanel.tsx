@@ -13,6 +13,7 @@ import {
   type TargetType,
   type TenantQuotaResponse,
   type TenantResponse,
+  type UpdateScanTargetRequest,
   type UUID,
 } from '@virtualrift/types';
 import { useSession } from '../../session';
@@ -127,6 +128,9 @@ export function TenantTargetsPanel() {
   const [createRepositoryUsername, setCreateRepositoryUsername] = useState('');
   const [createRepositoryHeaderName, setCreateRepositoryHeaderName] = useState('');
   const [createRepositorySecret, setCreateRepositorySecret] = useState('');
+  const [editingTargetId, setEditingTargetId] = useState<UUID | null>(null);
+  const [editingTargetValue, setEditingTargetValue] = useState('');
+  const [editingTargetDescription, setEditingTargetDescription] = useState('');
   const [editingRepositoryTargetId, setEditingRepositoryTargetId] = useState<UUID | null>(null);
   const [editingRepositoryAuthMode, setEditingRepositoryAuthMode] = useState<RepositoryAuthenticationMode>('NONE');
   const [editingRepositoryUsername, setEditingRepositoryUsername] = useState('');
@@ -175,6 +179,12 @@ export function TenantTargetsPanel() {
     [targets],
   );
 
+  const resetTargetEditor = () => {
+    setEditingTargetId(null);
+    setEditingTargetValue('');
+    setEditingTargetDescription('');
+  };
+
   const resetRepositoryCredentialEditor = () => {
     setEditingRepositoryTargetId(null);
     setEditingRepositoryAuthMode('NONE');
@@ -183,7 +193,15 @@ export function TenantTargetsPanel() {
     setEditingRepositorySecret('');
   };
 
+  const openTargetEditor = (target: ScanTargetResponse) => {
+    resetRepositoryCredentialEditor();
+    setEditingTargetId(target.id);
+    setEditingTargetValue(target.target);
+    setEditingTargetDescription(target.description ?? '');
+  };
+
   const openRepositoryCredentialEditor = (target: ScanTargetResponse) => {
+    resetTargetEditor();
     setEditingRepositoryTargetId(target.id);
     setEditingRepositoryAuthMode(target.repositoryCredentials?.mode ?? 'NONE');
     setEditingRepositoryUsername(target.repositoryCredentials?.username ?? '');
@@ -230,6 +248,33 @@ export function TenantTargetsPanel() {
     } catch (createError) {
       setStatus('ready');
       setError(toErrorMessage(createError, 'Não foi possível adicionar o alvo de scan.'));
+    }
+  };
+
+  const handleUpdateTarget = async (event: FormEvent<HTMLFormElement>, targetId: UUID) => {
+    event.preventDefault();
+    if (!tenantId) {
+      return;
+    }
+
+    const payload: UpdateScanTargetRequest = {
+      target: editingTargetValue,
+      description: editingTargetDescription.trim().length > 0 ? editingTargetDescription.trim() : null,
+    };
+
+    setStatus('submitting');
+    setError(null);
+
+    try {
+      const updatedTarget = await client.tenants.updateScanTarget(tenantId, targetId, payload);
+      setTargets((currentTargets) =>
+        currentTargets.map((currentTarget) => (currentTarget.id === targetId ? updatedTarget : currentTarget)),
+      );
+      resetTargetEditor();
+      setStatus('ready');
+    } catch (updateError) {
+      setStatus('ready');
+      setError(toErrorMessage(updateError, 'Não foi possível atualizar o alvo de scan.'));
     }
   };
 
@@ -297,6 +342,9 @@ export function TenantTargetsPanel() {
     try {
       await client.tenants.removeScanTarget(tenantId, targetId);
       setTargets((currentTargets) => currentTargets.filter((target) => target.id !== targetId));
+      if (editingTargetId === targetId) {
+        resetTargetEditor();
+      }
       if (editingRepositoryTargetId === targetId) {
         resetRepositoryCredentialEditor();
       }
@@ -706,6 +754,70 @@ export function TenantTargetsPanel() {
                   Última falha de verificação: {target.verificationFailureReason}
                 </p>
               ) : null}
+              {canManageTargets && editingTargetId === target.id ? (
+                <form onSubmit={(event) => void handleUpdateTarget(event, target.id)} className="form-stack">
+                  <div className="panel-section-header">
+                    <h4 className="panel-section-title">Editar alvo</h4>
+                    <span className="badge badge-accent">Foundation</span>
+                  </div>
+                  <div className="field-grid">
+                    <div className="field">
+                      <label htmlFor={`edit-target-value-${target.id}`}>Novo alvo</label>
+                      <input
+                        className="input"
+                        id={`edit-target-value-${target.id}`}
+                        name={`edit-target-value-${target.id}`}
+                        type="text"
+                        value={editingTargetValue}
+                        onChange={(event) => setEditingTargetValue(event.target.value)}
+                        placeholder={targetPlaceholder(target.type)}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`edit-target-type-${target.id}`}>Tipo</label>
+                      <input
+                        className="input"
+                        id={`edit-target-type-${target.id}`}
+                        name={`edit-target-type-${target.id}`}
+                        type="text"
+                        value={target.type}
+                        disabled
+                      />
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label htmlFor={`edit-target-description-${target.id}`}>Nova descrição</label>
+                      <input
+                        className="input"
+                        id={`edit-target-description-${target.id}`}
+                        name={`edit-target-description-${target.id}`}
+                        type="text"
+                        value={editingTargetDescription}
+                        onChange={(event) => setEditingTargetDescription(event.target.value)}
+                        placeholder="Aplicação principal de produção"
+                      />
+                    </div>
+                  </div>
+                  <p className="form-help">
+                    <strong>Impacto da edição</strong>
+                    Alterar só a descrição preserva o status atual. Alterar o alvo reinicia o ownership para <strong>PENDING</strong> e exige nova verificação antes de liberar scans.
+                  </p>
+                  {target.type === 'REPOSITORY' ? (
+                    <p className="form-help">
+                      <strong>Repositório</strong>
+                      Se você mudar o remoto, o backend valida o acesso novamente com a credencial já armazenada antes de salvar.
+                    </p>
+                  ) : null}
+                  <div className="form-actions">
+                    <button className="button-secondary" type="submit" disabled={status === 'submitting'}>
+                      {status === 'submitting' ? 'Atualizando...' : 'Salvar alvo'}
+                    </button>
+                    <button className="button-ghost" type="button" onClick={resetTargetEditor} disabled={status === 'submitting'}>
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : null}
               {canManageTargets && target.type === 'REPOSITORY' && editingRepositoryTargetId === target.id ? (
                 <form onSubmit={(event) => void handleRotateRepositoryCredentials(event, target.id)} className="form-stack">
                   <div className="panel-section-header">
@@ -823,6 +935,11 @@ export function TenantTargetsPanel() {
                 {canManageTargets && canApproveTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleApproveTarget(target.id)} disabled={status === 'submitting'}>
                     Aprovar ownership manualmente
+                  </button>
+                ) : null}
+                {canManageTargets && editingTargetId !== target.id ? (
+                  <button className="button-secondary" type="button" onClick={() => openTargetEditor(target)} disabled={status === 'submitting'}>
+                    Editar alvo
                   </button>
                 ) : null}
                 {canManageTargets && target.type === 'REPOSITORY' && editingRepositoryTargetId !== target.id ? (

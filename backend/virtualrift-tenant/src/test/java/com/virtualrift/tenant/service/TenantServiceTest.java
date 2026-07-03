@@ -11,6 +11,7 @@ import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.dto.UpdateScanTargetRequest;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
 import com.virtualrift.tenant.exception.InvalidScanTargetConfigurationException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
@@ -506,6 +507,107 @@ class TenantServiceTest {
             assertEquals(2, responses.size());
             assertEquals("https://one.example", responses.get(0).target());
             verify(scanTargetRepository).findByTenantIdOrderByCreatedAtDesc(tenantId);
+        }
+
+        @Test
+        @DisplayName("should update target description without resetting verification when target is unchanged")
+        void updateScanTarget_quandoSoDescricaoMuda_preservaStatus() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://app.example.com", TargetType.URL, "old");
+            target.markVerified();
+            String originalVerificationToken = target.getVerificationToken();
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.updateScanTarget(
+                    tenantId,
+                    targetId,
+                    new UpdateScanTargetRequest("https://app.example.com", "new description")
+            );
+
+            assertEquals("new description", response.description());
+            assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
+            assertEquals(originalVerificationToken, response.verificationToken());
+            verify(repositoryAccessValidator, never()).validateAccess(any(), any());
+        }
+
+        @Test
+        @DisplayName("should reset verification when target value changes")
+        void updateScanTarget_quandoTargetMuda_resetaOwnership() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://app.example.com", TargetType.URL, "old");
+            target.markVerified();
+            String originalVerificationToken = target.getVerificationToken();
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://app.example.com/login")).thenReturn(false);
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.updateScanTarget(
+                    tenantId,
+                    targetId,
+                    new UpdateScanTargetRequest("https://app.example.com/login", "new description")
+            );
+
+            assertEquals("https://app.example.com/login", response.target());
+            assertEquals("new description", response.description());
+            assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
+            assertNotEquals(originalVerificationToken, response.verificationToken());
+            assertNull(response.verifiedAt());
+            assertNull(response.verifiedByUserId());
+        }
+
+        @Test
+        @DisplayName("should validate repository access when repository target changes")
+        void updateScanTarget_quandoRepositorioMuda_revalidaAcesso() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://github.com/acme/platform.git", TargetType.REPOSITORY, "core repo");
+            target.markVerified();
+            String originalVerificationToken = target.getVerificationToken();
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://github.com/acme/platform-v2.git")).thenReturn(false);
+            when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("Authorization", "Bearer repo-token"));
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.updateScanTarget(
+                    tenantId,
+                    targetId,
+                    new UpdateScanTargetRequest("git@github.com:acme/platform-v2.git", "next repo")
+            );
+
+            assertEquals("https://github.com/acme/platform-v2.git", response.target());
+            assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
+            assertNotEquals(originalVerificationToken, response.verificationToken());
+            verify(repositoryAccessValidator).validateAccess(
+                    "https://github.com/acme/platform-v2.git",
+                    Map.of("Authorization", "Bearer repo-token")
+            );
+        }
+
+        @Test
+        @DisplayName("should reject duplicate updated target for same tenant")
+        void updateScanTarget_quandoNovoTargetDuplicado_lancaSlugAlreadyExistsException() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://app.example.com", TargetType.URL, "old");
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://app.example.com/login")).thenReturn(true);
+
+            assertThrows(
+                    SlugAlreadyExistsException.class,
+                    () -> tenantService.updateScanTarget(
+                            tenantId,
+                            targetId,
+                            new UpdateScanTargetRequest("https://app.example.com/login", "new description")
+                    )
+            );
+            verify(scanTargetRepository, never()).save(any(ScanTarget.class));
         }
 
         @Test

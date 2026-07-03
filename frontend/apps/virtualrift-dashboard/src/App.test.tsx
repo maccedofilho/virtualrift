@@ -309,6 +309,7 @@ const createClient = () => {
       revokeInvitation: vi.fn(),
       listScanTargets: vi.fn(),
       addScanTarget: vi.fn(),
+      updateScanTarget: vi.fn(),
       authorizeScanTarget: vi.fn(),
       verifyScanTarget: vi.fn(),
       approveScanTarget: vi.fn(),
@@ -402,6 +403,18 @@ const createClient = () => {
       type: payload.type,
       description: payload.description ?? null,
       verificationToken: 'token-created',
+    }),
+  );
+  client.tenants.updateScanTarget.mockImplementation(async (_tenantId, targetId, payload) =>
+    createTarget({
+      id: targetId,
+      target: payload.target,
+      description: payload.description ?? null,
+      verificationStatus: 'PENDING',
+      verificationToken: 'token-updated',
+      verificationCheckedAt: null,
+      verifiedAt: null,
+      verifiedByUserId: null,
     }),
   );
   client.tenants.authorizeScanTarget.mockResolvedValue({ authorized: true });
@@ -878,6 +891,45 @@ describe('VirtualRift Dashboard App', () => {
         secret: 'repo-token',
       },
     });
+  });
+
+  it('edits an existing target and resets verification when the target value changes', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'target-edit',
+        target: 'https://app.example.com',
+        description: 'Primary app',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+        verifiedByUserId: 'user-id',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
+    expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Editar alvo' }));
+    fireEvent.change(screen.getByLabelText('Novo alvo'), { target: { value: 'https://app.example.com/login' } });
+    fireEvent.change(screen.getByLabelText('Nova descrição'), { target: { value: 'Primary app login' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alvo' }));
+
+    await waitFor(() => {
+      expect(client.tenants.updateScanTarget).toHaveBeenCalledWith('tenant-id', 'target-edit', {
+        target: 'https://app.example.com/login',
+        description: 'Primary app login',
+      });
+    });
+    expect(await screen.findByText('https://app.example.com/login')).toBeInTheDocument();
+    expect(await screen.findByText('Status: PENDING')).toBeInTheDocument();
   });
 
   it('rotates repository credentials for an existing repository target without recreating it', async () => {

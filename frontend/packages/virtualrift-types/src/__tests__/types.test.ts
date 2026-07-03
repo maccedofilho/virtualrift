@@ -43,6 +43,7 @@ import type {
   ScanResult,
   ScanStatus,
   ScanTarget,
+  UpdateScanTargetRequest,
   ScanTargetVerificationStatus,
   ScanType,
   Severity,
@@ -182,6 +183,10 @@ describe('virtualrift types package', () => {
       username?: string | null;
       headerName?: string | null;
       secret?: string | null;
+    }>();
+    expectTypeOf<UpdateScanTargetRequest>().toEqualTypeOf<{
+      target: string;
+      description?: string | null;
     }>();
     expectTypeOf<ScanTarget>().toEqualTypeOf<{
       id: string;

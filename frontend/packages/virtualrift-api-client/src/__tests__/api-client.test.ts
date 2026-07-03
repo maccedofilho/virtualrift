@@ -438,6 +438,66 @@ describe('API client package', () => {
     );
   });
 
+  it('updates a scan target through the tenant API', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'target-1',
+          target: 'https://app.example.com/new-login',
+          type: 'URL',
+          description: 'Updated app target',
+          verificationStatus: 'PENDING',
+          verificationToken: 'token-next',
+          verificationCheckedAt: null,
+          verifiedAt: null,
+          verifiedByUserId: null,
+          createdAt: '2026-05-06T10:00:00Z',
+          repositoryCredentials: null,
+          verificationGuide: {
+            supported: true,
+            method: 'HTTP_WELL_KNOWN_OR_DNS_TXT',
+            location: 'https://app.example.com/new-login/.well-known/virtualrift-verification.txt',
+            instructions: ['Publish token'],
+          },
+          verificationFailureReason: null,
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.tenants.updateScanTarget(
+      'tenant-id',
+      'target-1',
+      {
+        target: 'https://app.example.com/new-login',
+        description: 'Updated app target',
+      },
+      { tenantId: 'tenant-id' },
+    );
+
+    expect(response.target).toBe('https://app.example.com/new-login');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/scan-targets/target-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          target: 'https://app.example.com/new-login',
+          description: 'Updated app target',
+        }),
+      }),
+    );
+  });
+
   it('serializes optional report query parameters only when provided', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify([]), {

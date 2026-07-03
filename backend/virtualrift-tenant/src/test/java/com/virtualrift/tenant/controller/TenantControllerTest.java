@@ -13,6 +13,7 @@ import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
+import com.virtualrift.tenant.dto.UpdateScanTargetRequest;
 import com.virtualrift.common.security.UserRole;
 import com.virtualrift.tenant.model.ScanTargetVerificationMethod;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
@@ -53,6 +54,25 @@ class TenantControllerTest {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> controller.addScanTarget("READER", UUID.randomUUID(), new AddScanTargetRequest("https://example.com", TargetType.URL, null, null))
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verifyNoInteractions(tenantService);
+    }
+
+    @Test
+    @DisplayName("should reject target editing for reader role")
+    void updateScanTarget_quandoReader_retorna403() {
+        TenantController controller = new TenantController(tenantService);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.updateScanTarget(
+                        "READER",
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        new UpdateScanTargetRequest("https://app.example.com/login", "updated")
+                )
         );
 
         assertEquals(403, exception.getStatusCode().value());
@@ -125,6 +145,41 @@ class TenantControllerTest {
 
         assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
         assertEquals(userId, response.verifiedByUserId());
+    }
+
+    @Test
+    @DisplayName("should allow target editing for owner role")
+    void updateScanTarget_quandoOwner_atualizaTarget() {
+        TenantController controller = new TenantController(tenantService);
+        UUID tenantId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UpdateScanTargetRequest request = new UpdateScanTargetRequest("https://app.example.com/login", "Updated app");
+
+        when(tenantService.updateScanTarget(tenantId, targetId, request)).thenReturn(new ScanTargetResponse(
+                targetId,
+                "https://app.example.com/login",
+                TargetType.URL,
+                "Updated app",
+                ScanTargetVerificationStatus.PENDING,
+                "token-next",
+                null,
+                null,
+                null,
+                null,
+                null,
+                new ScanTargetVerificationGuideResponse(
+                        true,
+                        ScanTargetVerificationMethod.HTTP_WELL_KNOWN_OR_DNS_TXT,
+                        "https://app.example.com/login/.well-known/virtualrift-verification.txt",
+                        java.util.List.of("Publish token")
+                ),
+                null
+        ));
+
+        ScanTargetResponse response = controller.updateScanTarget("OWNER", tenantId, targetId, request).getBody();
+
+        assertEquals("https://app.example.com/login", response.target());
+        assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
     }
 
     @Test
