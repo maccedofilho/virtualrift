@@ -371,6 +371,73 @@ describe('API client package', () => {
     expect(headers.get('X-Tenant-Id')).toBe('override-tenant');
   });
 
+  it('rotates repository credentials through the tenant API', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'target-1',
+          target: 'https://github.com/acme/platform.git',
+          type: 'REPOSITORY',
+          description: 'Core repository',
+          verificationStatus: 'VERIFIED',
+          verificationToken: null,
+          verificationCheckedAt: '2026-05-06T11:00:00Z',
+          verifiedAt: '2026-05-06T11:00:00Z',
+          verifiedByUserId: 'user-id',
+          createdAt: '2026-05-06T10:00:00Z',
+          repositoryCredentials: {
+            mode: 'CUSTOM_HEADER',
+            configured: true,
+            username: null,
+            headerName: 'PRIVATE-TOKEN',
+          },
+          verificationGuide: {
+            supported: true,
+            method: 'REPOSITORY_RAW_FILE',
+            location: 'https://github.com/acme/platform/-/raw/HEAD/.well-known/virtualrift-verification.txt',
+            instructions: ['Publish token'],
+          },
+          verificationFailureReason: null,
+        }),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
+      ),
+    );
+
+    const client = createVirtualRiftClient({
+      baseUrl: 'https://api.virtualrift.test',
+      fetch: fetchMock,
+    });
+
+    const response = await client.tenants.rotateRepositoryCredentials(
+      'tenant-id',
+      'target-1',
+      {
+        mode: 'CUSTOM_HEADER',
+        headerName: 'PRIVATE-TOKEN',
+        secret: 'repo-token',
+      },
+      { tenantId: 'tenant-id' },
+    );
+
+    expect(response.repositoryCredentials?.headerName).toBe('PRIVATE-TOKEN');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.virtualrift.test/api/v1/tenants/tenant-id/scan-targets/target-1/repository-credentials',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          mode: 'CUSTOM_HEADER',
+          headerName: 'PRIVATE-TOKEN',
+          secret: 'repo-token',
+        }),
+      }),
+    );
+  });
+
   it('serializes optional report query parameters only when provided', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify([]), {

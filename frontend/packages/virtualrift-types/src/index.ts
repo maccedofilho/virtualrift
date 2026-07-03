@@ -233,12 +233,14 @@ export type AddScanTargetRequest = {
   target: string;
   type: TargetType;
   description?: Nullable<string>;
-  repositoryCredentials?: Nullable<{
-    mode: RepositoryAuthenticationMode;
-    username?: Nullable<string>;
-    headerName?: Nullable<string>;
-    secret?: Nullable<string>;
-  }>;
+  repositoryCredentials?: Nullable<RepositoryCredentialsRequest>;
+};
+
+export type RepositoryCredentialsRequest = {
+  mode: RepositoryAuthenticationMode;
+  username?: Nullable<string>;
+  headerName?: Nullable<string>;
+  secret?: Nullable<string>;
 };
 
 export type ScanTarget = {

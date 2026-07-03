@@ -35,6 +35,7 @@ import type {
   PlanChangeRequestStatus,
   ProblemDetailResponse,
   RefreshTokenRequest,
+  RepositoryCredentialsRequest,
   Report,
   ReportFinding,
   Scan,
@@ -174,12 +175,13 @@ describe('virtualrift types package', () => {
       target: string;
       type: TargetType;
       description?: string | null;
-      repositoryCredentials?: {
-        mode: 'NONE' | 'BEARER_TOKEN' | 'BASIC' | 'CUSTOM_HEADER';
-        username?: string | null;
-        headerName?: string | null;
-        secret?: string | null;
-      } | null;
+      repositoryCredentials?: RepositoryCredentialsRequest | null;
+    }>();
+    expectTypeOf<RepositoryCredentialsRequest>().toEqualTypeOf<{
+      mode: 'NONE' | 'BEARER_TOKEN' | 'BASIC' | 'CUSTOM_HEADER';
+      username?: string | null;
+      headerName?: string | null;
+      secret?: string | null;
     }>();
     expectTypeOf<ScanTarget>().toEqualTypeOf<{
       id: string;

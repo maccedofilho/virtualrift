@@ -327,6 +327,30 @@ public class TenantService {
         return toResponse(scanTarget);
     }
 
+    @Transactional
+    public ScanTargetResponse rotateRepositoryCredentials(
+            UUID tenantId,
+            UUID targetId,
+            RepositoryCredentialsRequest request
+    ) {
+        ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
+        if (scanTarget.getType() != TargetType.REPOSITORY) {
+            throw new InvalidScanTargetConfigurationException(
+                    "Repository credentials can only be rotated for repository targets"
+            );
+        }
+
+        RepositoryCredentialsService.PersistedRepositoryCredentials repositoryCredentials =
+                prepareRepositoryCredentials(scanTarget.getType(), request);
+        applyRepositoryCredentials(scanTarget, repositoryCredentials);
+        validateRepositoryOnboardingAccess(scanTarget);
+        if (scanTarget.getVerificationStatus() == ScanTargetVerificationStatus.FAILED) {
+            scanTarget.markPendingVerification();
+        }
+
+        return toResponse(scanTargetRepository.save(scanTarget));
+    }
+
     public List<ScanTargetResponse> getScanTargets(UUID tenantId) {
         return scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(this::toResponse)

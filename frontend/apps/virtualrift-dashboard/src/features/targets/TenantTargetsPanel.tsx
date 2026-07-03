@@ -6,6 +6,7 @@ import {
   isVerifiedScanTarget,
   type AddScanTargetRequest,
   type RepositoryAuthenticationMode,
+  type RepositoryCredentialsRequest,
   type ScanTargetVerificationMethod,
   type ScanTargetResponse,
   type ScanType,
@@ -86,6 +87,32 @@ const repositoryAuthenticationLabel = (target: ScanTargetResponse): string | nul
   }
 };
 
+const buildRepositoryCredentialsPayload = (
+  mode: RepositoryAuthenticationMode,
+  username: string,
+  headerName: string,
+  secret: string,
+  includeNone: boolean,
+): RepositoryCredentialsRequest | null => {
+  if (mode === 'NONE') {
+    return includeNone
+      ? {
+          mode: 'NONE',
+          username: null,
+          headerName: null,
+          secret: null,
+        }
+      : null;
+  }
+
+  return {
+    mode,
+    username: mode === 'BASIC' ? username.trim() || null : null,
+    headerName: mode === 'CUSTOM_HEADER' ? headerName.trim() || null : null,
+    secret: secret.trim() || null,
+  };
+};
+
 export function TenantTargetsPanel() {
   const { client, session } = useSession();
   const [tenant, setTenant] = useState<TenantResponse | null>(null);
@@ -100,6 +127,11 @@ export function TenantTargetsPanel() {
   const [createRepositoryUsername, setCreateRepositoryUsername] = useState('');
   const [createRepositoryHeaderName, setCreateRepositoryHeaderName] = useState('');
   const [createRepositorySecret, setCreateRepositorySecret] = useState('');
+  const [editingRepositoryTargetId, setEditingRepositoryTargetId] = useState<UUID | null>(null);
+  const [editingRepositoryAuthMode, setEditingRepositoryAuthMode] = useState<RepositoryAuthenticationMode>('NONE');
+  const [editingRepositoryUsername, setEditingRepositoryUsername] = useState('');
+  const [editingRepositoryHeaderName, setEditingRepositoryHeaderName] = useState('');
+  const [editingRepositorySecret, setEditingRepositorySecret] = useState('');
   const [authorizeTarget, setAuthorizeTarget] = useState('');
   const [authorizeScanType, setAuthorizeScanType] = useState<ScanType>('WEB');
   const [authorizeStatus, setAuthorizeStatus] = useState<'idle' | 'checking'>('idle');
@@ -143,6 +175,22 @@ export function TenantTargetsPanel() {
     [targets],
   );
 
+  const resetRepositoryCredentialEditor = () => {
+    setEditingRepositoryTargetId(null);
+    setEditingRepositoryAuthMode('NONE');
+    setEditingRepositoryUsername('');
+    setEditingRepositoryHeaderName('');
+    setEditingRepositorySecret('');
+  };
+
+  const openRepositoryCredentialEditor = (target: ScanTargetResponse) => {
+    setEditingRepositoryTargetId(target.id);
+    setEditingRepositoryAuthMode(target.repositoryCredentials?.mode ?? 'NONE');
+    setEditingRepositoryUsername(target.repositoryCredentials?.username ?? '');
+    setEditingRepositoryHeaderName(target.repositoryCredentials?.headerName ?? '');
+    setEditingRepositorySecret('');
+  };
+
   const handleCreateTarget = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!tenantId) {
@@ -154,13 +202,14 @@ export function TenantTargetsPanel() {
       type: createType,
       description: createDescription.trim().length > 0 ? createDescription.trim() : null,
       repositoryCredentials:
-        createType === 'REPOSITORY' && createRepositoryAuthMode !== 'NONE'
-          ? {
-              mode: createRepositoryAuthMode,
-              username: createRepositoryAuthMode === 'BASIC' ? createRepositoryUsername.trim() || null : null,
-              headerName: createRepositoryAuthMode === 'CUSTOM_HEADER' ? createRepositoryHeaderName.trim() || null : null,
-              secret: createRepositorySecret.trim() || null,
-            }
+        createType === 'REPOSITORY'
+          ? buildRepositoryCredentialsPayload(
+              createRepositoryAuthMode,
+              createRepositoryUsername,
+              createRepositoryHeaderName,
+              createRepositorySecret,
+              false,
+            )
           : null,
     };
 
@@ -181,6 +230,39 @@ export function TenantTargetsPanel() {
     } catch (createError) {
       setStatus('ready');
       setError(toErrorMessage(createError, 'Não foi possível adicionar o alvo de scan.'));
+    }
+  };
+
+  const handleRotateRepositoryCredentials = async (event: FormEvent<HTMLFormElement>, targetId: UUID) => {
+    event.preventDefault();
+    if (!tenantId) {
+      return;
+    }
+
+    const payload = buildRepositoryCredentialsPayload(
+      editingRepositoryAuthMode,
+      editingRepositoryUsername,
+      editingRepositoryHeaderName,
+      editingRepositorySecret,
+      true,
+    );
+    if (!payload) {
+      return;
+    }
+
+    setStatus('submitting');
+    setError(null);
+
+    try {
+      const updatedTarget = await client.tenants.rotateRepositoryCredentials(tenantId, targetId, payload);
+      setTargets((currentTargets) =>
+        currentTargets.map((currentTarget) => (currentTarget.id === targetId ? updatedTarget : currentTarget)),
+      );
+      resetRepositoryCredentialEditor();
+      setStatus('ready');
+    } catch (rotateError) {
+      setStatus('ready');
+      setError(toErrorMessage(rotateError, 'Não foi possível atualizar a credencial do repositório.'));
     }
   };
 
@@ -215,6 +297,9 @@ export function TenantTargetsPanel() {
     try {
       await client.tenants.removeScanTarget(tenantId, targetId);
       setTargets((currentTargets) => currentTargets.filter((target) => target.id !== targetId));
+      if (editingRepositoryTargetId === targetId) {
+        resetRepositoryCredentialEditor();
+      }
       setStatus('ready');
     } catch (removeError) {
       setStatus('ready');
@@ -621,6 +706,108 @@ export function TenantTargetsPanel() {
                   Última falha de verificação: {target.verificationFailureReason}
                 </p>
               ) : null}
+              {canManageTargets && target.type === 'REPOSITORY' && editingRepositoryTargetId === target.id ? (
+                <form onSubmit={(event) => void handleRotateRepositoryCredentials(event, target.id)} className="form-stack">
+                  <div className="panel-section-header">
+                    <h4 className="panel-section-title">Rotacionar credencial do repositório</h4>
+                    <span className="badge badge-warning">Acesso privado</span>
+                  </div>
+                  <div className="field-grid">
+                    <div className="field">
+                      <label htmlFor={`rotate-repository-auth-mode-${target.id}`}>Novo acesso ao repositório</label>
+                      <select
+                        className="select"
+                        id={`rotate-repository-auth-mode-${target.id}`}
+                        name={`rotate-repository-auth-mode-${target.id}`}
+                        value={editingRepositoryAuthMode}
+                        onChange={(event) => setEditingRepositoryAuthMode(event.target.value as RepositoryAuthenticationMode)}
+                      >
+                        {REPOSITORY_AUTHENTICATION_MODES.map((mode) => (
+                          <option key={mode} value={mode}>
+                            {mode === 'NONE'
+                              ? 'Sem credencial'
+                              : mode === 'BEARER_TOKEN'
+                                ? 'Bearer token'
+                                : mode === 'BASIC'
+                                  ? 'Basic auth'
+                                  : 'Header customizado'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor={`current-repository-auth-${target.id}`}>Resumo atual</label>
+                      <input
+                        className="input"
+                        id={`current-repository-auth-${target.id}`}
+                        name={`current-repository-auth-${target.id}`}
+                        type="text"
+                        value={repositoryAuthenticationLabel(target) ?? 'Sem credencial configurada'}
+                        disabled
+                      />
+                    </div>
+                    {editingRepositoryAuthMode === 'BASIC' ? (
+                      <div className="field">
+                        <label htmlFor={`rotate-repository-auth-username-${target.id}`}>Novo usuário do repositório</label>
+                        <input
+                          className="input"
+                          id={`rotate-repository-auth-username-${target.id}`}
+                          name={`rotate-repository-auth-username-${target.id}`}
+                          type="text"
+                          value={editingRepositoryUsername}
+                          onChange={(event) => setEditingRepositoryUsername(event.target.value)}
+                          placeholder="oauth2 ou nome técnico do provedor"
+                          required
+                        />
+                      </div>
+                    ) : null}
+                    {editingRepositoryAuthMode === 'CUSTOM_HEADER' ? (
+                      <div className="field">
+                        <label htmlFor={`rotate-repository-auth-header-${target.id}`}>Novo nome do header</label>
+                        <input
+                          className="input"
+                          id={`rotate-repository-auth-header-${target.id}`}
+                          name={`rotate-repository-auth-header-${target.id}`}
+                          type="text"
+                          value={editingRepositoryHeaderName}
+                          onChange={(event) => setEditingRepositoryHeaderName(event.target.value)}
+                          placeholder="PRIVATE-TOKEN"
+                          required
+                        />
+                      </div>
+                    ) : null}
+                    {editingRepositoryAuthMode !== 'NONE' ? (
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label htmlFor={`rotate-repository-auth-secret-${target.id}`}>
+                          {editingRepositoryAuthMode === 'BASIC' ? 'Nova senha ou token do repositório' : 'Novo token ou valor do header'}
+                        </label>
+                        <input
+                          className="input"
+                          id={`rotate-repository-auth-secret-${target.id}`}
+                          name={`rotate-repository-auth-secret-${target.id}`}
+                          type="password"
+                          value={editingRepositorySecret}
+                          onChange={(event) => setEditingRepositorySecret(event.target.value)}
+                          placeholder="Informe o novo segredo para validar acesso e uso futuro do clone"
+                          required
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  <p className="form-help">
+                    <strong>Rotação segura</strong>
+                    Salvar essa alteração revalida o acesso do backend ao remoto. Se o repositório voltou a ser público, selecione <strong>Sem credencial</strong>.
+                  </p>
+                  <div className="form-actions">
+                    <button className="button-secondary" type="submit" disabled={status === 'submitting'}>
+                      {status === 'submitting' ? 'Atualizando...' : 'Salvar credencial'}
+                    </button>
+                    <button className="button-ghost" type="button" onClick={resetRepositoryCredentialEditor} disabled={status === 'submitting'}>
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : null}
               {!target.verificationGuide.supported ? (
                 <p className="alert alert-info">
                   Este alvo depende de revisão manual antes de poder ser usado em scans.
@@ -636,6 +823,11 @@ export function TenantTargetsPanel() {
                 {canManageTargets && canApproveTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleApproveTarget(target.id)} disabled={status === 'submitting'}>
                     Aprovar ownership manualmente
+                  </button>
+                ) : null}
+                {canManageTargets && target.type === 'REPOSITORY' && editingRepositoryTargetId !== target.id ? (
+                  <button className="button-secondary" type="button" onClick={() => openRepositoryCredentialEditor(target)} disabled={status === 'submitting'}>
+                    Rotacionar credencial
                   </button>
                 ) : null}
                 {canManageTargets ? (

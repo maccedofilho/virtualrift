@@ -312,6 +312,7 @@ const createClient = () => {
       authorizeScanTarget: vi.fn(),
       verifyScanTarget: vi.fn(),
       approveScanTarget: vi.fn(),
+      rotateRepositoryCredentials: vi.fn(),
       requestPlanChange: vi.fn(),
       removeScanTarget: vi.fn(),
     },
@@ -429,6 +430,33 @@ const createClient = () => {
         location: null,
         instructions: ['Faixas IP exigem revisão manual antes de habilitar scans NETWORK.'],
       },
+    }),
+  );
+  client.tenants.rotateRepositoryCredentials.mockImplementation(async (_tenantId, targetId, payload) =>
+    createTarget({
+      id: targetId,
+      target: 'https://github.com/acme/platform.git',
+      type: 'REPOSITORY',
+      description: 'Core repository',
+      verificationStatus: 'VERIFIED',
+      verificationToken: null,
+      verifiedAt: '2026-05-06T11:00:00.000Z',
+      verificationCheckedAt: '2026-05-06T11:00:00.000Z',
+      verifiedByUserId: 'user-id',
+      repositoryCredentials:
+        payload.mode === 'NONE'
+          ? {
+              mode: 'NONE',
+              configured: false,
+              username: null,
+              headerName: null,
+            }
+          : {
+              mode: payload.mode,
+              configured: true,
+              username: payload.username ?? null,
+              headerName: payload.headerName ?? null,
+            },
     }),
   );
   client.tenants.requestPlanChange.mockImplementation(async (_tenantId, payload) =>
@@ -850,6 +878,59 @@ describe('VirtualRift Dashboard App', () => {
         secret: 'repo-token',
       },
     });
+  });
+
+  it('rotates repository credentials for an existing repository target without recreating it', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        id: 'repo-target',
+        target: 'https://github.com/acme/platform.git',
+        type: 'REPOSITORY',
+        description: 'Core repository',
+        verificationStatus: 'VERIFIED',
+        verificationToken: null,
+        verifiedAt: '2026-05-06T11:00:00.000Z',
+        repositoryCredentials: {
+          mode: 'BEARER_TOKEN',
+          configured: true,
+          username: null,
+          headerName: null,
+        },
+        verificationGuide: {
+          supported: true,
+          method: 'REPOSITORY_RAW_FILE',
+          location: 'https://github.com/acme/platform/-/raw/HEAD/.well-known/virtualrift-verification.txt',
+          instructions: ['Publique o token no endpoint raw do repositório.'],
+        },
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Sessão pronta' });
+    goTo('targets');
+    expect(await screen.findByText('https://github.com/acme/platform.git')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rotacionar credencial' }));
+    fireEvent.change(screen.getByLabelText('Novo acesso ao repositório'), { target: { value: 'CUSTOM_HEADER' } });
+    fireEvent.change(screen.getByLabelText('Novo nome do header'), { target: { value: 'PRIVATE-TOKEN' } });
+    fireEvent.change(screen.getByLabelText('Novo token ou valor do header'), { target: { value: 'repo-token-v2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar credencial' }));
+
+    await waitFor(() => {
+      expect(client.tenants.rotateRepositoryCredentials).toHaveBeenCalledWith('tenant-id', 'repo-target', {
+        mode: 'CUSTOM_HEADER',
+        username: null,
+        headerName: 'PRIVATE-TOKEN',
+        secret: 'repo-token-v2',
+      });
+    });
+    expect(await screen.findByText('Header PRIVATE-TOKEN configurado')).toBeInTheDocument();
   });
 
   it('verifies ownership for a pending target', async () => {
