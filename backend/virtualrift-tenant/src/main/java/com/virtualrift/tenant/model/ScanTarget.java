@@ -33,6 +33,19 @@ public class ScanTarget {
     private String description;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "repository_auth_mode")
+    private RepositoryAuthenticationMode repositoryAuthMode;
+
+    @Column(name = "repository_auth_username")
+    private String repositoryAuthUsername;
+
+    @Column(name = "repository_auth_header_name")
+    private String repositoryAuthHeaderName;
+
+    @Column(name = "repository_auth_secret_ciphertext")
+    private String repositoryAuthSecretCiphertext;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", nullable = false)
     private ScanTargetVerificationStatus verificationStatus;
 
@@ -86,6 +99,10 @@ public class ScanTarget {
     public String getTarget() { return target; }
     public TargetType getType() { return type; }
     public String getDescription() { return description; }
+    public RepositoryAuthenticationMode getRepositoryAuthMode() { return repositoryAuthMode; }
+    public String getRepositoryAuthUsername() { return repositoryAuthUsername; }
+    public String getRepositoryAuthHeaderName() { return repositoryAuthHeaderName; }
+    public String getRepositoryAuthSecretCiphertext() { return repositoryAuthSecretCiphertext; }
     public ScanTargetVerificationStatus getVerificationStatus() { return verificationStatus; }
     public String getVerificationToken() { return verificationToken; }
     public Instant getVerificationCheckedAt() { return verificationCheckedAt; }
@@ -99,6 +116,10 @@ public class ScanTarget {
     public void setTarget(String target) { this.target = target; }
     public void setType(TargetType type) { this.type = type; }
     public void setDescription(String description) { this.description = description; }
+    public void setRepositoryAuthMode(RepositoryAuthenticationMode repositoryAuthMode) { this.repositoryAuthMode = repositoryAuthMode; }
+    public void setRepositoryAuthUsername(String repositoryAuthUsername) { this.repositoryAuthUsername = repositoryAuthUsername; }
+    public void setRepositoryAuthHeaderName(String repositoryAuthHeaderName) { this.repositoryAuthHeaderName = repositoryAuthHeaderName; }
+    public void setRepositoryAuthSecretCiphertext(String repositoryAuthSecretCiphertext) { this.repositoryAuthSecretCiphertext = repositoryAuthSecretCiphertext; }
     public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
 
     public void markVerified() {

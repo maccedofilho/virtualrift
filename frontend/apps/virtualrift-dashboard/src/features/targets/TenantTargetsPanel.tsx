@@ -1,9 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
+  REPOSITORY_AUTHENTICATION_MODES,
   SCAN_TYPES,
   TARGET_TYPES,
   isVerifiedScanTarget,
   type AddScanTargetRequest,
+  type RepositoryAuthenticationMode,
   type ScanTargetVerificationMethod,
   type ScanTargetResponse,
   type ScanType,
@@ -51,6 +53,39 @@ const verificationMethodLabel = (method: ScanTargetVerificationMethod): string =
   }
 };
 
+const targetPlaceholder = (type: TargetType): string => {
+  switch (type) {
+    case 'REPOSITORY':
+      return 'https://github.com/org/repo, github.com/org/repo ou git@github.com:org/repo.git';
+    case 'API_SPEC':
+      return 'https://api.example.com/openapi.json';
+    case 'IP_RANGE':
+      return '203.0.113.0/24';
+    case 'URL':
+    default:
+      return 'https://app.example.com';
+  }
+};
+
+const repositoryAuthenticationLabel = (target: ScanTargetResponse): string | null => {
+  const credentials = target.repositoryCredentials;
+  if (!credentials || !credentials.configured) {
+    return null;
+  }
+
+  switch (credentials.mode) {
+    case 'BEARER_TOKEN':
+      return 'Bearer token configurado';
+    case 'BASIC':
+      return credentials.username ? `Basic auth com usuário ${credentials.username}` : 'Basic auth configurado';
+    case 'CUSTOM_HEADER':
+      return credentials.headerName ? `Header ${credentials.headerName} configurado` : 'Header customizado configurado';
+    case 'NONE':
+    default:
+      return null;
+  }
+};
+
 export function TenantTargetsPanel() {
   const { client, session } = useSession();
   const [tenant, setTenant] = useState<TenantResponse | null>(null);
@@ -61,6 +96,10 @@ export function TenantTargetsPanel() {
   const [createTarget, setCreateTarget] = useState('');
   const [createType, setCreateType] = useState<TargetType>('URL');
   const [createDescription, setCreateDescription] = useState('');
+  const [createRepositoryAuthMode, setCreateRepositoryAuthMode] = useState<RepositoryAuthenticationMode>('NONE');
+  const [createRepositoryUsername, setCreateRepositoryUsername] = useState('');
+  const [createRepositoryHeaderName, setCreateRepositoryHeaderName] = useState('');
+  const [createRepositorySecret, setCreateRepositorySecret] = useState('');
   const [authorizeTarget, setAuthorizeTarget] = useState('');
   const [authorizeScanType, setAuthorizeScanType] = useState<ScanType>('WEB');
   const [authorizeStatus, setAuthorizeStatus] = useState<'idle' | 'checking'>('idle');
@@ -114,6 +153,15 @@ export function TenantTargetsPanel() {
       target: createTarget,
       type: createType,
       description: createDescription.trim().length > 0 ? createDescription.trim() : null,
+      repositoryCredentials:
+        createType === 'REPOSITORY' && createRepositoryAuthMode !== 'NONE'
+          ? {
+              mode: createRepositoryAuthMode,
+              username: createRepositoryAuthMode === 'BASIC' ? createRepositoryUsername.trim() || null : null,
+              headerName: createRepositoryAuthMode === 'CUSTOM_HEADER' ? createRepositoryHeaderName.trim() || null : null,
+              secret: createRepositorySecret.trim() || null,
+            }
+          : null,
     };
 
     setStatus('submitting');
@@ -124,6 +172,10 @@ export function TenantTargetsPanel() {
       setTargets((currentTargets) => [createdTarget, ...currentTargets]);
       setCreateTarget('');
       setCreateDescription('');
+      setCreateRepositoryAuthMode('NONE');
+      setCreateRepositoryUsername('');
+      setCreateRepositoryHeaderName('');
+      setCreateRepositorySecret('');
       setAuthorizationResult(null);
       setStatus('ready');
     } catch (createError) {
@@ -305,7 +357,7 @@ export function TenantTargetsPanel() {
                   type="text"
                   value={createTarget}
                   onChange={(event) => setCreateTarget(event.target.value)}
-                  placeholder="https://app.example.com or https://github.com/org/repo"
+                  placeholder={targetPlaceholder(createType)}
                   required
                 />
               </div>
@@ -337,11 +389,90 @@ export function TenantTargetsPanel() {
                   placeholder="Aplicação principal de produção"
                 />
               </div>
+              {createType === 'REPOSITORY' ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="repository-auth-mode">Acesso ao repositório</label>
+                    <select
+                      className="select"
+                      id="repository-auth-mode"
+                      name="repository-auth-mode"
+                      value={createRepositoryAuthMode}
+                      onChange={(event) => setCreateRepositoryAuthMode(event.target.value as RepositoryAuthenticationMode)}
+                    >
+                      {REPOSITORY_AUTHENTICATION_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode === 'NONE'
+                            ? 'Sem credencial'
+                            : mode === 'BEARER_TOKEN'
+                              ? 'Bearer token'
+                              : mode === 'BASIC'
+                                ? 'Basic auth'
+                                : 'Header customizado'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {createRepositoryAuthMode === 'BASIC' ? (
+                    <div className="field">
+                      <label htmlFor="repository-auth-username">Usuário do repositório</label>
+                      <input
+                        className="input"
+                        id="repository-auth-username"
+                        name="repository-auth-username"
+                        type="text"
+                        value={createRepositoryUsername}
+                        onChange={(event) => setCreateRepositoryUsername(event.target.value)}
+                        placeholder="oauth2 ou nome técnico do provedor"
+                        required
+                      />
+                    </div>
+                  ) : null}
+                  {createRepositoryAuthMode === 'CUSTOM_HEADER' ? (
+                    <div className="field">
+                      <label htmlFor="repository-auth-header">Nome do header</label>
+                      <input
+                        className="input"
+                        id="repository-auth-header"
+                        name="repository-auth-header"
+                        type="text"
+                        value={createRepositoryHeaderName}
+                        onChange={(event) => setCreateRepositoryHeaderName(event.target.value)}
+                        placeholder="PRIVATE-TOKEN"
+                        required
+                      />
+                    </div>
+                  ) : null}
+                  {createRepositoryAuthMode !== 'NONE' ? (
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label htmlFor="repository-auth-secret">
+                        {createRepositoryAuthMode === 'BASIC' ? 'Senha ou token do repositório' : 'Token ou valor do header'}
+                      </label>
+                      <input
+                        className="input"
+                        id="repository-auth-secret"
+                        name="repository-auth-secret"
+                        type="password"
+                        value={createRepositorySecret}
+                        onChange={(event) => setCreateRepositorySecret(event.target.value)}
+                        placeholder="Cole o segredo que o worker deve usar no clone HTTPS"
+                        required
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </div>
             <p className="form-help">
               <strong>Tipos de alvo</strong>
               Use URLs para fluxos web/app, especificações de API para scans guiados por contrato, repositórios em HTTPS, sem esquema ou `git@...` para onboarding SAST e IP ranges quando sua operação já tiver um processo manual de aprovação para NETWORK scan.
             </p>
+            {createType === 'REPOSITORY' ? (
+              <p className="form-help">
+                <strong>Acesso privado</strong>
+                Use essa credencial quando o repositório exigir autenticação no clone HTTPS ou no endpoint raw da prova de ownership. O painel só guarda um resumo mascarado; o segredo continua restrito ao backend.
+              </p>
+            ) : null}
             <div className="form-actions">
               <button className="button-primary" type="submit" disabled={status === 'submitting'}>
                 {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
@@ -457,6 +588,12 @@ export function TenantTargetsPanel() {
                   <span className="kv-label">Método de verificação</span>
                   <span className="kv-value">{verificationMethodLabel(target.verificationGuide.method)}</span>
                 </div>
+                {repositoryAuthenticationLabel(target) ? (
+                  <div className="kv-item">
+                    <span className="kv-label">Credencial do repositório</span>
+                    <span className="kv-value">{repositoryAuthenticationLabel(target)}</span>
+                  </div>
+                ) : null}
                 <div className="kv-item">
                   <span className="kv-label">Publicar em</span>
                   <span className="kv-value">{target.verificationGuide.location ?? 'Fluxo operacional manual'}</span>

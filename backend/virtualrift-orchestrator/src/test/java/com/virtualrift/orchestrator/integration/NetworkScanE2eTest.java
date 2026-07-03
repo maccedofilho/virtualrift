@@ -113,11 +113,11 @@ class NetworkScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.PROFESSIONAL);
-        when(tenantClient.isScanTargetAuthorized(
+        when(tenantClient.resolveScanTarget(
                 tenantId,
                 "example.com:443",
                 ScanType.NETWORK
-        )).thenReturn(true);
+        )).thenReturn(new com.virtualrift.tenant.client.ResolveScanTargetResponse(true, java.util.Map.of(), java.util.Map.of()));
 
         waitForKafkaAssignments();
 

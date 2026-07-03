@@ -118,11 +118,11 @@ class SastScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.ENTERPRISE);
-        when(tenantClient.isScanTargetAuthorized(
+        when(tenantClient.resolveScanTarget(
                 tenantId,
                 "https://github.com/acme/vulnerable.git",
                 ScanType.SAST
-        )).thenReturn(true);
+        )).thenReturn(new com.virtualrift.tenant.client.ResolveScanTargetResponse(true, java.util.Map.of(), java.util.Map.of()));
 
         waitForKafkaAssignments();
 
@@ -156,11 +156,11 @@ class SastScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.ENTERPRISE);
-        when(tenantClient.isScanTargetAuthorized(
+        when(tenantClient.resolveScanTarget(
                 tenantId,
                 "git@github.com:acme/vulnerable.git",
                 ScanType.SAST
-        )).thenReturn(true);
+        )).thenReturn(new com.virtualrift.tenant.client.ResolveScanTargetResponse(true, java.util.Map.of(), java.util.Map.of()));
 
         waitForKafkaAssignments();
 

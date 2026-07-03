@@ -215,6 +215,7 @@ const createTarget = (overrides?: Partial<ScanTargetResponse>): ScanTargetRespon
   verifiedAt: null,
   verifiedByUserId: null,
   createdAt: '2026-05-06T10:00:00.000Z',
+  repositoryCredentials: null,
   verificationGuide: {
     supported: true,
     method: 'HTTP_WELL_KNOWN_OR_DNS_TXT',
@@ -817,7 +818,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('https://api.example.com/openapi.json')).toBeInTheDocument();
   });
 
-  it('creates a new scan target from the tenant workspace panel', async () => {
+  it('creates a new repository target with a custom auth header from the tenant workspace panel', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
     });
@@ -832,6 +833,9 @@ describe('VirtualRift Dashboard App', () => {
     fireEvent.change(screen.getByLabelText('Alvo'), { target: { value: 'https://github.com/acme/platform' } });
     fireEvent.change(screen.getByLabelText('Tipo'), { target: { value: 'REPOSITORY' } });
     fireEvent.change(screen.getByLabelText('Descrição'), { target: { value: 'Core repository' } });
+    fireEvent.change(screen.getByLabelText('Acesso ao repositório'), { target: { value: 'CUSTOM_HEADER' } });
+    fireEvent.change(screen.getByLabelText('Nome do header'), { target: { value: 'PRIVATE-TOKEN' } });
+    fireEvent.change(screen.getByLabelText('Token ou valor do header'), { target: { value: 'repo-token' } });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar alvo' }));
 
     expect(await screen.findByText('https://github.com/acme/platform')).toBeInTheDocument();
@@ -839,6 +843,12 @@ describe('VirtualRift Dashboard App', () => {
       target: 'https://github.com/acme/platform',
       type: 'REPOSITORY',
       description: 'Core repository',
+      repositoryCredentials: {
+        mode: 'CUSTOM_HEADER',
+        username: null,
+        headerName: 'PRIVATE-TOKEN',
+        secret: 'repo-token',
+      },
     });
   });
 

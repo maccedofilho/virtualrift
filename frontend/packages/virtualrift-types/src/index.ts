@@ -41,6 +41,9 @@ export const SCAN_TARGET_VERIFICATION_METHODS = [
 ] as const;
 export type ScanTargetVerificationMethod = (typeof SCAN_TARGET_VERIFICATION_METHODS)[number];
 
+export const REPOSITORY_AUTHENTICATION_MODES = ['NONE', 'BEARER_TOKEN', 'BASIC', 'CUSTOM_HEADER'] as const;
+export type RepositoryAuthenticationMode = (typeof REPOSITORY_AUTHENTICATION_MODES)[number];
+
 export const REPORT_EXPORT_FORMATS = ['json', 'html'] as const;
 export type ReportExportFormat = (typeof REPORT_EXPORT_FORMATS)[number];
 
@@ -230,6 +233,12 @@ export type AddScanTargetRequest = {
   target: string;
   type: TargetType;
   description?: Nullable<string>;
+  repositoryCredentials?: Nullable<{
+    mode: RepositoryAuthenticationMode;
+    username?: Nullable<string>;
+    headerName?: Nullable<string>;
+    secret?: Nullable<string>;
+  }>;
 };
 
 export type ScanTarget = {
@@ -243,6 +252,12 @@ export type ScanTarget = {
   verifiedAt: Nullable<IsoDateTime>;
   verifiedByUserId: Nullable<UUID>;
   createdAt: IsoDateTime;
+  repositoryCredentials: Nullable<{
+    mode: RepositoryAuthenticationMode;
+    configured: boolean;
+    username: Nullable<string>;
+    headerName: Nullable<string>;
+  }>;
   verificationGuide: {
     supported: boolean;
     method: ScanTargetVerificationMethod;

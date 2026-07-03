@@ -13,10 +13,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,10 +33,11 @@ class TenantClientTest {
     private TenantClient tenantClient;
 
     private static final String TENANT_SERVICE_URL = "http://virtualrift-tenant";
+    private static final String INTERNAL_API_KEY = "internal-key";
 
     @BeforeEach
     void setUp() {
-        tenantClient = new TenantClient(restTemplate, TENANT_SERVICE_URL);
+        tenantClient = new TenantClient(restTemplate, TENANT_SERVICE_URL, INTERNAL_API_KEY);
     }
 
     @Nested
@@ -151,6 +155,48 @@ class TenantClientTest {
             boolean result = tenantClient.isScanTargetAuthorized(tenantId, "https://example.com", ScanType.WEB);
 
             assertEquals(false, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Resolve scan target")
+    class ResolveScanTarget {
+
+        @Test
+        @DisplayName("should resolve stored repository headers through the internal tenant endpoint")
+        void resolveScanTarget_quandoServicoResponde_retornaHeaders() {
+            UUID tenantId = UUID.randomUUID();
+
+            when(restTemplate.exchange(
+                    eq(TENANT_SERVICE_URL + "/api/internal/tenants/" + tenantId + "/scan-targets/resolve"),
+                    eq(org.springframework.http.HttpMethod.POST),
+                    any(org.springframework.http.HttpEntity.class),
+                    eq(ResolveScanTargetResponse.class)
+            )).thenReturn(org.springframework.http.ResponseEntity.ok(
+                    new ResolveScanTargetResponse(true, Map.of("PRIVATE-TOKEN", "repo-token"), Map.of())
+            ));
+
+            ResolveScanTargetResponse response = tenantClient.resolveScanTarget(tenantId, "git@github.com:acme/app.git", ScanType.SAST);
+
+            assertEquals(true, response.authorized());
+            assertEquals(Map.of("PRIVATE-TOKEN", "repo-token"), response.headers());
+        }
+
+        @Test
+        @DisplayName("should wrap internal resolution failures as TenantServiceException")
+        void resolveScanTarget_quandoServicoFalha_lancaTenantServiceException() {
+            UUID tenantId = UUID.randomUUID();
+
+            when(restTemplate.exchange(
+                    eq(TENANT_SERVICE_URL + "/api/internal/tenants/" + tenantId + "/scan-targets/resolve"),
+                    eq(org.springframework.http.HttpMethod.POST),
+                    any(org.springframework.http.HttpEntity.class),
+                    eq(ResolveScanTargetResponse.class)
+            )).thenThrow(new RuntimeException("tenant service unavailable"));
+
+            assertThrows(TenantServiceException.class, () ->
+                    tenantClient.resolveScanTarget(tenantId, "git@github.com:acme/app.git", ScanType.SAST)
+            );
         }
     }
 }

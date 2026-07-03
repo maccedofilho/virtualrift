@@ -4,9 +4,12 @@ import com.virtualrift.tenant.config.InternalProvisioningConfig;
 import com.virtualrift.tenant.dto.InternalProvisionTenantRequest;
 import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationRequest;
 import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationResponse;
+import com.virtualrift.tenant.dto.InternalResolveScanTargetRequest;
+import com.virtualrift.tenant.dto.InternalResolveScanTargetResponse;
 import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
 import com.virtualrift.tenant.dto.InternalSlugAvailabilityResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
+import com.virtualrift.tenant.service.ResolvedScanTargetAuthorization;
 import com.virtualrift.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
@@ -82,6 +85,25 @@ public class InternalTenantProvisioningController {
     ) {
         requireInternalApiKey(internalApiKey);
         return ResponseEntity.ok(tenantService.acceptInvitation(request.token()));
+    }
+
+    @PostMapping("/{tenantId}/scan-targets/resolve")
+    public ResponseEntity<InternalResolveScanTargetResponse> resolveScanTarget(
+            @RequestHeader("X-Internal-Api-Key") String internalApiKey,
+            @PathVariable UUID tenantId,
+            @Valid @RequestBody InternalResolveScanTargetRequest request
+    ) {
+        requireInternalApiKey(internalApiKey);
+        ResolvedScanTargetAuthorization response = tenantService.resolveScanTarget(
+                tenantId,
+                request.target(),
+                request.scanType()
+        );
+        return ResponseEntity.ok(new InternalResolveScanTargetResponse(
+                response.authorized(),
+                response.headers(),
+                response.cookies()
+        ));
     }
 
     private void requireInternalApiKey(String internalApiKey) {

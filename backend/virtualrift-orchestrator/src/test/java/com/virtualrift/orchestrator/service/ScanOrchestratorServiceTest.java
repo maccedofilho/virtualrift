@@ -17,6 +17,7 @@ import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
 import com.virtualrift.orchestrator.repository.ScanFindingRepository;
 import com.virtualrift.orchestrator.repository.ScanRepository;
+import com.virtualrift.tenant.client.ResolveScanTargetResponse;
 import com.virtualrift.tenant.client.TenantClient;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.TenantQuota;
@@ -92,6 +93,10 @@ class ScanOrchestratorServiceTest {
         );
     }
 
+    private ResolveScanTargetResponse authorizedTarget() {
+        return new ResolveScanTargetResponse(true, Map.of(), Map.of());
+    }
+
     @Nested
     @DisplayName("Create scan")
     class CreateScanFlow {
@@ -103,7 +108,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
+            when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -140,7 +145,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
+            when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -178,7 +183,8 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.PROFESSIONAL);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, "https://github.com/acme/platform", ScanType.SAST)).thenReturn(true);
+            when(tenantClient.resolveScanTarget(TENANT_ID, "https://github.com/acme/platform", ScanType.SAST))
+                    .thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -227,7 +233,8 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(false);
+            when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB))
+                    .thenReturn(new ResolveScanTargetResponse(false, Map.of(), Map.of()));
 
             assertThrows(ScanTargetNotAuthorizedException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
             verify(scanRepository, never()).save(any(Scan.class));
@@ -241,7 +248,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(1, 10));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
+            when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(1L);
 
             assertThrows(ScanQuotaExceededException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
@@ -254,7 +261,7 @@ class ScanOrchestratorServiceTest {
 
             when(tenantClient.getQuota(TENANT_ID)).thenReturn(createQuota(100, 1));
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
-            when(tenantClient.isScanTargetAuthorized(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(true);
+            when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
             when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(1L);
 

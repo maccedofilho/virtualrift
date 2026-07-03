@@ -1,6 +1,7 @@
 package com.virtualrift.tenant.controller;
 
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
+import com.virtualrift.tenant.exception.InvalidScanTargetConfigurationException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
@@ -40,6 +41,11 @@ public class TenantExceptionHandler {
     @ExceptionHandler(InvalidPlanChangeRequestException.class)
     public ResponseEntity<ProblemDetail> handleInvalidPlanRequest(InvalidPlanChangeRequestException exception) {
         return build(HttpStatus.BAD_REQUEST, "Plan change request is invalid", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidScanTargetConfigurationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidScanTargetConfiguration(InvalidScanTargetConfigurationException exception) {
+        return build(HttpStatus.BAD_REQUEST, "Scan target configuration is invalid", exception.getMessage());
     }
 
     @ExceptionHandler(TenantQuotaExceededException.class)

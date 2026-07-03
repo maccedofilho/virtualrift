@@ -1,6 +1,7 @@
 package com.virtualrift.orchestrator.dto;
 
 import com.virtualrift.common.model.ScanType;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
@@ -9,8 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record CreateScanRequest(
-        @NotNull(message = "Target is required")
-        @Pattern(regexp = "^https?://.*", message = "Target must be a valid URL")
+        @NotBlank(message = "Target is required")
         String target,
 
         @NotNull(message = "Scan type is required")

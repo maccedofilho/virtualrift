@@ -1,6 +1,7 @@
 package com.virtualrift.tenant.dto;
 
 import com.virtualrift.tenant.model.TargetType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -11,6 +12,9 @@ public record AddScanTargetRequest(
         @NotNull(message = "Type is required")
         TargetType type,
 
-        String description
+        String description,
+
+        @Valid
+        RepositoryCredentialsRequest repositoryCredentials
 ) {
 }
