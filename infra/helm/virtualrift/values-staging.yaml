@@ -1,0 +1,33 @@
+platform:
+  publicApiUrl: https://api.staging.virtualrift.example.com
+  frontendOrigin: https://app.staging.virtualrift.example.com
+
+dependencies:
+  postgres:
+    host: postgres-staging.internal
+  redis:
+    host: redis-staging.internal
+  kafka:
+    bootstrapServers: kafka-staging.internal:9092
+
+components:
+  gateway:
+    ingress:
+      host: api.staging.virtualrift.example.com
+      tlsSecretName: virtualrift-staging-api-tls
+  auth:
+    replicas: 2
+  tenant:
+    replicas: 2
+  orchestrator:
+    replicas: 2
+  reports:
+    replicas: 2
+  web-scanner:
+    replicas: 1
+  api-scanner:
+    replicas: 1
+  network-scanner:
+    replicas: 1
+  sast:
+    replicas: 1

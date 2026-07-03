@@ -1,0 +1,122 @@
+platform:
+  publicApiUrl: https://api.virtualrift.example.com
+  frontendOrigin: https://app.virtualrift.example.com
+  githubOauthEnabled: "true"
+
+dependencies:
+  postgres:
+    host: postgres-prod.internal
+  redis:
+    host: redis-prod.internal
+  kafka:
+    bootstrapServers: kafka-prod.internal:9092
+
+components:
+  gateway:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 65
+    ingress:
+      host: api.virtualrift.example.com
+      tlsSecretName: virtualrift-prod-api-tls
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  auth:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  tenant:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  orchestrator:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  reports:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 65
+    resources:
+      requests:
+        cpu: 500m
+        memory: 768Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  web-scanner:
+    replicas: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+  api-scanner:
+    replicas: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+  network-scanner:
+    replicas: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+  sast:
+    replicas: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "4"
+        memory: 4Gi

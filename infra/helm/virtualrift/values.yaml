@@ -1,0 +1,485 @@
+global:
+  service:
+    type: ClusterIP
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  imagePullSecrets: []
+  podLabels: {}
+  podAnnotations: {}
+  podSecurityContext:
+    fsGroup: 10001
+  containerSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  ingress:
+    className: nginx
+    annotations: {}
+
+platform:
+  publicApiUrl: https://api.virtualrift.example.com
+  frontendOrigin: https://app.virtualrift.example.com
+  githubOauthEnabled: "false"
+
+dependencies:
+  postgres:
+    host: postgres.internal
+    port: 5432
+  redis:
+    host: redis.internal
+    port: 6379
+  kafka:
+    bootstrapServers: kafka.internal:9092
+
+components:
+  gateway:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-gateway
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8080
+      targetPort: 8080
+    ingress:
+      enabled: true
+      host: api.virtualrift.example.com
+      path: /
+      pathType: Prefix
+      tls: true
+      tlsSecretName: virtualrift-api-tls
+      annotations: {}
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8080
+      readiness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8080
+    env:
+      AUTH_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "auth")) 8081 }}'
+      TENANT_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "tenant")) 8082 }}'
+      ORCHESTRATOR_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "orchestrator")) 8083 }}'
+      REPORTS_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "reports")) 8084 }}'
+      WEB_SCANNER_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "web-scanner")) 8085 }}'
+      API_SCANNER_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "api-scanner")) 8086 }}'
+      NETWORK_SCANNER_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "network-scanner")) 8087 }}'
+      SAST_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "sast")) 8088 }}'
+      REDIS_HOST: '{{ .Values.dependencies.redis.host }}'
+      REDIS_PORT: '{{ .Values.dependencies.redis.port }}'
+      GATEWAY_ALLOWED_ORIGIN_LOCALHOST: '{{ .Values.platform.frontendOrigin }}'
+      GATEWAY_ALLOWED_ORIGIN_LOOPBACK: '{{ .Values.platform.frontendOrigin }}'
+    secretEnv:
+      JWT_PUBLIC_KEY:
+        secretName: virtualrift-jwt
+        key: public-key.pem
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  auth:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-auth
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8081
+      targetPort: 8081
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8081
+      readiness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8081
+    env:
+      DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_auth'
+      DB_USER: virtualrift_auth
+      REDIS_HOST: '{{ .Values.dependencies.redis.host }}'
+      REDIS_PORT: '{{ .Values.dependencies.redis.port }}'
+      AUTH_PUBLIC_BASE_URL: '{{ .Values.platform.publicApiUrl }}'
+      AUTH_OAUTH_ALLOWED_REDIRECT_ORIGIN_LOCALHOST: '{{ .Values.platform.frontendOrigin }}'
+      AUTH_OAUTH_ALLOWED_REDIRECT_ORIGIN_LOOPBACK: '{{ .Values.platform.frontendOrigin }}'
+      AUTH_GITHUB_OAUTH_ENABLED: '{{ .Values.platform.githubOauthEnabled }}'
+      AUTH_ONBOARDING_ENABLED: "true"
+      AUTH_ONBOARDING_ALLOWED_PLANS: TRIAL,STARTER,PROFESSIONAL
+      TENANT_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "tenant")) 8082 }}'
+    secretEnv:
+      DB_PASSWORD:
+        secretName: virtualrift-auth-db
+        key: password
+      JWT_PRIVATE_KEY:
+        secretName: virtualrift-jwt
+        key: private-key.pem
+      JWT_PUBLIC_KEY:
+        secretName: virtualrift-jwt
+        key: public-key.pem
+      AUTH_OAUTH_STATE_SECRET:
+        secretName: virtualrift-auth-secrets
+        key: oauth-state-secret
+      AUTH_GITHUB_CLIENT_ID:
+        secretName: virtualrift-auth-secrets
+        key: github-client-id
+        optional: true
+      AUTH_GITHUB_CLIENT_SECRET:
+        secretName: virtualrift-auth-secrets
+        key: github-client-secret
+        optional: true
+      TENANT_INTERNAL_API_KEY:
+        secretName: virtualrift-shared-secrets
+        key: tenant-internal-api-key
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  tenant:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-tenant
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8082
+      targetPort: 8082
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8082
+      readiness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8082
+    env:
+      DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_tenant'
+      DB_USER: virtualrift_tenant
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+    secretEnv:
+      DB_PASSWORD:
+        secretName: virtualrift-tenant-db
+        key: password
+      TENANT_INTERNAL_API_KEY:
+        secretName: virtualrift-shared-secrets
+        key: tenant-internal-api-key
+      TENANT_REPOSITORY_CREDENTIALS_KEY_BASE64:
+        secretName: virtualrift-tenant-secrets
+        key: repository-credentials-key-base64
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  orchestrator:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-orchestrator
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8083
+      targetPort: 8083
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8083
+      readiness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8083
+    env:
+      DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_orchestrator'
+      DB_USER: virtualrift_orchestrator
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+      TENANT_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "tenant")) 8082 }}'
+    secretEnv:
+      DB_PASSWORD:
+        secretName: virtualrift-orchestrator-db
+        key: password
+      TENANT_INTERNAL_API_KEY:
+        secretName: virtualrift-shared-secrets
+        key: tenant-internal-api-key
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  reports:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-reports
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8084
+      targetPort: 8084
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8084
+      readiness:
+        enabled: true
+        type: http
+        path: /actuator/health
+        port: 8084
+    env:
+      DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_reports'
+      DB_USER: virtualrift_reports
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+      ORCHESTRATOR_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "orchestrator")) 8083 }}'
+    secretEnv:
+      DB_PASSWORD:
+        secretName: virtualrift-reports-db
+        key: password
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  web-scanner:
+    enabled: true
+    replicas: 1
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-web-scanner
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8085
+      targetPort: 8085
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: false
+    probes:
+      liveness:
+        enabled: true
+        type: tcp
+        port: 8085
+      readiness:
+        enabled: true
+        type: tcp
+        port: 8085
+    env:
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+    resources:
+      requests:
+        cpu: 150m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 768Mi
+
+  api-scanner:
+    enabled: true
+    replicas: 1
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-api-scanner
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8086
+      targetPort: 8086
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: false
+    probes:
+      liveness:
+        enabled: true
+        type: tcp
+        port: 8086
+      readiness:
+        enabled: true
+        type: tcp
+        port: 8086
+    env:
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+    resources:
+      requests:
+        cpu: 150m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 768Mi
+
+  network-scanner:
+    enabled: true
+    replicas: 1
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-network-scanner
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8087
+      targetPort: 8087
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: false
+    probes:
+      liveness:
+        enabled: true
+        type: tcp
+        port: 8087
+      readiness:
+        enabled: true
+        type: tcp
+        port: 8087
+    env:
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+    resources:
+      requests:
+        cpu: 150m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 768Mi
+
+  sast:
+    enabled: true
+    replicas: 1
+    image:
+      repository: ghcr.io/virtualrift/virtualrift-sast
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      port: 8088
+      targetPort: 8088
+    ingress:
+      enabled: false
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: false
+    probes:
+      liveness:
+        enabled: true
+        type: tcp
+        port: 8088
+      readiness:
+        enabled: true
+        type: tcp
+        port: 8088
+    env:
+      KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
+      SAST_WORKSPACE_ROOT: /tmp/virtualrift-sast
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi

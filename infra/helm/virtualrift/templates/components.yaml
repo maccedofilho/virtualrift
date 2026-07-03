@@ -1,0 +1,121 @@
+{{- range $name, $component := .Values.components }}
+{{- if $component.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  type: {{ default $.Values.global.service.type $component.service.type }}
+  selector:
+    {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $component.service.port }}
+      targetPort: {{ default $component.service.port $component.service.targetPort }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if not $component.autoscaling.enabled }}
+  replicas: {{ default 1 $component.replicas }}
+  {{- end }}
+  revisionHistoryLimit: {{ default 3 $component.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- with $.Values.global.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with $component.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or $.Values.global.podAnnotations $component.podAnnotations }}
+      annotations:
+        {{- with $.Values.global.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with $component.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "virtualrift.serviceAccountName" $ }}
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- with $.Values.global.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s:%s" $component.image.repository $component.image.tag | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" $component.image.pullPolicy }}
+          {{- with $component.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $component.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ default $component.service.port $component.containerPort }}
+          {{- if or $component.env $component.secretEnv }}
+          env:
+            {{- include "virtualrift.renderEnv" (dict "root" $ "env" $component.env "secretEnv" $component.secretEnv) | nindent 12 }}
+          {{- end }}
+          {{- if and $component.envFrom (or $component.envFrom.configMaps $component.envFrom.secrets) }}
+          envFrom:
+            {{- include "virtualrift.renderEnvFrom" (dict "root" $ "envFrom" $component.envFrom) | nindent 12 }}
+          {{- end }}
+          {{- with $component.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            {{- include "virtualrift.renderProbe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- with $component.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            {{- include "virtualrift.renderProbe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- with $component.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            {{- include "virtualrift.renderProbe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          securityContext:
+            {{- toYaml (default $.Values.global.containerSecurityContext $component.containerSecurityContext) | nindent 12 }}
+          resources:
+            {{- toYaml $component.resources | nindent 12 }}
+{{- end }}
+{{- end }}

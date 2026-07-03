@@ -1,0 +1,10 @@
+project_id              = "virtualrift-staging"
+public_api_url          = "https://api.staging.virtualrift.example.com"
+frontend_origin         = "https://app.staging.virtualrift.example.com"
+kafka_bootstrap_servers = "pkc-yyyyy.us-central1.gcp.confluent.cloud:9092"
+kafka_auth_secret_name  = "virtualrift-kafka"
+vault_address           = "https://vault.staging.virtualrift.example.com"
+
+labels = {
+  owner = "platform"
+}
