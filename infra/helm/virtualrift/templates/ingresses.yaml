@@ -1,0 +1,38 @@
+{{- range $name, $component := .Values.components }}
+{{- if and $component.enabled $component.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 4 }}
+  {{- if or $.Values.global.ingress.annotations $component.ingress.annotations }}
+  annotations:
+    {{- with $.Values.global.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with $component.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  ingressClassName: {{ default $.Values.global.ingress.className $component.ingress.className }}
+  rules:
+    - host: {{ $component.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ default "/" $component.ingress.path }}
+            pathType: {{ default "Prefix" $component.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
+                port:
+                  number: {{ $component.service.port }}
+  {{- if $component.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ $component.ingress.host | quote }}
+      secretName: {{ $component.ingress.tlsSecretName | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

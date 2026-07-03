@@ -1,0 +1,6 @@
+terraform {
+  backend "gcs" {
+    bucket = "virtualrift-tfstate-staging"
+    prefix = "infra/foundation"
+  }
+}

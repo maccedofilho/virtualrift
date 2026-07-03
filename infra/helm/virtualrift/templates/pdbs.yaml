@@ -1,0 +1,19 @@
+{{- range $name, $component := .Values.components }}
+{{- if and $component.enabled $component.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
+  {{- if hasKey $component.podDisruptionBudget "minAvailable" }}
+  minAvailable: {{ $component.podDisruptionBudget.minAvailable }}
+  {{- else if hasKey $component.podDisruptionBudget "maxUnavailable" }}
+  maxUnavailable: {{ $component.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+{{- end }}
+{{- end }}

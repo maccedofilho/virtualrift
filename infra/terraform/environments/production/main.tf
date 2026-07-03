@@ -1,0 +1,34 @@
+module "foundation" {
+  source = "../../modules/platform-foundation"
+
+  project_id                   = var.project_id
+  region                       = var.region
+  environment                  = "production"
+  platform_name                = var.platform_name
+  public_api_url               = var.public_api_url
+  frontend_origin              = var.frontend_origin
+  labels                       = var.labels
+  vpc_cidr                     = var.vpc_cidr
+  gke_pods_cidr                = var.gke_pods_cidr
+  gke_services_cidr            = var.gke_services_cidr
+  master_ipv4_cidr_block       = var.master_ipv4_cidr_block
+  node_machine_type            = var.node_machine_type
+  node_min_count               = var.node_min_count
+  node_max_count               = var.node_max_count
+  node_disk_size_gb            = var.node_disk_size_gb
+  sql_tier                     = var.sql_tier
+  sql_disk_size_gb             = var.sql_disk_size_gb
+  sql_availability_type        = var.sql_availability_type
+  redis_memory_size_gb         = var.redis_memory_size_gb
+  redis_tier                   = var.redis_tier
+  reports_bucket_location      = var.reports_bucket_location
+  reports_bucket_force_destroy = var.reports_bucket_force_destroy
+  kafka_bootstrap_servers      = var.kafka_bootstrap_servers
+  kafka_tls_enabled            = var.kafka_tls_enabled
+  kafka_auth_secret_name       = var.kafka_auth_secret_name
+  vault_address                = var.vault_address
+  vault_namespace              = var.vault_namespace
+  vault_auth_path              = var.vault_auth_path
+  vault_kubernetes_role        = var.vault_kubernetes_role
+  deletion_protection          = var.deletion_protection
+}

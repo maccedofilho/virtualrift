@@ -1,0 +1,52 @@
+platform:
+  publicApiUrl: https://api.dev.virtualrift.example.com
+  frontendOrigin: https://app.dev.virtualrift.example.com
+
+dependencies:
+  postgres:
+    host: postgres-dev.internal
+  redis:
+    host: redis-dev.internal
+  kafka:
+    bootstrapServers: kafka-dev.internal:9092
+
+components:
+  gateway:
+    replicas: 1
+    autoscaling:
+      enabled: false
+    ingress:
+      host: api.dev.virtualrift.example.com
+      tlsSecretName: virtualrift-dev-api-tls
+  auth:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  tenant:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  orchestrator:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  reports:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  web-scanner:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  api-scanner:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  network-scanner:
+    replicas: 1
+    autoscaling:
+      enabled: false
+  sast:
+    replicas: 1
+    autoscaling:
+      enabled: false
