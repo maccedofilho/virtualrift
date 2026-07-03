@@ -8,6 +8,8 @@ server:
   port: ${WEB_SCANNER_PORT:8085}
 
 virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
   web-scanner:
     request-timeout-seconds: ${WEB_SCANNER_REQUEST_TIMEOUT_SECONDS:10}
     max-findings: ${WEB_SCANNER_MAX_FINDINGS:100}

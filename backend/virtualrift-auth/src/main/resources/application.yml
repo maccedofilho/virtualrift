@@ -58,6 +58,10 @@ auth:
     tenant-service-url: ${TENANT_SERVICE_URL:http://localhost:8082}
     internal-api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
 
+virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
+
 # Server configuration
 server:
   port: 8081

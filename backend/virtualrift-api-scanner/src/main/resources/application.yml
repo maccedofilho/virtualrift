@@ -8,6 +8,8 @@ server:
   port: ${API_SCANNER_PORT:8086}
 
 virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
   api-scanner:
     request-timeout-seconds: ${API_SCANNER_REQUEST_TIMEOUT_SECONDS:10}
     max-findings: ${API_SCANNER_MAX_FINDINGS:100}

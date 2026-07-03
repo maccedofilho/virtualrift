@@ -8,6 +8,8 @@ server:
   port: ${SAST_PORT:8088}
 
 virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
   sast:
     workspace-root: ${SAST_WORKSPACE_ROOT:${java.io.tmpdir}/virtualrift-sast}
     allowed-repository-schemes:
