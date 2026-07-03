@@ -118,11 +118,11 @@ class ApiScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.STARTER);
-        when(tenantClient.isScanTargetAuthorized(
+        when(tenantClient.resolveScanTarget(
                 tenantId,
                 "https://api.example.com/users",
                 ScanType.API
-        )).thenReturn(true);
+        )).thenReturn(new com.virtualrift.tenant.client.ResolveScanTargetResponse(true, java.util.Map.of(), java.util.Map.of()));
 
         waitForKafkaAssignments();
 

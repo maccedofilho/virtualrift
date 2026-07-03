@@ -113,11 +113,11 @@ class WebScanE2eTest {
 
         when(tenantClient.getQuota(tenantId)).thenReturn(quota);
         when(tenantClient.getPlan(tenantId)).thenReturn(Plan.TRIAL);
-        when(tenantClient.isScanTargetAuthorized(
+        when(tenantClient.resolveScanTarget(
                 tenantId,
                 "https://example.com/search",
                 ScanType.WEB
-        )).thenReturn(true);
+        )).thenReturn(new com.virtualrift.tenant.client.ResolveScanTargetResponse(true, java.util.Map.of(), java.util.Map.of()));
 
         waitForKafkaAssignments();
 

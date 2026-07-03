@@ -17,6 +17,7 @@ public record ScanTargetResponse(
         Instant verifiedAt,
         UUID verifiedByUserId,
         Instant createdAt,
+        RepositoryCredentialsSummaryResponse repositoryCredentials,
         ScanTargetVerificationGuideResponse verificationGuide,
         String verificationFailureReason
 ) {

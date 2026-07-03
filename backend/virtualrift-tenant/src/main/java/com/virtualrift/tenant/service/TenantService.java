@@ -7,6 +7,8 @@ import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.InternalAcceptTenantInvitationResponse;
+import com.virtualrift.tenant.dto.RepositoryCredentialsRequest;
+import com.virtualrift.tenant.dto.RepositoryCredentialsSummaryResponse;
 import com.virtualrift.tenant.dto.InternalTenantInvitationPreviewResponse;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
@@ -19,6 +21,7 @@ import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.exception.TenantInvitationConflictException;
 import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
+import com.virtualrift.tenant.exception.InvalidScanTargetConfigurationException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
@@ -50,6 +53,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -69,19 +73,25 @@ public class TenantService {
     private final PlanChangeRequestRepository planChangeRequestRepository;
     private final TenantInvitationRepository tenantInvitationRepository;
     private final ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
+    private final RepositoryCredentialsService repositoryCredentialsService;
+    private final RepositoryAccessValidator repositoryAccessValidator;
 
     public TenantService(TenantRepository tenantRepository,
                         TenantQuotaRepository quotaRepository,
                         ScanTargetRepository scanTargetRepository,
                         PlanChangeRequestRepository planChangeRequestRepository,
                         TenantInvitationRepository tenantInvitationRepository,
-                        ScanTargetOwnershipVerifier scanTargetOwnershipVerifier) {
+                        ScanTargetOwnershipVerifier scanTargetOwnershipVerifier,
+                        RepositoryCredentialsService repositoryCredentialsService,
+                        RepositoryAccessValidator repositoryAccessValidator) {
         this.tenantRepository = tenantRepository;
         this.quotaRepository = quotaRepository;
         this.scanTargetRepository = scanTargetRepository;
         this.planChangeRequestRepository = planChangeRequestRepository;
         this.tenantInvitationRepository = tenantInvitationRepository;
         this.scanTargetOwnershipVerifier = scanTargetOwnershipVerifier;
+        this.repositoryCredentialsService = repositoryCredentialsService;
+        this.repositoryAccessValidator = repositoryAccessValidator;
     }
 
     @Transactional
@@ -297,6 +307,8 @@ public class TenantService {
         }
 
         String normalizedTarget = normalizeTargetForPersistence(request.target(), request.type());
+        RepositoryCredentialsService.PersistedRepositoryCredentials repositoryCredentials =
+                prepareRepositoryCredentials(request.type(), request.repositoryCredentials());
         if (scanTargetRepository.existsByTenantIdAndTarget(tenantId, normalizedTarget)) {
             throw new SlugAlreadyExistsException("Target already exists: " + normalizedTarget);
         }
@@ -308,6 +320,8 @@ public class TenantService {
                 request.type(),
                 request.description()
         );
+        applyRepositoryCredentials(scanTarget, repositoryCredentials);
+        validateRepositoryOnboardingAccess(scanTarget);
         scanTarget = scanTargetRepository.save(scanTarget);
 
         return toResponse(scanTarget);
@@ -320,17 +334,30 @@ public class TenantService {
     }
 
     public boolean isScanTargetAuthorized(UUID tenantId, String target, String scanType) {
+        return resolveScanTarget(tenantId, target, scanType).authorized();
+    }
+
+    public ResolvedScanTargetAuthorization resolveScanTarget(UUID tenantId, String target, String scanType) {
         if (!tenantRepository.existsById(tenantId)) {
             throw new TenantNotFoundException("Tenant not found: " + tenantId);
         }
         if (target == null || target.isBlank() || scanType == null || scanType.isBlank()) {
-            return false;
+            return ResolvedScanTargetAuthorization.unauthorized();
         }
 
         return scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .filter(scanTarget -> scanTarget.getVerificationStatus() == ScanTargetVerificationStatus.VERIFIED)
                 .filter(scanTarget -> isCompatible(scanTarget.getType(), scanType))
-                .anyMatch(scanTarget -> matches(scanTarget, target));
+                .filter(scanTarget -> matches(scanTarget, target))
+                .findFirst()
+                .map(scanTarget -> new ResolvedScanTargetAuthorization(
+                        true,
+                        scanTarget.getType() == TargetType.REPOSITORY
+                                ? repositoryCredentialsService.resolveHeaders(scanTarget)
+                                : Map.of(),
+                        Map.of()
+                ))
+                .orElseGet(ResolvedScanTargetAuthorization::unauthorized);
     }
 
     @Transactional
@@ -596,6 +623,50 @@ public class TenantService {
                 .orElse(trimmedTarget);
     }
 
+    private RepositoryCredentialsService.PersistedRepositoryCredentials prepareRepositoryCredentials(
+            TargetType targetType,
+            RepositoryCredentialsRequest request
+    ) {
+        if (targetType != TargetType.REPOSITORY) {
+            if (request != null) {
+                throw new InvalidScanTargetConfigurationException(
+                        "Repository credentials can only be configured for repository targets"
+                );
+            }
+            return RepositoryCredentialsService.PersistedRepositoryCredentials.none();
+        }
+        if (request == null) {
+            return RepositoryCredentialsService.PersistedRepositoryCredentials.none();
+        }
+        RepositoryCredentialsService.PersistedRepositoryCredentials prepared =
+                repositoryCredentialsService.prepareForStorage(request);
+        return prepared == null ? RepositoryCredentialsService.PersistedRepositoryCredentials.none() : prepared;
+    }
+
+    private void applyRepositoryCredentials(
+            ScanTarget scanTarget,
+            RepositoryCredentialsService.PersistedRepositoryCredentials credentials
+    ) {
+        scanTarget.setRepositoryAuthMode(credentials.mode());
+        scanTarget.setRepositoryAuthUsername(credentials.username());
+        scanTarget.setRepositoryAuthHeaderName(credentials.headerName());
+        scanTarget.setRepositoryAuthSecretCiphertext(credentials.encryptedSecret());
+    }
+
+    private void validateRepositoryOnboardingAccess(ScanTarget scanTarget) {
+        if (scanTarget.getType() != TargetType.REPOSITORY) {
+            return;
+        }
+
+        RepositoryAccessValidationResult accessValidation = repositoryAccessValidator.validateAccess(
+                scanTarget.getTarget(),
+                repositoryCredentialsService.resolveHeaders(scanTarget)
+        );
+        if (!accessValidation.accessible()) {
+            throw new InvalidScanTargetConfigurationException(accessValidation.detail());
+        }
+    }
+
     private int resolveExpiryDays(Integer expiresInDays) {
         return expiresInDays == null ? DEFAULT_INVITATION_EXPIRY_DAYS : expiresInDays;
     }
@@ -652,6 +723,7 @@ public class TenantService {
     }
 
     private ScanTargetResponse toResponse(ScanTarget scanTarget) {
+        RepositoryCredentialsSummaryResponse repositoryCredentials = repositoryCredentialsService.summarize(scanTarget);
         return new ScanTargetResponse(
                 scanTarget.getId(),
                 scanTarget.getTarget(),
@@ -663,6 +735,7 @@ public class TenantService {
                 scanTarget.getVerifiedAt(),
                 scanTarget.getVerifiedByUserId(),
                 scanTarget.getCreatedAt(),
+                repositoryCredentials,
                 scanTargetOwnershipVerifier.describe(scanTarget),
                 scanTarget.getVerificationFailureReason()
         );

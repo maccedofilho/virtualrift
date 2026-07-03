@@ -36,6 +36,8 @@ spring:
 tenant:
   service:
     url: ${TENANT_SERVICE_URL:http://localhost:8082}
+  internal:
+    api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
 
 server:
   port: 8083

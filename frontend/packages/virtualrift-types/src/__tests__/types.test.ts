@@ -174,6 +174,12 @@ describe('virtualrift types package', () => {
       target: string;
       type: TargetType;
       description?: string | null;
+      repositoryCredentials?: {
+        mode: 'NONE' | 'BEARER_TOKEN' | 'BASIC' | 'CUSTOM_HEADER';
+        username?: string | null;
+        headerName?: string | null;
+        secret?: string | null;
+      } | null;
     }>();
     expectTypeOf<ScanTarget>().toEqualTypeOf<{
       id: string;
@@ -186,6 +192,12 @@ describe('virtualrift types package', () => {
       verifiedAt: string | null;
       verifiedByUserId: string | null;
       createdAt: string;
+      repositoryCredentials: {
+        mode: 'NONE' | 'BEARER_TOKEN' | 'BASIC' | 'CUSTOM_HEADER';
+        configured: boolean;
+        username: string | null;
+        headerName: string | null;
+      } | null;
       verificationGuide: {
         supported: boolean;
         method: 'HTTP_WELL_KNOWN_OR_DNS_TXT' | 'REPOSITORY_RAW_FILE' | 'MANUAL_REVIEW';

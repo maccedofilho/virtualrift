@@ -1,12 +1,13 @@
 package com.virtualrift.tenant;
 
 import com.virtualrift.tenant.config.InternalProvisioningConfig;
+import com.virtualrift.tenant.config.RepositoryCredentialsConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
-@EnableConfigurationProperties(InternalProvisioningConfig.class)
+@EnableConfigurationProperties({InternalProvisioningConfig.class, RepositoryCredentialsConfig.class})
 public class VirtualRiftTenantApplication {
 
     public static void main(String[] args) {

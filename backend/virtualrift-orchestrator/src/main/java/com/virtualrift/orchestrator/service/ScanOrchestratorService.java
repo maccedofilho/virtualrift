@@ -74,9 +74,12 @@ public class ScanOrchestratorService {
         TenantQuota quota = tenantClient.getQuota(tenantId);
         Plan plan = tenantClient.getPlan(tenantId);
         ScanAuthenticationContext authenticationContext = normalizeAuthenticationContext(request);
+        com.virtualrift.tenant.client.ResolveScanTargetResponse resolvedTarget =
+                tenantClient.resolveScanTarget(tenantId, request.target(), request.scanType());
+        ScanAuthenticationContext mergedAuthenticationContext = mergeAuthenticationContexts(resolvedTarget, authenticationContext);
 
         validateScanTypeAllowed(request.scanType(), plan);
-        validateTargetAuthorized(tenantId, request.target(), request.scanType());
+        validateTargetAuthorized(tenantId, resolvedTarget);
         validateDailyQuota(tenantId, quota);
         validateConcurrentScans(tenantId, quota);
 
@@ -99,8 +102,8 @@ public class ScanOrchestratorService {
                 scan.getScanType().name(),
                 scan.getDepth(),
                 scan.getTimeout(),
-                authenticationContext.headers(),
-                authenticationContext.cookies()
+                mergedAuthenticationContext.headers(),
+                mergedAuthenticationContext.cookies()
         );
 
         return toResponse(scan);
@@ -185,8 +188,8 @@ public class ScanOrchestratorService {
         };
     }
 
-    private void validateTargetAuthorized(UUID tenantId, String target, ScanType scanType) {
-        if (!tenantClient.isScanTargetAuthorized(tenantId, target, scanType)) {
+    private void validateTargetAuthorized(UUID tenantId, com.virtualrift.tenant.client.ResolveScanTargetResponse resolvedTarget) {
+        if (resolvedTarget == null || !resolvedTarget.authorized()) {
             throw new ScanTargetNotAuthorizedException(
                     "Target is not registered or authorized for tenant: " + tenantId
             );
@@ -233,6 +236,23 @@ public class ScanOrchestratorService {
         }
 
         return new ScanAuthenticationContext(headers, cookies);
+    }
+
+    private ScanAuthenticationContext mergeAuthenticationContexts(
+            com.virtualrift.tenant.client.ResolveScanTargetResponse resolvedTarget,
+            ScanAuthenticationContext requestAuthentication
+    ) {
+        Map<String, String> mergedHeaders = new LinkedHashMap<>();
+        Map<String, String> mergedCookies = new LinkedHashMap<>();
+
+        if (resolvedTarget != null) {
+            mergedHeaders.putAll(resolvedTarget.headers());
+            mergedCookies.putAll(resolvedTarget.cookies());
+        }
+        mergedHeaders.putAll(requestAuthentication.headers());
+        mergedCookies.putAll(requestAuthentication.cookies());
+
+        return new ScanAuthenticationContext(Map.copyOf(mergedHeaders), Map.copyOf(mergedCookies));
     }
 
     private Map<String, String> normalizeHeaders(Map<String, String> headers) {

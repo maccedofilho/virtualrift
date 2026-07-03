@@ -14,6 +14,9 @@ import com.virtualrift.tenant.repository.ScanTargetRepository;
 import com.virtualrift.tenant.repository.TenantInvitationRepository;
 import com.virtualrift.tenant.repository.TenantQuotaRepository;
 import com.virtualrift.tenant.repository.TenantRepository;
+import com.virtualrift.tenant.service.RepositoryAccessValidationResult;
+import com.virtualrift.tenant.service.RepositoryAccessValidator;
+import com.virtualrift.tenant.service.RepositoryCredentialsService;
 import com.virtualrift.tenant.service.ScanTargetOwnershipVerifier;
 import com.virtualrift.tenant.service.TenantService;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +61,12 @@ class TenantIsolationTest {
     @Mock
     private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
+    @Mock
+    private RepositoryCredentialsService repositoryCredentialsService;
+
+    @Mock
+    private RepositoryAccessValidator repositoryAccessValidator;
+
     private TenantService tenantService;
 
     @BeforeEach
@@ -68,8 +77,13 @@ class TenantIsolationTest {
                 scanTargetRepository,
                 planChangeRequestRepository,
                 tenantInvitationRepository,
-                scanTargetOwnershipVerifier
+                scanTargetOwnershipVerifier,
+                repositoryCredentialsService,
+                repositoryAccessValidator
         );
+        org.mockito.Mockito.lenient().when(repositoryCredentialsService.summarize(any(ScanTarget.class))).thenReturn(null);
+        org.mockito.Mockito.lenient().when(repositoryCredentialsService.resolveHeaders(any(ScanTarget.class))).thenReturn(java.util.Map.of());
+        org.mockito.Mockito.lenient().when(repositoryAccessValidator.validateAccess(any(), any())).thenReturn(RepositoryAccessValidationResult.success());
     }
 
     private Tenant tenant(UUID tenantId, String slug) {
@@ -128,7 +142,7 @@ class TenantIsolationTest {
         void addScanTarget_quandoMesmoAlvoDeOutroTenant_naoBloqueiaTenantAtual() {
             UUID tenantId = UUID.randomUUID();
             Tenant tenant = tenant(tenantId, "tenant-a");
-            AddScanTargetRequest request = new AddScanTargetRequest("https://shared.example", TargetType.URL, null);
+            AddScanTargetRequest request = new AddScanTargetRequest("https://shared.example", TargetType.URL, null, null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota(tenantId)));

@@ -68,6 +68,17 @@ const translateApiError = (error: VirtualRiftApiError): string => {
     case 429:
       return 'Você atingiu um limite operacional do seu plano ou tentou a ação rápido demais.';
     default:
+      if (error.status === 400 && url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
+        if (detail.includes('credentials are invalid') || detail.includes('do not have access')) {
+          return 'As credenciais configuradas para esse repositório não funcionaram ou não têm acesso suficiente.';
+        }
+        if (detail.includes('repository was not found') || detail.includes('repository target must be a valid remote repository url')) {
+          return 'O repositório informado não pôde ser validado. Revise a URL e confirme se ele está acessível pelo clone HTTPS.';
+        }
+        if (detail.includes('repository host could not be resolved')) {
+          return 'O backend não conseguiu resolver o host desse repositório durante a validação.';
+        }
+      }
       if (error.status === 503 && (url.includes('/api/v1/auth/onboarding/workspaces') || url.includes('/api/v1/auth/onboarding/availability'))) {
         return 'O onboarding self-service não está disponível neste ambiente agora.';
       }

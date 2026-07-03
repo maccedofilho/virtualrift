@@ -1,5 +1,6 @@
 package com.virtualrift.tenant.service;
 
+import com.virtualrift.tenant.config.RepositoryCredentialsConfig;
 import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationMethod;
@@ -20,6 +21,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -33,16 +35,17 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
     private final HttpClient httpClient;
     private final DnsTxtRecordResolver dnsTxtRecordResolver;
     private final boolean allowPrivateAddresses;
+    private final RepositoryCredentialsService repositoryCredentialsService;
 
     public HttpScanTargetOwnershipVerifier() {
         this(HttpClient.newBuilder()
                 .connectTimeout(REQUEST_TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NEVER)
-                .build(), new JndiDnsTxtRecordResolver(), false);
+                .build(), new JndiDnsTxtRecordResolver(), false, defaultRepositoryCredentialsService());
     }
 
     HttpScanTargetOwnershipVerifier(HttpClient httpClient, boolean allowPrivateAddresses) {
-        this(httpClient, new JndiDnsTxtRecordResolver(), allowPrivateAddresses);
+        this(httpClient, new JndiDnsTxtRecordResolver(), allowPrivateAddresses, defaultRepositoryCredentialsService());
     }
 
     HttpScanTargetOwnershipVerifier(
@@ -50,9 +53,19 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
             DnsTxtRecordResolver dnsTxtRecordResolver,
             boolean allowPrivateAddresses
     ) {
+        this(httpClient, dnsTxtRecordResolver, allowPrivateAddresses, defaultRepositoryCredentialsService());
+    }
+
+    HttpScanTargetOwnershipVerifier(
+            HttpClient httpClient,
+            DnsTxtRecordResolver dnsTxtRecordResolver,
+            boolean allowPrivateAddresses,
+            RepositoryCredentialsService repositoryCredentialsService
+    ) {
         this.httpClient = httpClient;
         this.dnsTxtRecordResolver = dnsTxtRecordResolver;
         this.allowPrivateAddresses = allowPrivateAddresses;
+        this.repositoryCredentialsService = repositoryCredentialsService;
     }
 
     @Override
@@ -84,7 +97,7 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
             return ScanTargetOwnershipVerificationResult.failed("verification URL is not allowed");
         }
 
-        VerificationProbeResult httpProbe = verifyHttpToken(verificationUri.get(), scanTarget.getVerificationToken());
+        VerificationProbeResult httpProbe = verifyHttpToken(verificationUri.get(), scanTarget.getVerificationToken(), Map.of());
         if (httpProbe.matched()) {
             return ScanTargetOwnershipVerificationResult.success();
         }
@@ -115,13 +128,14 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
             return ScanTargetOwnershipVerificationResult.failed("repository verification method is not supported for this target");
         }
 
+        Map<String, String> headers = repositoryCredentialsService.resolveHeaders(scanTarget);
         boolean tokenMissing = false;
         for (URI verificationUri : verificationUris) {
             if (!isAllowedVerificationUri(verificationUri)) {
                 return ScanTargetOwnershipVerificationResult.failed("verification URL is not allowed");
             }
 
-            VerificationProbeResult probe = verifyHttpToken(verificationUri, scanTarget.getVerificationToken());
+            VerificationProbeResult probe = verifyHttpToken(verificationUri, scanTarget.getVerificationToken(), headers);
             if (probe.matched()) {
                 return ScanTargetOwnershipVerificationResult.success();
             }
@@ -295,14 +309,20 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
                 .map(host -> host.toLowerCase(Locale.ROOT));
     }
 
-    private VerificationProbeResult verifyHttpToken(URI verificationUri, String token) {
+    private VerificationProbeResult verifyHttpToken(URI verificationUri, String token, Map<String, String> headers) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(verificationUri)
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(verificationUri)
                     .GET()
                     .timeout(REQUEST_TIMEOUT)
-                    .header("Accept", "text/plain")
-                    .build();
+                    .header("Accept", "text/plain");
+            if (headers != null) {
+                headers.forEach(requestBuilder::header);
+            }
+            HttpRequest request = requestBuilder.build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                return VerificationProbeResult.unreachableFailure("repository credentials were rejected while checking the verification file");
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 return VerificationProbeResult.unreachableFailure("verification file was not reachable");
             }
@@ -388,6 +408,11 @@ public class HttpScanTargetOwnershipVerifier implements ScanTargetOwnershipVerif
                 .map(segment -> URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"))
                 .reduce((left, right) -> left + "/" + right)
                 .orElse("");
+    }
+
+    private static RepositoryCredentialsService defaultRepositoryCredentialsService() {
+        RepositoryCredentialsConfig config = new RepositoryCredentialsConfig();
+        return new RepositoryCredentialsService(new RepositoryCredentialCipher(config));
     }
 
     private record VerificationProbeResult(boolean matched, boolean tokenMissing, String detail) {

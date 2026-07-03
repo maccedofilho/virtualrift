@@ -72,6 +72,12 @@ class TenantServiceTest {
     @Mock
     private ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
 
+    @Mock
+    private RepositoryCredentialsService repositoryCredentialsService;
+
+    @Mock
+    private RepositoryAccessValidator repositoryAccessValidator;
+
     private TenantService tenantService;
 
     @BeforeEach
@@ -82,9 +88,14 @@ class TenantServiceTest {
                 scanTargetRepository,
                 planChangeRequestRepository,
                 tenantInvitationRepository,
-                scanTargetOwnershipVerifier
+                scanTargetOwnershipVerifier,
+                repositoryCredentialsService,
+                repositoryAccessValidator
         );
         lenient().when(scanTargetOwnershipVerifier.describe(any(ScanTarget.class))).thenReturn(defaultVerificationGuide());
+        lenient().when(repositoryCredentialsService.summarize(any(ScanTarget.class))).thenReturn(null);
+        lenient().when(repositoryAccessValidator.validateAccess(any(), any())).thenReturn(RepositoryAccessValidationResult.success());
+        lenient().when(repositoryCredentialsService.resolveHeaders(any(ScanTarget.class))).thenReturn(java.util.Map.of());
     }
 
     private Tenant createTenant(UUID tenantId, String slug, Plan plan, TenantStatus status) {
@@ -398,7 +409,7 @@ class TenantServiceTest {
             UUID tenantId = UUID.randomUUID();
             Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
             TenantQuota quota = createQuota(tenantId);
-            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary");
+            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
@@ -426,7 +437,7 @@ class TenantServiceTest {
             UUID tenantId = UUID.randomUUID();
             Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
             TenantQuota quota = createQuota(tenantId);
-            AddScanTargetRequest request = new AddScanTargetRequest("git@github.com:acme/platform.git", TargetType.REPOSITORY, "core repo");
+            AddScanTargetRequest request = new AddScanTargetRequest("git@github.com:acme/platform.git", TargetType.REPOSITORY, "core repo", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
@@ -450,7 +461,7 @@ class TenantServiceTest {
             UUID tenantId = UUID.randomUUID();
             Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
             TenantQuota quota = createQuota(tenantId);
-            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary");
+            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
@@ -467,7 +478,7 @@ class TenantServiceTest {
             UUID tenantId = UUID.randomUUID();
             Tenant tenant = createTenant(tenantId, "acme-corp", Plan.PROFESSIONAL, TenantStatus.ACTIVE);
             TenantQuota quota = new TenantQuota(tenantId, 100, 10, 1, 90, true);
-            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary");
+            AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
             when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));

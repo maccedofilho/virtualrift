@@ -50,7 +50,7 @@ class TenantControllerTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> controller.addScanTarget("READER", UUID.randomUUID(), new AddScanTargetRequest("https://example.com", TargetType.URL, null))
+                () -> controller.addScanTarget("READER", UUID.randomUUID(), new AddScanTargetRequest("https://example.com", TargetType.URL, null, null))
         );
 
         assertEquals(403, exception.getStatusCode().value());
@@ -89,6 +89,7 @@ class TenantControllerTest {
                 null,
                 null,
                 userId,
+                null,
                 null,
                 new ScanTargetVerificationGuideResponse(
                         false,
