@@ -1,3 +1,7 @@
+global:
+  env:
+    VIRTUALRIFT_RUNTIME_ENVIRONMENT: production
+
 platform:
   publicApiUrl: https://api.virtualrift.example.com
   frontendOrigin: https://app.virtualrift.example.com

@@ -114,6 +114,10 @@ auth:
     public-key: ${JWT_PUBLIC_KEY}
 
 # Gateway Configuration
+virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
+
 gateway:
   cors:
     allowed-origins:

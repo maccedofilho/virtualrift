@@ -1,5 +1,8 @@
 {{- range $name, $component := .Values.components }}
 {{- if $component.enabled }}
+{{- $globalEnv := default (dict) $.Values.global.env }}
+{{- $componentEnv := default (dict) $component.env }}
+{{- $env := mergeOverwrite (deepCopy $globalEnv) $componentEnv }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -87,9 +90,9 @@ spec:
           ports:
             - name: http
               containerPort: {{ default $component.service.port $component.containerPort }}
-          {{- if or $component.env $component.secretEnv }}
+          {{- if or (gt (len $env) 0) $component.secretEnv }}
           env:
-            {{- include "virtualrift.renderEnv" (dict "root" $ "env" $component.env "secretEnv" $component.secretEnv) | nindent 12 }}
+            {{- include "virtualrift.renderEnv" (dict "root" $ "env" $env "secretEnv" $component.secretEnv) | nindent 12 }}
           {{- end }}
           {{- if and $component.envFrom (or $component.envFrom.configMaps $component.envFrom.secrets) }}
           envFrom:

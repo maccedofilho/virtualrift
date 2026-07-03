@@ -32,6 +32,10 @@ orchestrator:
   service:
     url: ${ORCHESTRATOR_SERVICE_URL:http://localhost:8083}
 
+virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
+
 server:
   port: 8084
 

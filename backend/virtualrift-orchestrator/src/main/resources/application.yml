@@ -39,6 +39,10 @@ tenant:
   internal:
     api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
 
+virtualrift:
+  runtime:
+    environment: ${VIRTUALRIFT_RUNTIME_ENVIRONMENT:local}
+
 server:
   port: 8083
 

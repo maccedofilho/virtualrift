@@ -1,4 +1,6 @@
 global:
+  env:
+    VIRTUALRIFT_RUNTIME_ENVIRONMENT: development
   service:
     type: ClusterIP
   serviceAccount:
