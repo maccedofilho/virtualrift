@@ -10,6 +10,7 @@ import com.virtualrift.tenant.dto.CreateTenantRequest;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
+import com.virtualrift.tenant.dto.RepositoryCredentialsRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -183,6 +185,23 @@ public class TenantController {
             @PathVariable UUID targetId) {
         requireAnyRole(rolesHeader, UserRole.OWNER);
         ScanTargetResponse response = tenantService.approveScanTarget(tenantId, targetId, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{tenantId}/scan-targets/{targetId}/repository-credentials")
+    @Operation(summary = "Rotacionar credenciais de repositório", description = "Perfis permitidos: OWNER.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Credenciais atualizadas"),
+            @ApiResponse(responseCode = "400", description = "Configuracao invalida ou acesso ao repositório nao validado"),
+            @ApiResponse(responseCode = "403", description = "Apenas OWNER pode alterar credenciais de repositório")
+    })
+    public ResponseEntity<ScanTargetResponse> rotateRepositoryCredentials(
+            @RequestHeader("X-Roles") String rolesHeader,
+            @PathVariable UUID tenantId,
+            @PathVariable UUID targetId,
+            @Valid @RequestBody RepositoryCredentialsRequest request) {
+        requireAnyRole(rolesHeader, UserRole.OWNER);
+        ScanTargetResponse response = tenantService.rotateRepositoryCredentials(tenantId, targetId, request);
         return ResponseEntity.ok(response);
     }
 

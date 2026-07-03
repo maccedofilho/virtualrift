@@ -142,4 +142,12 @@ public class ScanTarget {
         this.verifiedByUserId = null;
         this.verificationFailureReason = reason;
     }
+
+    public void markPendingVerification() {
+        this.verificationStatus = ScanTargetVerificationStatus.PENDING;
+        this.verificationCheckedAt = null;
+        this.verifiedAt = null;
+        this.verifiedByUserId = null;
+        this.verificationFailureReason = null;
+    }
 }

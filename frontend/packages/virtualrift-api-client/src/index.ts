@@ -17,6 +17,7 @@ import type {
   PlanChangeRequestResponse,
   ProblemDetailResponse,
   RefreshTokenRequest,
+  RepositoryCredentialsRequest,
   ReportExportFormat,
   ReportResponse,
   ScanFindingResponse,
@@ -60,7 +61,7 @@ export type VirtualRiftFileDownload = {
   contentType: string | null;
 };
 
-type HttpMethod = 'GET' | 'POST' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 type RequestConfig = VirtualRiftRequestOptions & {
   method: HttpMethod;
@@ -418,6 +419,18 @@ const createTenantClient = (request: VirtualRiftRequestExecutor) => ({
     request<ScanTargetResponse>({
       method: 'POST',
       path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}/approve`,
+      ...options,
+    }),
+  rotateRepositoryCredentials: (
+    tenantId: UUID,
+    targetId: UUID,
+    payload: RepositoryCredentialsRequest,
+    options?: VirtualRiftRequestOptions,
+  ) =>
+    request<ScanTargetResponse>({
+      method: 'PUT',
+      path: `/api/v1/tenants/${tenantId}/scan-targets/${targetId}/repository-credentials`,
+      body: payload,
       ...options,
     }),
   requestPlanChange: (tenantId: UUID, payload: CreatePlanChangeRequestRequest, options?: VirtualRiftRequestOptions) =>

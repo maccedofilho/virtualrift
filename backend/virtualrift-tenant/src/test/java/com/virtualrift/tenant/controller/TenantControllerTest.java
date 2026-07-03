@@ -8,6 +8,7 @@ import com.virtualrift.tenant.dto.BillingUsageResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.CreateTenantInvitationRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
+import com.virtualrift.tenant.dto.RepositoryCredentialsRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantInvitationResponse;
@@ -18,6 +19,7 @@ import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
 import com.virtualrift.tenant.model.TargetType;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
+import com.virtualrift.tenant.model.RepositoryAuthenticationMode;
 import com.virtualrift.tenant.model.TenantInvitationStatus;
 import com.virtualrift.tenant.model.TenantStatus;
 import com.virtualrift.tenant.service.TenantService;
@@ -72,6 +74,25 @@ class TenantControllerTest {
     }
 
     @Test
+    @DisplayName("should reject repository credential rotation for analyst role")
+    void rotateRepositoryCredentials_quandoAnalyst_retorna403() {
+        TenantController controller = new TenantController(tenantService);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.rotateRepositoryCredentials(
+                        "ANALYST",
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        new RepositoryCredentialsRequest(RepositoryAuthenticationMode.BEARER_TOKEN, null, null, "token")
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verifyNoInteractions(tenantService);
+    }
+
+    @Test
     @DisplayName("should allow manual target approval for owner role")
     void approveScanTarget_quandoOwner_aprovaOwnershipManual() {
         TenantController controller = new TenantController(tenantService);
@@ -104,6 +125,51 @@ class TenantControllerTest {
 
         assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
         assertEquals(userId, response.verifiedByUserId());
+    }
+
+    @Test
+    @DisplayName("should allow repository credential rotation for owner role")
+    void rotateRepositoryCredentials_quandoOwner_atualizaCredenciais() {
+        TenantController controller = new TenantController(tenantService);
+        UUID tenantId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        RepositoryCredentialsRequest request = new RepositoryCredentialsRequest(
+                RepositoryAuthenticationMode.CUSTOM_HEADER,
+                null,
+                "PRIVATE-TOKEN",
+                "repo-token"
+        );
+
+        when(tenantService.rotateRepositoryCredentials(tenantId, targetId, request)).thenReturn(new ScanTargetResponse(
+                targetId,
+                "https://github.com/acme/platform.git",
+                TargetType.REPOSITORY,
+                "core repo",
+                ScanTargetVerificationStatus.VERIFIED,
+                null,
+                null,
+                null,
+                UUID.randomUUID(),
+                null,
+                new com.virtualrift.tenant.dto.RepositoryCredentialsSummaryResponse(
+                        RepositoryAuthenticationMode.CUSTOM_HEADER,
+                        true,
+                        null,
+                        "PRIVATE-TOKEN"
+                ),
+                new ScanTargetVerificationGuideResponse(
+                        true,
+                        ScanTargetVerificationMethod.REPOSITORY_RAW_FILE,
+                        "https://github.com/acme/platform/-/raw/HEAD/.well-known/virtualrift-verification.txt",
+                        java.util.List.of("Publish token")
+                ),
+                null
+        ));
+
+        ScanTargetResponse response = controller.rotateRepositoryCredentials("OWNER", tenantId, targetId, request).getBody();
+
+        assertEquals(TargetType.REPOSITORY, response.type());
+        assertEquals("PRIVATE-TOKEN", response.repositoryCredentials().headerName());
     }
 
     @Test

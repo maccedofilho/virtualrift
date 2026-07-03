@@ -5,11 +5,14 @@ import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
 import com.virtualrift.tenant.dto.PlanChangeRequestResponse;
 import com.virtualrift.tenant.dto.CreateTenantRequest;
+import com.virtualrift.tenant.dto.RepositoryCredentialsRequest;
+import com.virtualrift.tenant.dto.RepositoryCredentialsSummaryResponse;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.dto.ScanTargetVerificationGuideResponse;
 import com.virtualrift.tenant.dto.TenantQuotaResponse;
 import com.virtualrift.tenant.dto.TenantResponse;
 import com.virtualrift.tenant.exception.InvalidPlanChangeRequestException;
+import com.virtualrift.tenant.exception.InvalidScanTargetConfigurationException;
 import com.virtualrift.tenant.exception.PlanChangeRequestAlreadyPendingException;
 import com.virtualrift.tenant.exception.ScanTargetVerificationConflictException;
 import com.virtualrift.tenant.exception.SlugAlreadyExistsException;
@@ -18,6 +21,7 @@ import com.virtualrift.tenant.exception.TenantQuotaExceededException;
 import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.tenant.model.PlanChangeRequest;
 import com.virtualrift.tenant.model.PlanChangeRequestStatus;
+import com.virtualrift.tenant.model.RepositoryAuthenticationMode;
 import com.virtualrift.tenant.model.ScanTarget;
 import com.virtualrift.tenant.model.ScanTargetVerificationMethod;
 import com.virtualrift.tenant.model.ScanTargetVerificationStatus;
@@ -42,6 +46,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -501,6 +506,112 @@ class TenantServiceTest {
             assertEquals(2, responses.size());
             assertEquals("https://one.example", responses.get(0).target());
             verify(scanTargetRepository).findByTenantIdOrderByCreatedAtDesc(tenantId);
+        }
+
+        @Test
+        @DisplayName("should rotate repository credentials and revalidate access")
+        void rotateRepositoryCredentials_quandoRepositorioValido_atualizaCredenciais() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://github.com/acme/platform.git", TargetType.REPOSITORY, "core repo");
+            target.markVerified();
+            RepositoryCredentialsRequest request = new RepositoryCredentialsRequest(
+                    RepositoryAuthenticationMode.CUSTOM_HEADER,
+                    null,
+                    "PRIVATE-TOKEN",
+                    "repo-token"
+            );
+            RepositoryCredentialsService.PersistedRepositoryCredentials persisted =
+                    new RepositoryCredentialsService.PersistedRepositoryCredentials(
+                            RepositoryAuthenticationMode.CUSTOM_HEADER,
+                            null,
+                            "PRIVATE-TOKEN",
+                            "ciphertext"
+                    );
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(repositoryCredentialsService.prepareForStorage(request)).thenReturn(persisted);
+            when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("PRIVATE-TOKEN", "repo-token"));
+            when(repositoryCredentialsService.summarize(target)).thenReturn(new RepositoryCredentialsSummaryResponse(
+                    RepositoryAuthenticationMode.CUSTOM_HEADER,
+                    true,
+                    null,
+                    "PRIVATE-TOKEN"
+            ));
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.rotateRepositoryCredentials(tenantId, targetId, request);
+
+            assertEquals(RepositoryAuthenticationMode.CUSTOM_HEADER, target.getRepositoryAuthMode());
+            assertEquals("PRIVATE-TOKEN", target.getRepositoryAuthHeaderName());
+            assertEquals("ciphertext", target.getRepositoryAuthSecretCiphertext());
+            assertEquals(ScanTargetVerificationStatus.VERIFIED, response.verificationStatus());
+            assertEquals("PRIVATE-TOKEN", response.repositoryCredentials().headerName());
+            verify(repositoryAccessValidator).validateAccess(
+                    "https://github.com/acme/platform.git",
+                    Map.of("PRIVATE-TOKEN", "repo-token")
+            );
+            verify(scanTargetRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("should reset failed repository target to pending after successful credential rotation")
+        void rotateRepositoryCredentials_quandoRepositorioFalhou_resetaStatus() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://github.com/acme/platform.git", TargetType.REPOSITORY, "core repo");
+            target.markFailed("repository credentials were rejected while checking the verification file");
+            RepositoryCredentialsRequest request = new RepositoryCredentialsRequest(
+                    RepositoryAuthenticationMode.BEARER_TOKEN,
+                    null,
+                    null,
+                    "next-token"
+            );
+            RepositoryCredentialsService.PersistedRepositoryCredentials persisted =
+                    new RepositoryCredentialsService.PersistedRepositoryCredentials(
+                            RepositoryAuthenticationMode.BEARER_TOKEN,
+                            null,
+                            null,
+                            "ciphertext"
+                    );
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(repositoryCredentialsService.prepareForStorage(request)).thenReturn(persisted);
+            when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("Authorization", "Bearer next-token"));
+            when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            ScanTargetResponse response = tenantService.rotateRepositoryCredentials(tenantId, targetId, request);
+
+            assertEquals(ScanTargetVerificationStatus.PENDING, response.verificationStatus());
+            assertNull(response.verificationFailureReason());
+            assertNull(response.verifiedAt());
+            verify(repositoryAccessValidator).validateAccess(
+                    "https://github.com/acme/platform.git",
+                    Map.of("Authorization", "Bearer next-token")
+            );
+        }
+
+        @Test
+        @DisplayName("should reject credential rotation for non-repository targets")
+        void rotateRepositoryCredentials_quandoTargetNaoRepositorio_lancaExcecao() {
+            UUID tenantId = UUID.randomUUID();
+            UUID targetId = UUID.randomUUID();
+            ScanTarget target = new ScanTarget(targetId, tenantId, "https://app.example.com", TargetType.URL, "primary app");
+            RepositoryCredentialsRequest request = new RepositoryCredentialsRequest(
+                    RepositoryAuthenticationMode.BEARER_TOKEN,
+                    null,
+                    null,
+                    "repo-token"
+            );
+
+            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+
+            assertThrows(
+                    InvalidScanTargetConfigurationException.class,
+                    () -> tenantService.rotateRepositoryCredentials(tenantId, targetId, request)
+            );
+            verify(repositoryCredentialsService, never()).prepareForStorage(any());
+            verify(scanTargetRepository, never()).save(any(ScanTarget.class));
         }
 
         @Test
