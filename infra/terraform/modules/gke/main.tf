@@ -95,6 +95,9 @@ resource "google_container_node_pool" "default" {
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
     labels          = var.labels
     tags            = var.network_tags
+    metadata = {
+      disable-legacy-endpoints = "true"
+    }
 
     shielded_instance_config {
       enable_secure_boot          = true

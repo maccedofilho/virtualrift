@@ -72,6 +72,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - Prometheus metrics, structured JSON logs, operational alerts, Grafana dashboard and incident runbooks
 - production pod, rollout, autoscaling and NetworkPolicy hardening
 - Vault-backed External Secrets synchronization and authenticated Kafka clients with SASL/TLS enforcement outside local development
+- blocking CodeQL, dependency, secret, IaC and container vulnerability gates with verifiable image attestations
 - repository rules, commands, agents and skills in `.claude`
 - real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
 - real frontend `test`, `lint` and `build` scripts
@@ -80,7 +81,6 @@ This monorepo already contains a working backend platform, an operational fronte
 
 - final frontend product polish and broader beta UX hardening
 - deeper repository provider integrations beyond the current normalized clone-based onboarding flow
-- full security automation and release governance coverage in `.github/workflows/`
 - final provisioning and capacity validation for the selected managed Kafka and Vault providers
 - complete scanner depth across all desired languages and frameworks
 - final report export/storage pipeline beyond the current JSON and printable HTML foundation
@@ -206,6 +206,8 @@ Current backend direction already assumes:
 - rate limiting and denylist controls at the gateway edge
 - masked evidence before persistence/exposure
 - review rules for auth, authz, data exposure, injection and scanner abuse
+
+Automated security gates, vulnerability reporting and release attestation procedures are documented in [`SECURITY.md`](SECURITY.md) and [`infra/SECURITY_AUTOMATION.md`](infra/SECURITY_AUTOMATION.md).
 
 ## License
 

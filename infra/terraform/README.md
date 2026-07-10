@@ -23,5 +23,5 @@ Esta base assume Google Cloud como provider principal e cobre:
 ## Observacoes
 
 - O repositorio nao grava segredos em Terraform variables versionadas.
-- Os modulos de Kafka e Vault desta branch padronizam inputs e outputs, mas assumem servicos externos ja existentes.
-- A publicacao de imagens, a injecao final de segredos e o pipeline de deploy ficam para branches posteriores.
+- Os modulos de Kafka e Vault padronizam inputs e outputs, mas assumem servicos externos ja existentes.
+- Publicacao de imagens, injecao de segredos, deploy, rollback e gates de seguranca estao versionados em `.github/workflows` e `infra/helm`.

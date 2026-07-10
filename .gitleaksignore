@@ -1,0 +1,27 @@
+# Development-only repository encryption key fixture.
+c996f5b201d65f8edb38f1ac73f7a1c4d1b05d86:backend/virtualrift-common/src/main/java/com/virtualrift/common/runtime/RuntimeConfigGuard.java:generic-api-key:13
+81d5c8a6dccb5faa4228d4221491737699dce44b:backend/virtualrift-tenant/src/main/java/com/virtualrift/tenant/config/RepositoryCredentialsConfig.java:generic-api-key:8
+
+# PEM delimiters parsed by JwtService; these findings contain no private key material.
+a2471a9ffaf5851f70ed5135eb3b9338ea66f4cc:backend/virtualrift-auth/src/main/java/com/virtualrift/auth/service/JwtService.java:private-key:34
+3f0c6089d5080fd9d8faa2d5785494c1233bdbe3:backend/virtualrift-auth/src/main/java/com/virtualrift/auth/service/JwtService.java:private-key:34
+
+# Synthetic JWT and API-key fixtures committed before secret scanning was enabled.
+3f0b1997bf272ffd3a06d6e3d4536aff5df53984:backend/virtualrift-api-scanner/src/test/java/com/virtualrift/apiscanner/engine/ApiVulnerabilityDetectorTest.java:jwt:88
+b49b0aa17880f4fc735189a7e3491ad329278cb9:backend/virtualrift-api-scanner/src/test/java/com/virtualrift/apiscanner/engine/ApiVulnerabilityDetectorTest.java:jwt:88
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:33
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:33
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:143
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:143
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:296
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:304
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:296
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:312
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:304
+94b2215229ac9c79e6a4c2b20231454de9485f1a:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:320
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:312
+4be85aa12a49fb8e63322bc55a233c9e875e8038:backend/virtualrift-gateway/src/test/java/com/virtualrift/gateway/filter/JwtValidationFilterTest.java:generic-api-key:320
+65006f9d4eb691d289fa14fc6447386d1e3c3210:backend/virtualrift-auth/src/test/java/com/virtualrift/auth/service/JwtServiceTest.java:jwt:222
+65006f9d4eb691d289fa14fc6447386d1e3c3210:backend/virtualrift-auth/src/test/java/com/virtualrift/auth/service/JwtServiceTest.java:generic-api-key:286
+65006f9d4eb691d289fa14fc6447386d1e3c3210:backend/virtualrift-auth/src/test/java/com/virtualrift/auth/service/JwtServiceTest.java:generic-api-key:296
+e525034e23883ed7231f10f8bf633d10d483197c:backend/virtualrift-common/src/test/java/com/virtualrift/common/model/VulnerabilityFindingTest.java:generic-api-key:234

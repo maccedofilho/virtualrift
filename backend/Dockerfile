@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+FROM maven:3.9.9-eclipse-temurin-21@sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e AS build
 
 ARG SERVICE_MODULE
 
@@ -18,12 +18,13 @@ RUN --mount=type=cache,target=/root/.m2 \
     && test -n "$artifact" \
     && cp "$artifact" /workspace/application.jar
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-noble@sha256:373787d1d45a87f084fda43e7de0e9acf5eedee049446efac738f13587ec4c64
 
 ARG SERVICE_PORT=8080
 
-RUN addgroup -S -g 10001 virtualrift \
-    && adduser -S -D -H -u 10001 -G virtualrift virtualrift
+RUN groupadd --gid 10001 virtualrift \
+    && useradd --uid 10001 --gid virtualrift --no-create-home \
+      --shell /usr/sbin/nologin virtualrift
 
 WORKDIR /app
 
