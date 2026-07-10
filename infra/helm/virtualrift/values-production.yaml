@@ -1,6 +1,18 @@
 global:
   env:
     VIRTUALRIFT_RUNTIME_ENVIRONMENT: production
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
+
+externalSecrets:
+  enabled: true
+  remotePathPrefix: production
+  secretStore:
+    create: true
+    vault:
+      server: https://vault.virtualrift.example.com
+      auth:
+        role: virtualrift-production
 
 networkPolicy:
   enabled: true
@@ -17,6 +29,8 @@ dependencies:
     host: redis-prod.internal
   kafka:
     bootstrapServers: kafka-prod.internal:9092
+    security:
+      enabled: true
 
 components:
   gateway:

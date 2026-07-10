@@ -1,6 +1,18 @@
 global:
   env:
     VIRTUALRIFT_RUNTIME_ENVIRONMENT: staging
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
+
+externalSecrets:
+  enabled: true
+  remotePathPrefix: staging
+  secretStore:
+    create: true
+    vault:
+      server: https://vault.staging.virtualrift.example.com
+      auth:
+        role: virtualrift-staging
 
 networkPolicy:
   enabled: true
@@ -16,6 +28,8 @@ dependencies:
     host: redis-staging.internal
   kafka:
     bootstrapServers: kafka-staging.internal:9092
+    security:
+      enabled: true
 
 components:
   gateway:

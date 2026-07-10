@@ -5,7 +5,7 @@ import com.virtualrift.common.events.ScanFailedEvent;
 import com.virtualrift.common.events.ScanRequestedEvent;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -25,13 +25,15 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConfig {
 
-    @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
-    private String bootstrapServers;
+    private final KafkaProperties kafkaProperties;
+
+    public KafkaConfig(KafkaProperties kafkaProperties) {
+        this.kafkaProperties = kafkaProperties;
+    }
 
     @Bean
     public ConsumerFactory<String, ScanRequestedEvent> scanRequestedConsumerFactory() {
-        Map<String, Object> config = new HashMap<>();
-        config.put("bootstrap.servers", bootstrapServers);
+        Map<String, Object> config = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
         config.put("group.id", "virtualrift-web-scanner");
         config.put("key.deserializer", StringDeserializer.class);
         config.put("value.deserializer", JsonDeserializer.class);
@@ -75,8 +77,7 @@ public class KafkaConfig {
     }
 
     private Map<String, Object> producerConfig() {
-        Map<String, Object> config = new HashMap<>();
-        config.put("bootstrap.servers", bootstrapServers);
+        Map<String, Object> config = new HashMap<>(kafkaProperties.buildProducerProperties(null));
         config.put("key.serializer", StringSerializer.class);
         config.put("value.serializer", JsonSerializer.class);
         return config;

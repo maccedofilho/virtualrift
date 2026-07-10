@@ -37,7 +37,16 @@ Configure required reviewers and prevent self-review on the `production` environ
 
 ## Cluster prerequisites
 
-The target namespace must contain these Secrets before deployment:
+Staging and production use External Secrets Operator. Before the first deployment:
+
+- install an operator version that serves `external-secrets.io/v1` for `SecretStore` and `ExternalSecret`
+- configure the Vault Kubernetes auth role for the release ServiceAccount and the `vault` token audience
+- populate the environment paths and keys listed in [`SECRETS_AND_MESSAGING.md`](SECRETS_AND_MESSAGING.md)
+- install a Secret reload controller compatible with the `reloader.stakater.com/auto` annotation, or perform controlled rollouts after rotation
+
+The deployment preflight checks the required External Secrets CRDs. Helm creates the namespaced `SecretStore` and all `ExternalSecret` resources; its atomic wait fails and restores the previous release when the generated Secrets cannot be consumed.
+
+When `externalSecrets.enabled=false`, the target namespace must already contain:
 
 - `virtualrift-jwt`
 - `virtualrift-shared-secrets`
@@ -47,8 +56,9 @@ The target namespace must contain these Secrets before deployment:
 - `virtualrift-tenant-secrets`
 - `virtualrift-orchestrator-db`
 - `virtualrift-reports-db`
+- `virtualrift-kafka-client`
 
-The workflow creates a missing namespace, but it deliberately does not create, copy or print secret material. If the GHCR packages are private, also configure `global.imagePullSecrets` in the environment's Helm values or deployment configuration.
+The workflow creates a missing namespace, but it never creates, copies or prints secret material itself. If the GHCR packages are private, also configure `global.imagePullSecrets` in the environment's Helm values or deployment configuration.
 
 ## Manual deployment
 

@@ -50,6 +50,39 @@ public final class RuntimeConfigGuard {
         }
     }
 
+    public static void requireSecureKafka(String securityProtocol,
+                                          String saslMechanism,
+                                          String saslJaasConfig,
+                                          String truststoreCertificates,
+                                          String endpointIdentificationAlgorithm,
+                                          RuntimeEnvironment environment) {
+        if (environment.isLocal()) {
+            return;
+        }
+
+        String protocol = requireText("spring.kafka.security.protocol", securityProtocol, environment);
+        if (!"SASL_SSL".equalsIgnoreCase(protocol)) {
+            throw invalid("spring.kafka.security.protocol", "must be SASL_SSL", environment);
+        }
+
+        requireText("spring.kafka.properties[sasl.mechanism]", saslMechanism, environment);
+        requireText("spring.kafka.properties[sasl.jaas.config]", saslJaasConfig, environment);
+        requireText("spring.kafka.properties[ssl.truststore.certificates]", truststoreCertificates, environment);
+
+        String endpointAlgorithm = requireText(
+                "spring.kafka.properties[ssl.endpoint.identification.algorithm]",
+                endpointIdentificationAlgorithm,
+                environment
+        );
+        if (!"https".equalsIgnoreCase(endpointAlgorithm)) {
+            throw invalid(
+                    "spring.kafka.properties[ssl.endpoint.identification.algorithm]",
+                    "must be https so broker hostnames are verified",
+                    environment
+            );
+        }
+    }
+
     public static void requireServiceUrl(String propertyName, String value, RuntimeEnvironment environment) {
         if (environment.isLocal()) {
             return;

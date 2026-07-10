@@ -3,6 +3,14 @@
 {{- $globalEnv := default (dict) $.Values.global.env }}
 {{- $componentEnv := default (dict) $component.env }}
 {{- $env := mergeOverwrite (deepCopy $globalEnv) $componentEnv }}
+{{- $secretEnv := deepCopy (default (dict) $component.secretEnv) }}
+{{- if and $component.kafka $.Values.dependencies.kafka.security.enabled }}
+{{- $_ := set $env "KAFKA_SECURITY_PROTOCOL" $.Values.dependencies.kafka.security.protocol }}
+{{- $_ := set $env "KAFKA_SASL_MECHANISM" $.Values.dependencies.kafka.security.saslMechanism }}
+{{- $_ := set $env "KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM" $.Values.dependencies.kafka.security.endpointIdentificationAlgorithm }}
+{{- $_ := set $secretEnv "KAFKA_SASL_JAAS_CONFIG" (dict "secretName" $.Values.dependencies.kafka.security.secretName "key" $.Values.dependencies.kafka.security.jaasConfigKey) }}
+{{- $_ := set $secretEnv "KAFKA_SSL_TRUSTSTORE_CERTIFICATES" (dict "secretName" $.Values.dependencies.kafka.security.secretName "key" $.Values.dependencies.kafka.security.caCertificatesKey) }}
+{{- end }}
 {{- $globalSecurityContext := default (dict) $.Values.global.containerSecurityContext }}
 {{- $componentSecurityContext := default (dict) $component.containerSecurityContext }}
 {{- $containerSecurityContext := mergeOverwrite (deepCopy $globalSecurityContext) $componentSecurityContext }}
@@ -133,9 +141,9 @@ spec:
             - name: metrics
               containerPort: {{ $metricsPort }}
             {{- end }}
-          {{- if or (gt (len $env) 0) $component.secretEnv }}
+          {{- if or (gt (len $env) 0) (gt (len $secretEnv) 0) }}
           env:
-            {{- include "virtualrift.renderEnv" (dict "root" $ "env" $env "secretEnv" $component.secretEnv) | nindent 12 }}
+            {{- include "virtualrift.renderEnv" (dict "root" $ "env" $env "secretEnv" $secretEnv) | nindent 12 }}
           {{- end }}
           {{- if and $component.envFrom (or $component.envFrom.configMaps $component.envFrom.secrets) }}
           envFrom:

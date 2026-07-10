@@ -27,7 +27,11 @@ chart_path="$REPOSITORY_ROOT/infra/helm/virtualrift"
 image_tag="sha-$image_sha"
 
 ensure_namespace "$namespace"
-verify_required_secrets "$namespace"
+if chart_uses_external_secrets "$release_name" "$namespace" "$chart_path" "$values_file"; then
+  verify_external_secrets_operator
+else
+  verify_required_secrets "$namespace"
+fi
 
 previous_revision=$(current_deployed_revision "$release_name" "$namespace")
 write_github_output previous_revision "$previous_revision"

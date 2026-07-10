@@ -1,6 +1,8 @@
 spring:
   config:
-    import: classpath:virtualrift-observability.yml
+    import:
+      - classpath:virtualrift-observability.yml
+      - classpath:virtualrift-kafka-security.yml
   application:
     name: virtualrift-sast
   kafka:

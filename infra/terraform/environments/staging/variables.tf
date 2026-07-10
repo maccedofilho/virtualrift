@@ -132,10 +132,28 @@ variable "kafka_tls_enabled" {
   default     = true
 }
 
+variable "kafka_security_protocol" {
+  description = "Kafka client security protocol."
+  type        = string
+  default     = "SASL_SSL"
+}
+
 variable "kafka_auth_secret_name" {
   description = "Optional Kubernetes Secret name with Kafka credentials."
   type        = string
-  default     = ""
+  default     = "virtualrift-kafka-client"
+}
+
+variable "kafka_sasl_mechanism" {
+  description = "Kafka SASL authentication mechanism."
+  type        = string
+  default     = "SCRAM-SHA-512"
+}
+
+variable "external_secrets_enabled" {
+  description = "Whether External Secrets Operator should reconcile application Secrets from Vault."
+  type        = bool
+  default     = true
 }
 
 variable "vault_address" {
@@ -160,6 +178,18 @@ variable "vault_kubernetes_role" {
   description = "Vault Kubernetes role."
   type        = string
   default     = "virtualrift-staging"
+}
+
+variable "vault_secret_store_name" {
+  description = "Namespaced External Secrets SecretStore name."
+  type        = string
+  default     = "virtualrift-vault"
+}
+
+variable "vault_kv_path" {
+  description = "Vault KV secrets engine mount path."
+  type        = string
+  default     = "virtualrift"
 }
 
 variable "deletion_protection" {

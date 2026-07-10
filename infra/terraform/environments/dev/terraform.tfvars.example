@@ -2,7 +2,7 @@ project_id              = "virtualrift-dev"
 public_api_url          = "https://api.dev.virtualrift.example.com"
 frontend_origin         = "https://app.dev.virtualrift.example.com"
 kafka_bootstrap_servers = "pkc-xxxxx.us-central1.gcp.confluent.cloud:9092"
-kafka_auth_secret_name  = "virtualrift-kafka"
+kafka_auth_secret_name  = "virtualrift-kafka-client"
 vault_address           = "https://vault.dev.virtualrift.example.com"
 
 labels = {

@@ -75,4 +75,46 @@ class RuntimeConfigGuardTest {
                 )
         );
     }
+
+    @Test
+    @DisplayName("should keep plaintext Kafka available for local development")
+    void requireSecureKafka_quandoAmbienteLocal_permitePlaintext() {
+        assertDoesNotThrow(() -> RuntimeConfigGuard.requireSecureKafka(
+                "PLAINTEXT",
+                "",
+                "",
+                "",
+                "",
+                RuntimeEnvironment.LOCAL
+        ));
+    }
+
+    @Test
+    @DisplayName("should reject Kafka without TLS and SASL outside local runtime")
+    void requireSecureKafka_quandoAmbienteRemoto_rejeitaPlaintext() {
+        assertThrows(
+                IllegalStateException.class,
+                () -> RuntimeConfigGuard.requireSecureKafka(
+                        "PLAINTEXT",
+                        "SCRAM-SHA-512",
+                        "configured",
+                        "configured",
+                        "https",
+                        RuntimeEnvironment.PRODUCTION
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("should accept authenticated TLS Kafka outside local runtime")
+    void requireSecureKafka_quandoAmbienteRemotoAceitaSaslSsl() {
+        assertDoesNotThrow(() -> RuntimeConfigGuard.requireSecureKafka(
+                "SASL_SSL",
+                "SCRAM-SHA-512",
+                "org.apache.kafka.common.security.scram.ScramLoginModule required;",
+                "-----BEGIN CERTIFICATE-----...",
+                "https",
+                RuntimeEnvironment.STAGING
+        ));
+    }
 }
