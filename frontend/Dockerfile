@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM node:22-alpine AS build
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS build
 
 WORKDIR /workspace
 
@@ -19,9 +19,10 @@ COPY . .
 
 RUN pnpm build
 
-FROM nginx:1.28-alpine
+FROM nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1
 
-RUN addgroup -S -g 10001 virtualrift \
+RUN apk upgrade --no-cache \
+    && addgroup -S -g 10001 virtualrift \
     && adduser -S -D -H -u 10001 -G virtualrift virtualrift \
     && rm -rf /usr/share/nginx/html/* \
     && chown -R 10001:10001 /usr/share/nginx/html

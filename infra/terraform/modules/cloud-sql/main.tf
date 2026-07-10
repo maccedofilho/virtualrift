@@ -23,6 +23,7 @@ resource "google_sql_database_instance" "this" {
       ipv4_enabled                                  = false
       private_network                               = var.private_network_self_link
       enable_private_path_for_google_cloud_services = true
+      ssl_mode                                      = "ENCRYPTED_ONLY"
     }
 
     insights_config {

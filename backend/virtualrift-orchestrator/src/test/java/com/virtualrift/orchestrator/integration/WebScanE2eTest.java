@@ -42,6 +42,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -66,18 +67,25 @@ import static org.mockito.Mockito.when;
         VirtualRiftOrchestratorApplication.class,
         WebScanE2eTest.WebWorkerTestConfig.class
 })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @DisplayName("WEB scan E2E with Testcontainers")
 class WebScanE2eTest {
 
     @Container
-    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
+            DockerImageName.parse(
+                    "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
+            ).asCompatibleSubstituteFor("postgres")
+    )
             .withDatabaseName("virtualrift")
             .withUsername("virtualrift")
             .withPassword("virtualrift");
 
     @Container
     static final KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:7.5.0")
+            DockerImageName.parse(
+                    "confluentinc/cp-kafka:7.5.0@sha256:fbbb6fa11b258a88b83f54d4f0bddfcffbf2279f99d66a843486e3da7bdfbf41"
+            ).asCompatibleSubstituteFor("confluentinc/cp-kafka")
     );
 
     @DynamicPropertySource
