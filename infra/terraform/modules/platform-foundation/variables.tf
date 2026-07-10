@@ -123,10 +123,28 @@ variable "kafka_tls_enabled" {
   default     = true
 }
 
+variable "kafka_security_protocol" {
+  description = "Kafka client security protocol."
+  type        = string
+  default     = "SASL_SSL"
+}
+
 variable "kafka_auth_secret_name" {
   description = "Optional Kubernetes Secret that stores Kafka client credentials."
   type        = string
-  default     = ""
+  default     = "virtualrift-kafka-client"
+}
+
+variable "kafka_sasl_mechanism" {
+  description = "Kafka SASL authentication mechanism."
+  type        = string
+  default     = "SCRAM-SHA-512"
+}
+
+variable "external_secrets_enabled" {
+  description = "Whether Helm should reconcile application Secrets from Vault through External Secrets Operator."
+  type        = bool
+  default     = false
 }
 
 variable "vault_address" {
@@ -149,6 +167,18 @@ variable "vault_auth_path" {
 
 variable "vault_kubernetes_role" {
   description = "Vault Kubernetes role used by workloads."
+  type        = string
+  default     = "virtualrift"
+}
+
+variable "vault_secret_store_name" {
+  description = "Namespaced External Secrets SecretStore name."
+  type        = string
+  default     = "virtualrift-vault"
+}
+
+variable "vault_kv_path" {
+  description = "Vault KV secrets engine mount path."
   type        = string
   default     = "virtualrift"
 }

@@ -119,6 +119,57 @@ networkPolicy:
     - 6379
     - 9092
 
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  remotePathPrefix: development
+  secretStoreRef:
+    kind: SecretStore
+    name: virtualrift-vault
+  secretStore:
+    create: false
+    vault:
+      server: https://vault.virtualrift.example.com
+      namespace: ""
+      path: virtualrift
+      version: v2
+      auth:
+        mountPath: kubernetes
+        role: virtualrift-development
+        audiences:
+          - vault
+  target:
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  secrets:
+    jwt:
+      targetName: virtualrift-jwt
+      remoteKey: jwt
+    shared:
+      targetName: virtualrift-shared-secrets
+      remoteKey: shared-secrets
+    authDb:
+      targetName: virtualrift-auth-db
+      remoteKey: auth-db
+    auth:
+      targetName: virtualrift-auth-secrets
+      remoteKey: auth-secrets
+    tenantDb:
+      targetName: virtualrift-tenant-db
+      remoteKey: tenant-db
+    tenant:
+      targetName: virtualrift-tenant-secrets
+      remoteKey: tenant-secrets
+    orchestratorDb:
+      targetName: virtualrift-orchestrator-db
+      remoteKey: orchestrator-db
+    reportsDb:
+      targetName: virtualrift-reports-db
+      remoteKey: reports-db
+    kafkaClient:
+      targetName: virtualrift-kafka-client
+      remoteKey: kafka-client
+
 platform:
   publicApiUrl: https://api.virtualrift.example.com
   frontendOrigin: https://app.virtualrift.example.com
@@ -133,6 +184,14 @@ dependencies:
     port: 6379
   kafka:
     bootstrapServers: kafka.internal:9092
+    security:
+      enabled: false
+      protocol: SASL_SSL
+      saslMechanism: SCRAM-SHA-512
+      endpointIdentificationAlgorithm: https
+      secretName: virtualrift-kafka-client
+      jaasConfigKey: sasl-jaas-config
+      caCertificatesKey: ca.crt
 
 components:
   gateway:
@@ -288,6 +347,7 @@ components:
 
   tenant:
     enabled: true
+    kafka: true
     replicas: 2
     image:
       repository: ghcr.io/maccedofilho/virtualrift-tenant
@@ -348,6 +408,7 @@ components:
 
   orchestrator:
     enabled: true
+    kafka: true
     replicas: 2
     image:
       repository: ghcr.io/maccedofilho/virtualrift-orchestrator
@@ -406,6 +467,7 @@ components:
 
   reports:
     enabled: true
+    kafka: true
     replicas: 2
     image:
       repository: ghcr.io/maccedofilho/virtualrift-reports
@@ -461,6 +523,7 @@ components:
 
   web-scanner:
     enabled: true
+    kafka: true
     replicas: 1
     image:
       repository: ghcr.io/maccedofilho/virtualrift-web-scanner
@@ -508,6 +571,7 @@ components:
 
   api-scanner:
     enabled: true
+    kafka: true
     replicas: 1
     image:
       repository: ghcr.io/maccedofilho/virtualrift-api-scanner
@@ -555,6 +619,7 @@ components:
 
   network-scanner:
     enabled: true
+    kafka: true
     replicas: 1
     image:
       repository: ghcr.io/maccedofilho/virtualrift-network-scanner
@@ -602,6 +667,7 @@ components:
 
   sast:
     enabled: true
+    kafka: true
     replicas: 1
     image:
       repository: ghcr.io/maccedofilho/virtualrift-sast

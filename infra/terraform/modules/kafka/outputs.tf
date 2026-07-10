@@ -8,6 +8,11 @@ output "tls_enabled" {
   value       = var.tls_enabled
 }
 
+output "security_protocol" {
+  description = "Kafka client security protocol."
+  value       = var.security_protocol
+}
+
 output "auth_secret_name" {
   description = "Optional Kubernetes Secret containing Kafka credentials."
   value       = var.auth_secret_name

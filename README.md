@@ -71,6 +71,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - automated staging delivery, protected production deployment and deterministic Helm rollback
 - Prometheus metrics, structured JSON logs, operational alerts, Grafana dashboard and incident runbooks
 - production pod, rollout, autoscaling and NetworkPolicy hardening
+- Vault-backed External Secrets synchronization and authenticated Kafka clients with SASL/TLS enforcement outside local development
 - repository rules, commands, agents and skills in `.claude`
 - real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
 - real frontend `test`, `lint` and `build` scripts
@@ -80,7 +81,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - final frontend product polish and broader beta UX hardening
 - deeper repository provider integrations beyond the current normalized clone-based onboarding flow
 - full security automation and release governance coverage in `.github/workflows/`
-- full production infrastructure promised by the long-term platform vision
+- final provisioning and capacity validation for the selected managed Kafka and Vault providers
 - complete scanner depth across all desired languages and frameworks
 - final report export/storage pipeline beyond the current JSON and printable HTML foundation
 

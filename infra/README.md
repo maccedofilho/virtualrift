@@ -7,7 +7,7 @@ Concentra os artefatos de infraestrutura usados para levar o VirtualRift de ambi
 - chart Helm funcional para os servicos backend e o frontend da plataforma
 - values base e overlays por ambiente (`dev`, `staging`, `production`)
 - fundacao Terraform para GCP com VPC, GKE, Cloud SQL, Redis e GCS
-- contracts Terraform para integrar Kafka e Vault externos sem embutir segredos no repositorio
+- integracao de Vault com External Secrets Operator e Kafka autenticado com SASL/TLS, sem embutir segredos no repositorio
 - imagens multi-stage executadas sem root para todos os componentes
 - validacao e publicacao automatica das imagens no GHCR
 - configuracao do dashboard no startup para promover a mesma imagem entre ambientes
@@ -15,6 +15,8 @@ Concentra os artefatos de infraestrutura usados para levar o VirtualRift de ambi
 - rollback Helm manual e recuperacao automatica quando readiness ou smoke tests falham
 - metricas Prometheus, logs JSON, alertas, dashboard Grafana e runbooks operacionais
 - hardening de pods, probes, rollouts, autoscaling e politicas de rede
+
+O contrato de segredos, os caminhos esperados no Vault, os requisitos do operador e o fluxo de rotacao estao em [`SECRETS_AND_MESSAGING.md`](SECRETS_AND_MESSAGING.md).
 
 ## O que esta branch ainda nao tenta resolver
 

@@ -52,6 +52,7 @@ output "kafka" {
   value = {
     bootstrap_servers = module.kafka.bootstrap_servers
     tls_enabled       = module.kafka.tls_enabled
+    security_protocol = module.kafka.security_protocol
     auth_secret_name  = module.kafka.auth_secret_name
     sasl_mechanism    = module.kafka.sasl_mechanism
   }
@@ -60,10 +61,13 @@ output "kafka" {
 output "vault" {
   description = "Vault integration outputs."
   value = {
-    address         = module.vault.address
-    namespace       = module.vault.namespace
-    auth_path       = module.vault.auth_path
-    kubernetes_role = module.vault.kubernetes_role
+    address            = module.vault.address
+    namespace          = module.vault.namespace
+    auth_path          = module.vault.auth_path
+    kubernetes_role    = module.vault.kubernetes_role
+    secret_store_name  = module.vault.secret_store_name
+    kv_path            = module.vault.kv_path
+    secret_path_prefix = module.vault.secret_path_prefix
   }
 }
 
@@ -85,6 +89,34 @@ output "helm_values" {
       }
       kafka = {
         bootstrapServers = module.kafka.bootstrap_servers
+        security = {
+          enabled       = module.kafka.tls_enabled
+          protocol      = module.kafka.security_protocol
+          saslMechanism = module.kafka.sasl_mechanism
+          secretName    = module.kafka.auth_secret_name
+        }
+      }
+    }
+    externalSecrets = {
+      enabled          = var.external_secrets_enabled
+      remotePathPrefix = module.vault.secret_path_prefix
+      secretStoreRef = {
+        kind = "SecretStore"
+        name = module.vault.secret_store_name
+      }
+      secretStore = {
+        create = var.external_secrets_enabled
+        vault = {
+          server    = module.vault.address
+          namespace = module.vault.namespace
+          path      = module.vault.kv_path
+          version   = "v2"
+          auth = {
+            mountPath = trimsuffix(trimprefix(module.vault.auth_path, "auth/"), "/")
+            role      = module.vault.kubernetes_role
+            audiences = ["vault"]
+          }
+        }
       }
     }
     reportsBucket = module.gcs.bucket_name

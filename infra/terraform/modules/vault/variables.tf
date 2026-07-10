@@ -20,3 +20,20 @@ variable "kubernetes_role" {
   type        = string
   default     = "virtualrift"
 }
+
+variable "secret_store_name" {
+  description = "Namespaced External Secrets SecretStore name."
+  type        = string
+  default     = "virtualrift-vault"
+}
+
+variable "kv_path" {
+  description = "Vault KV secrets engine mount path."
+  type        = string
+  default     = "virtualrift"
+}
+
+variable "secret_path_prefix" {
+  description = "Environment-specific path below the Vault KV mount."
+  type        = string
+}

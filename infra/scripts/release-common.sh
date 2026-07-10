@@ -24,6 +24,7 @@ readonly DEFAULT_REQUIRED_SECRETS=(
   virtualrift-tenant-secrets
   virtualrift-orchestrator-db
   virtualrift-reports-db
+  virtualrift-kafka-client
 )
 
 require_command() {
@@ -134,6 +135,33 @@ verify_required_secrets() {
   if ((missing)); then
     exit 1
   fi
+}
+
+chart_uses_external_secrets() {
+  local release_name=$1
+  local namespace=$2
+  local chart_path=$3
+  local values_file=$4
+  local rendered
+
+  rendered=$(helm template "$release_name" "$chart_path" \
+    --namespace "$namespace" \
+    --values "$chart_path/values.yaml" \
+    --values "$values_file" \
+    --show-only templates/external-secrets.yaml)
+
+  [[ $rendered == *"kind: ExternalSecret"* ]]
+}
+
+verify_external_secrets_operator() {
+  local resource
+
+  for resource in externalsecrets.external-secrets.io secretstores.external-secrets.io; do
+    if ! kubectl get customresourcedefinition "$resource" >/dev/null 2>&1; then
+      echo "External Secrets Operator CRD is required but missing: $resource" >&2
+      exit 1
+    fi
+  done
 }
 
 wait_for_release_rollout() {

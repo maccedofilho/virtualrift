@@ -112,14 +112,19 @@ module "kafka" {
 
   bootstrap_servers = var.kafka_bootstrap_servers
   tls_enabled       = var.kafka_tls_enabled
+  security_protocol = var.kafka_security_protocol
   auth_secret_name  = var.kafka_auth_secret_name
+  sasl_mechanism    = var.kafka_sasl_mechanism
 }
 
 module "vault" {
   source = "../vault"
 
-  address         = var.vault_address
-  namespace       = var.vault_namespace
-  auth_path       = var.vault_auth_path
-  kubernetes_role = var.vault_kubernetes_role
+  address            = var.vault_address
+  namespace          = var.vault_namespace
+  auth_path          = var.vault_auth_path
+  kubernetes_role    = var.vault_kubernetes_role
+  secret_store_name  = var.vault_secret_store_name
+  kv_path            = var.vault_kv_path
+  secret_path_prefix = var.environment
 }

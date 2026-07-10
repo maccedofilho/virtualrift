@@ -17,7 +17,7 @@ This chart groups the Kubernetes resources required to run the complete VirtualR
 
 ## Design choices
 
-- The chart references pre-created Kubernetes Secrets instead of storing sensitive values in Git.
+- The chart can reconcile Kubernetes Secrets from Vault through External Secrets Operator without storing sensitive values in Git; local development can still use pre-created Secrets.
 - PostgreSQL, Redis and Kafka are modeled as external dependencies so the same chart can run against managed services.
 - Environment overlays only tune runtime shape and public URLs; they do not ship secret material.
 - The frontend receives API and OAuth configuration when its container starts, allowing the same image digest to be promoted across environments.
@@ -25,6 +25,7 @@ This chart groups the Kubernetes resources required to run the complete VirtualR
 - Backend management endpoints use isolated ports `9080` through `9088`; only application ports are exposed through ingress.
 - Staging and production enable default-deny NetworkPolicies with explicit platform, dependency, monitoring and scanner exceptions.
 - Prometheus Operator and Grafana resources are optional so the chart can still run without their CRDs.
+- Kafka workloads inherit a shared `SASL_SSL` client configuration in staging and production, including hostname verification and a PEM CA supplied by Secret.
 
 ## Observability
 
@@ -54,6 +55,9 @@ At minimum, the cluster should expose Secrets matching the default references in
 - `virtualrift-tenant-secrets`
 - `virtualrift-orchestrator-db`
 - `virtualrift-reports-db`
+- `virtualrift-kafka-client`
+
+Staging and production enable `externalSecrets` and create a namespaced Vault `SecretStore`. The cluster must have External Secrets Operator installed with the `external-secrets.io/v1` APIs. Secret paths, required keys and rotation behavior are documented in [`infra/SECRETS_AND_MESSAGING.md`](../../SECRETS_AND_MESSAGING.md).
 
 ## Example usage
 

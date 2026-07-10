@@ -25,10 +25,15 @@ module "foundation" {
   reports_bucket_force_destroy = var.reports_bucket_force_destroy
   kafka_bootstrap_servers      = var.kafka_bootstrap_servers
   kafka_tls_enabled            = var.kafka_tls_enabled
+  kafka_security_protocol      = var.kafka_security_protocol
   kafka_auth_secret_name       = var.kafka_auth_secret_name
+  kafka_sasl_mechanism         = var.kafka_sasl_mechanism
+  external_secrets_enabled     = var.external_secrets_enabled
   vault_address                = var.vault_address
   vault_namespace              = var.vault_namespace
   vault_auth_path              = var.vault_auth_path
   vault_kubernetes_role        = var.vault_kubernetes_role
+  vault_secret_store_name      = var.vault_secret_store_name
+  vault_kv_path                = var.vault_kv_path
   deletion_protection          = var.deletion_protection
 }
