@@ -1,4 +1,5 @@
 import { OAUTH_CALLBACK_HASH } from './constants';
+import { readDashboardEnv } from '../runtime-config';
 import type { BrowserAdapter, BrowserLocationLike, OAuthProvider, OAuthProviderConfig } from './types';
 
 type OAuthCallbackPayload = {
@@ -94,8 +95,9 @@ export const clearOAuthCallback = (browser: BrowserAdapter, nextHash = '#/overvi
 };
 
 export const buildOAuthProviders = (location: BrowserLocationLike): OAuthProviderConfig[] => {
-  const githubStartUrl = import.meta.env.VITE_GITHUB_OAUTH_START_URL?.trim() ?? '';
-  const googleStartUrl = import.meta.env.VITE_GOOGLE_OAUTH_START_URL?.trim() ?? '';
+  const runtimeEnv = readDashboardEnv();
+  const githubStartUrl = runtimeEnv.VITE_GITHUB_OAUTH_START_URL?.trim() ?? '';
+  const googleStartUrl = runtimeEnv.VITE_GOOGLE_OAUTH_START_URL?.trim() ?? '';
 
   return [
     {

@@ -1,6 +1,6 @@
 # VirtualRift Chart
 
-This chart groups the Kubernetes resources required to run the VirtualRift backend platform.
+This chart groups the Kubernetes resources required to run the complete VirtualRift platform.
 
 ## Components
 
@@ -13,12 +13,15 @@ This chart groups the Kubernetes resources required to run the VirtualRift backe
 - `api-scanner`
 - `network-scanner`
 - `sast`
+- `frontend`
 
 ## Design choices
 
 - The chart references pre-created Kubernetes Secrets instead of storing sensitive values in Git.
 - PostgreSQL, Redis and Kafka are modeled as external dependencies so the same chart can run against managed services.
 - Environment overlays only tune runtime shape and public URLs; they do not ship secret material.
+- The frontend receives API and OAuth configuration when its container starts, allowing the same image digest to be promoted across environments.
+- The default `edge` tags follow `main`; controlled deployments should override them with the immutable `sha-<commit>` tags published by CI.
 
 ## Expected secrets
 

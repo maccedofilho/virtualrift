@@ -12,3 +12,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface Window {
+  __VIRTUALRIFT_CONFIG__?: Partial<ImportMetaEnv>;
+}

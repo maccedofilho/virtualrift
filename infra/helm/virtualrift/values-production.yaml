@@ -124,3 +124,13 @@ components:
       limits:
         cpu: "4"
         memory: 4Gi
+  frontend:
+    replicas: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 65
+    ingress:
+      host: app.virtualrift.example.com
+      tlsSecretName: virtualrift-prod-app-tls
