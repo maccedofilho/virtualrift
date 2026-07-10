@@ -68,6 +68,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - production container images for every backend service and the frontend dashboard
 - GHCR image validation/publication with immutable commit tags and a mainline `edge` tag
 - Helm runtime coverage for the complete platform, including the frontend ingress
+- automated staging delivery, protected production deployment and deterministic Helm rollback
 - repository rules, commands, agents and skills in `.claude`
 - real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
 - real frontend `test`, `lint` and `build` scripts
@@ -76,7 +77,7 @@ This monorepo already contains a working backend platform, an operational fronte
 
 - final frontend product polish and broader beta UX hardening
 - deeper repository provider integrations beyond the current normalized clone-based onboarding flow
-- full CI/release/security automation coverage in `.github/workflows/`
+- full security automation and release governance coverage in `.github/workflows/`
 - full production infrastructure promised by the long-term platform vision
 - complete scanner depth across all desired languages and frameworks
 - final report export/storage pipeline beyond the current JSON and printable HTML foundation

@@ -39,6 +39,42 @@ jobs:
             exit 1
           fi
 
+  delivery-configuration:
+    name: Delivery configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: repository-hygiene
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate GitHub Actions workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7
+
+      - name: Validate release scripts
+        run: |
+          bash -n infra/scripts/*.sh
+          docker run --rm -v "$PWD:/repo" --workdir /repo koalaman/shellcheck-alpine:v0.10.0 \
+            shellcheck --external-sources --source-path=infra/scripts \
+            infra/scripts/deploy-release.sh \
+            infra/scripts/rollback-release.sh \
+            infra/scripts/smoke-test-release.sh \
+            infra/scripts/verify-release-images.sh
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate Helm environments
+        run: |
+          for environment in dev staging production; do
+            helm lint infra/helm/virtualrift \
+              -f infra/helm/virtualrift/values.yaml \
+              -f "infra/helm/virtualrift/values-$environment.yaml"
+            helm template virtualrift infra/helm/virtualrift \
+              -f infra/helm/virtualrift/values.yaml \
+              -f "infra/helm/virtualrift/values-$environment.yaml" >/dev/null
+          done
+
   backend:
     name: Backend tests and package
     runs-on: ubuntu-latest
