@@ -48,9 +48,9 @@ components:
     enabled: true
     replicas: 2
     image:
-      repository: ghcr.io/virtualrift/virtualrift-gateway
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-gateway
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8080
       targetPort: 8080
@@ -110,9 +110,9 @@ components:
     enabled: true
     replicas: 2
     image:
-      repository: ghcr.io/virtualrift/virtualrift-auth
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-auth
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8081
       targetPort: 8081
@@ -185,9 +185,9 @@ components:
     enabled: true
     replicas: 2
     image:
-      repository: ghcr.io/virtualrift/virtualrift-tenant
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-tenant
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8082
       targetPort: 8082
@@ -238,9 +238,9 @@ components:
     enabled: true
     replicas: 2
     image:
-      repository: ghcr.io/virtualrift/virtualrift-orchestrator
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-orchestrator
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8083
       targetPort: 8083
@@ -289,9 +289,9 @@ components:
     enabled: true
     replicas: 2
     image:
-      repository: ghcr.io/virtualrift/virtualrift-reports
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-reports
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8084
       targetPort: 8084
@@ -337,9 +337,9 @@ components:
     enabled: true
     replicas: 1
     image:
-      repository: ghcr.io/virtualrift/virtualrift-web-scanner
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-web-scanner
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8085
       targetPort: 8085
@@ -375,9 +375,9 @@ components:
     enabled: true
     replicas: 1
     image:
-      repository: ghcr.io/virtualrift/virtualrift-api-scanner
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-api-scanner
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8086
       targetPort: 8086
@@ -413,9 +413,9 @@ components:
     enabled: true
     replicas: 1
     image:
-      repository: ghcr.io/virtualrift/virtualrift-network-scanner
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-network-scanner
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8087
       targetPort: 8087
@@ -451,9 +451,9 @@ components:
     enabled: true
     replicas: 1
     image:
-      repository: ghcr.io/virtualrift/virtualrift-sast
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ghcr.io/maccedofilho/virtualrift-sast
+      tag: edge
+      pullPolicy: Always
     service:
       port: 8088
       targetPort: 8088
@@ -485,3 +485,52 @@ components:
       limits:
         cpu: "2"
         memory: 2Gi
+
+  frontend:
+    enabled: true
+    replicas: 2
+    image:
+      repository: ghcr.io/maccedofilho/virtualrift-frontend
+      tag: edge
+      pullPolicy: Always
+    service:
+      port: 8080
+      targetPort: 8080
+    ingress:
+      enabled: true
+      host: app.virtualrift.example.com
+      path: /
+      pathType: Prefix
+      tls: true
+      tlsSecretName: virtualrift-app-tls
+      annotations: {}
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    probes:
+      liveness:
+        enabled: true
+        type: http
+        path: /healthz
+        port: 8080
+      readiness:
+        enabled: true
+        type: http
+        path: /healthz
+        port: 8080
+    env:
+      VITE_VIRTUALRIFT_ENVIRONMENT: '{{ .Values.global.env.VIRTUALRIFT_RUNTIME_ENVIRONMENT }}'
+      VITE_API_BASE_URL: '{{ .Values.platform.publicApiUrl }}'
+      VITE_GITHUB_OAUTH_START_URL: '{{ if eq .Values.platform.githubOauthEnabled "true" }}{{ .Values.platform.publicApiUrl }}/api/v1/auth/oauth/github/start?redirect_uri={callbackUrl}{{ end }}'
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi

@@ -1,3 +1,5 @@
+import { readDashboardEnv } from '../runtime-config';
+
 export const SESSION_STORAGE_KEY = 'virtualrift.dashboard.session';
 export const OAUTH_CALLBACK_HASH = '#/auth/callback';
 
@@ -48,7 +50,7 @@ const validateConfiguredBaseUrl = (value: string, runtimeEnvironment: DashboardR
 };
 
 export const resolveDashboardApiBaseUrl = ({
-  env = import.meta.env,
+  env = readDashboardEnv(),
   location = typeof window === 'undefined' ? null : window.location,
 }: {
   env?: DashboardEnv;

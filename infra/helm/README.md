@@ -15,6 +15,6 @@ O chart desta branch assume:
 
 - dependencias gerenciadas fora do chart para PostgreSQL, Redis e Kafka
 - injecao de segredos por `Secret` ja existente no cluster
-- uma release unica por ambiente contendo gateway, auth, tenant, orchestrator, reports e workers
+- uma release unica por ambiente contendo frontend, gateway, auth, tenant, orchestrator, reports e workers
 
-O frontend e a estrategia final de runtime/containerizacao ficam para a branch de runtime.
+As imagens usam a tag `edge` como default de integracao. Deploys controlados devem substituir cada tag por `sha-<commit>`, publicada pelo workflow de imagens, para manter rastreabilidade e rollback deterministico.

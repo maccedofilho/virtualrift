@@ -54,3 +54,10 @@ components:
     replicas: 1
     autoscaling:
       enabled: false
+  frontend:
+    replicas: 1
+    autoscaling:
+      enabled: false
+    ingress:
+      host: app.dev.virtualrift.example.com
+      tlsSecretName: virtualrift-dev-app-tls

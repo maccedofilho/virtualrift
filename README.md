@@ -65,6 +65,9 @@ This monorepo already contains a working backend platform, an operational fronte
 - repository onboarding and authenticated SAST ingestion across HTTPS, scheme-less, SSH-short and provider page URLs
 - shared frontend packages for API client and TypeScript contracts
 - initial CI with backend test/package and frontend test/lint/build
+- production container images for every backend service and the frontend dashboard
+- GHCR image validation/publication with immutable commit tags and a mainline `edge` tag
+- Helm runtime coverage for the complete platform, including the frontend ingress
 - repository rules, commands, agents and skills in `.claude`
 - real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
 - real frontend `test`, `lint` and `build` scripts
@@ -144,6 +147,25 @@ corepack pnpm test
 corepack pnpm lint
 corepack pnpm build
 ```
+
+### Container images
+
+The backend uses one parameterized multi-stage Dockerfile. Build a service by passing its Maven module and port:
+
+```bash
+docker build backend \
+  --build-arg SERVICE_MODULE=virtualrift-gateway \
+  --build-arg SERVICE_PORT=8080 \
+  --tag virtualrift-gateway:local
+```
+
+Build the production dashboard image with:
+
+```bash
+docker build frontend --tag virtualrift-frontend:local
+```
+
+The dashboard image reads `VITE_VIRTUALRIFT_ENVIRONMENT`, `VITE_API_BASE_URL` and the OAuth start URLs when the container starts, so the same image can be promoted across environments without a frontend rebuild.
 
 ## Roadmap Direction
 

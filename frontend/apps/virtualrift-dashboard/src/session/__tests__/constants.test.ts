@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readDashboardEnv } from '../../runtime-config';
 import { resolveDashboardApiBaseUrl } from '../constants';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('dashboard session constants', () => {
   it('keeps the local fallback behavior when runtime is local', () => {
@@ -51,5 +56,18 @@ describe('dashboard session constants', () => {
         location: null,
       }),
     ).toBe('https://api.dev.virtualrift.example.com');
+  });
+
+  it('prefers startup configuration over values embedded during the build', () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.build.virtualrift.example.com');
+    expect(
+      readDashboardEnv({
+        VITE_API_BASE_URL: 'https://api.runtime.virtualrift.example.com',
+        VITE_VIRTUALRIFT_ENVIRONMENT: 'production',
+      }),
+    ).toMatchObject({
+      VITE_API_BASE_URL: 'https://api.runtime.virtualrift.example.com',
+      VITE_VIRTUALRIFT_ENVIRONMENT: 'production',
+    });
   });
 });

@@ -35,3 +35,8 @@ components:
     replicas: 1
   sast:
     replicas: 1
+  frontend:
+    replicas: 2
+    ingress:
+      host: app.staging.virtualrift.example.com
+      tlsSecretName: virtualrift-staging-app-tls
