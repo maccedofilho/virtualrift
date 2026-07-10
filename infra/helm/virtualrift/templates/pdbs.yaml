@@ -1,5 +1,6 @@
 {{- range $name, $component := .Values.components }}
 {{- if and $component.enabled $component.podDisruptionBudget.enabled }}
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

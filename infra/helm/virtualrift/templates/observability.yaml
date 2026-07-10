@@ -1,0 +1,128 @@
+{{- if .Values.observability.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" . "name" "metrics") | nindent 4 }}
+    {{- with .Values.observability.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      observability.virtualrift.io/scrape: "true"
+  endpoints:
+    - port: metrics
+      path: {{ .Values.observability.metrics.path }}
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.observability.serviceMonitor.scrapeTimeout }}
+      relabelings:
+        - sourceLabels:
+            - __meta_kubernetes_service_label_app_kubernetes_io_component
+          targetLabel: component
+        - sourceLabels:
+            - __meta_kubernetes_service_label_app_kubernetes_io_instance
+          targetLabel: release
+---
+{{- end }}
+{{- if .Values.observability.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" . "name" "alerts") | nindent 4 }}
+    {{- with .Values.observability.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: virtualrift.availability
+      rules:
+        - alert: VirtualRiftTargetDown
+          expr: up{release={{ .Release.Name | quote }}} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VirtualRift component is unavailable"
+            description: "Prometheus cannot scrape component {{`{{ $labels.component }}`}} for more than five minutes."
+            runbook_url: {{ printf "%s/component-down.md" .Values.observability.runbookBaseUrl | quote }}
+        - alert: VirtualRiftDeploymentUnavailable
+          expr: kube_deployment_status_replicas_unavailable{namespace={{ .Release.Namespace | quote }},deployment=~{{ printf "%s-.*" .Release.Name | quote }}} > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "VirtualRift deployment has unavailable replicas"
+            description: "Deployment {{`{{ $labels.deployment }}`}} has unavailable replicas for more than ten minutes."
+            runbook_url: {{ printf "%s/deployment-unavailable.md" .Values.observability.runbookBaseUrl | quote }}
+        - alert: VirtualRiftContainerRestarting
+          expr: sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace={{ .Release.Namespace | quote }},pod=~{{ printf "%s-.*" .Release.Name | quote }}}[15m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VirtualRift container is restarting"
+            description: "Container {{`{{ $labels.container }}`}} in pod {{`{{ $labels.pod }}`}} restarted repeatedly."
+            runbook_url: {{ printf "%s/container-restarts.md" .Values.observability.runbookBaseUrl | quote }}
+    - name: virtualrift.performance
+      rules:
+        - alert: VirtualRiftHighErrorRate
+          expr: |
+            (
+              sum by (component) (rate(http_server_requests_seconds_count{release={{ .Release.Name | quote }},status=~"5.."}[5m]))
+              /
+              clamp_min(sum by (component) (rate(http_server_requests_seconds_count{release={{ .Release.Name | quote }}}[5m])), 0.001)
+            ) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VirtualRift component has a high HTTP error rate"
+            description: "Component {{`{{ $labels.component }}`}} has exceeded 5% HTTP 5xx responses for ten minutes."
+            runbook_url: {{ printf "%s/high-error-rate.md" .Values.observability.runbookBaseUrl | quote }}
+        - alert: VirtualRiftHighLatency
+          expr: histogram_quantile(0.95, sum by (le, component) (rate(http_server_requests_seconds_bucket{release={{ .Release.Name | quote }}}[5m]))) > 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VirtualRift component has high request latency"
+            description: "Component {{`{{ $labels.component }}`}} p95 latency has exceeded two seconds for ten minutes."
+            runbook_url: {{ printf "%s/high-latency.md" .Values.observability.runbookBaseUrl | quote }}
+        - alert: VirtualRiftHighJvmHeapUsage
+          expr: |
+            (
+              sum by (component) (jvm_memory_used_bytes{release={{ .Release.Name | quote }},area="heap"})
+              /
+              clamp_min(sum by (component) (jvm_memory_max_bytes{release={{ .Release.Name | quote }},area="heap"}), 1)
+            ) > 0.85
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "VirtualRift component has high JVM heap usage"
+            description: "Component {{`{{ $labels.component }}`}} has used more than 85% of its maximum heap for fifteen minutes."
+            runbook_url: {{ printf "%s/high-jvm-heap.md" .Values.observability.runbookBaseUrl | quote }}
+{{- end }}
+{{- if .Values.observability.grafanaDashboard.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-grafana-dashboard
+  labels:
+    {{- include "virtualrift.commonLabels" (dict "root" . "name" "grafana-dashboard") | nindent 4 }}
+    {{- with .Values.observability.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+data:
+  virtualrift-overview.json: |
+    {{- .Files.Get "dashboards/virtualrift-overview.json" | nindent 4 }}
+{{- end }}

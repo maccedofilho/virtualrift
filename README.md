@@ -69,6 +69,8 @@ This monorepo already contains a working backend platform, an operational fronte
 - GHCR image validation/publication with immutable commit tags and a mainline `edge` tag
 - Helm runtime coverage for the complete platform, including the frontend ingress
 - automated staging delivery, protected production deployment and deterministic Helm rollback
+- Prometheus metrics, structured JSON logs, operational alerts, Grafana dashboard and incident runbooks
+- production pod, rollout, autoscaling and NetworkPolicy hardening
 - repository rules, commands, agents and skills in `.claude`
 - real backend tests with `mvn test`, including Testcontainers-backed E2E coverage when Docker is available
 - real frontend `test`, `lint` and `build` scripts

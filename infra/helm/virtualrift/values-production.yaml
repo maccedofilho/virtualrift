@@ -2,6 +2,9 @@ global:
   env:
     VIRTUALRIFT_RUNTIME_ENVIRONMENT: production
 
+networkPolicy:
+  enabled: true
+
 platform:
   publicApiUrl: https://api.virtualrift.example.com
   frontendOrigin: https://app.virtualrift.example.com

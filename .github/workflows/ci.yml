@@ -72,8 +72,18 @@ jobs:
               -f "infra/helm/virtualrift/values-$environment.yaml"
             helm template virtualrift infra/helm/virtualrift \
               -f infra/helm/virtualrift/values.yaml \
-              -f "infra/helm/virtualrift/values-$environment.yaml" >/dev/null
+              -f "infra/helm/virtualrift/values-$environment.yaml" \
+              | docker run --rm -i ghcr.io/yannh/kubeconform:v0.6.7 \
+                  -strict -summary -kubernetes-version 1.29.0
           done
+          helm template virtualrift infra/helm/virtualrift \
+            -f infra/helm/virtualrift/values.yaml \
+            -f infra/helm/virtualrift/values-production.yaml \
+            --set observability.serviceMonitor.enabled=true \
+            --set observability.prometheusRule.enabled=true \
+            --set observability.grafanaDashboard.enabled=true \
+            | docker run --rm -i ghcr.io/yannh/kubeconform:v0.6.7 \
+                -strict -summary -ignore-missing-schemas -kubernetes-version 1.29.0
 
   backend:
     name: Backend tests and package

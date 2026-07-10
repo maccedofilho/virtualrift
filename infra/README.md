@@ -13,12 +13,16 @@ Concentra os artefatos de infraestrutura usados para levar o VirtualRift de ambi
 - configuracao do dashboard no startup para promover a mesma imagem entre ambientes
 - deploy automatico em staging e deploy manual protegido em production
 - rollback Helm manual e recuperacao automatica quando readiness ou smoke tests falham
+- metricas Prometheus, logs JSON, alertas, dashboard Grafana e runbooks operacionais
+- hardening de pods, probes, rollouts, autoscaling e politicas de rede
 
 ## O que esta branch ainda nao tenta resolver
 
 - gestao definitiva de segredos
-- hardening operacional fino de rede, observabilidade e mensageria
+- hardening fino da mensageria gerenciada e seus contratos de autenticacao
 
 Esses itens ficam para as proximas branches de preparacao para producao.
 
 Consulte [`DEPLOYMENT.md`](DEPLOYMENT.md) para configurar os GitHub Environments, o acesso OIDC ao GKE, os pre-requisitos de Secrets e os procedimentos de deploy e rollback.
+
+Consulte [`OBSERVABILITY.md`](OBSERVABILITY.md) para configurar Prometheus/Grafana, revisar as NetworkPolicies e operar os alertas com os runbooks versionados.

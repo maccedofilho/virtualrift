@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:virtualrift-observability.yml
   application:
     name: virtualrift-api-scanner
   kafka:
@@ -6,6 +8,10 @@ spring:
 
 server:
   port: ${API_SCANNER_PORT:8086}
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9086}
 
 virtualrift:
   runtime:

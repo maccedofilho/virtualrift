@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:virtualrift-observability.yml
   application:
     name: virtualrift-gateway
 
@@ -182,18 +184,9 @@ gateway:
 server:
   port: 8080
 
-# Management endpoints
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health
-  endpoint:
-    health:
-      show-details: never
-  metrics:
-    tags:
-      application: ${spring.application.name}
+  server:
+    port: ${MANAGEMENT_PORT:9080}
 
 springdoc:
   swagger-ui:

@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:virtualrift-observability.yml
   application:
     name: virtualrift-tenant
 
@@ -40,13 +42,8 @@ springdoc:
     tags-sorter: alpha
 
 management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: always
+  server:
+    port: ${MANAGEMENT_PORT:9082}
 
 tenant:
   internal:

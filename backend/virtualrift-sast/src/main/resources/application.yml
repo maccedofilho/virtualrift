@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: classpath:virtualrift-observability.yml
   application:
     name: virtualrift-sast
   kafka:
@@ -6,6 +8,10 @@ spring:
 
 server:
   port: ${SAST_PORT:8088}
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9088}
 
 virtualrift:
   runtime:

@@ -2,6 +2,9 @@ global:
   env:
     VIRTUALRIFT_RUNTIME_ENVIRONMENT: staging
 
+networkPolicy:
+  enabled: true
+
 platform:
   publicApiUrl: https://api.staging.virtualrift.example.com
   frontendOrigin: https://app.staging.virtualrift.example.com
