@@ -1,0 +1,87 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      revision:
+        description: Helm revision; leave empty to use the previous successful revision
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Roll back ${{ inputs.environment }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.FRONTEND_URL }}
+    env:
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      ROLLBACK_REVISION: ${{ inputs.revision }}
+      KUBERNETES_NAMESPACE: ${{ vars.KUBERNETES_NAMESPACE }}
+      HELM_RELEASE_NAME: ${{ vars.HELM_RELEASE_NAME }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER_NAME }}
+          location: ${{ vars.GKE_LOCATION }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Roll back Helm release
+        id: rollback
+        run: ./infra/scripts/rollback-release.sh "$DEPLOY_ENVIRONMENT" "$ROLLBACK_REVISION"
+
+      - name: Run external smoke tests
+        run: ./infra/scripts/smoke-test-release.sh "$API_HEALTH_URL" "$FRONTEND_HEALTH_URL"
+
+      - name: Publish rollback summary
+        if: always()
+        env:
+          RELEASE_NAMESPACE: ${{ steps.rollback.outputs.namespace }}
+          RELEASE_NAME: ${{ steps.rollback.outputs.release_name }}
+          TARGET_REVISION: ${{ steps.rollback.outputs.rollback_revision }}
+        run: |
+          {
+            echo "## VirtualRift rollback"
+            echo
+            echo "- Environment: \`$DEPLOY_ENVIRONMENT\`"
+            echo "- Release: \`${RELEASE_NAME:-unknown}\`"
+            echo "- Namespace: \`${RELEASE_NAMESPACE:-unknown}\`"
+            echo "- Target revision: \`${TARGET_REVISION:-not-rolled-back}\`"
+          } >>"$GITHUB_STEP_SUMMARY"

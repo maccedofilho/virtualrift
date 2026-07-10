@@ -1,3 +1,9 @@
 # Infra Workflows
 
-This folder describes CI and CD workflow responsibilities related to infrastructure operations. It is intended to document how platform provisioning and delivery pipelines are organized.
+The executable workflows live in the repository-level `.github/workflows` directory:
+
+- `images.yml` validates and publishes immutable application images.
+- `deploy.yml` automatically promotes successful `main` images to staging and supports protected manual production deploys.
+- `rollback.yml` restores a selected or previous successful Helm revision.
+
+Environment setup, cluster prerequisites and operational procedures are documented in [`infra/DEPLOYMENT.md`](../../DEPLOYMENT.md).
