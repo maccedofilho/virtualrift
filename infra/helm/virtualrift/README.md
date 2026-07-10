@@ -22,6 +22,25 @@ This chart groups the Kubernetes resources required to run the complete VirtualR
 - Environment overlays only tune runtime shape and public URLs; they do not ship secret material.
 - The frontend receives API and OAuth configuration when its container starts, allowing the same image digest to be promoted across environments.
 - The default `edge` tags follow `main`; controlled deployments should override them with the immutable `sha-<commit>` tags published by CI.
+- Backend management endpoints use isolated ports `9080` through `9088`; only application ports are exposed through ingress.
+- Staging and production enable default-deny NetworkPolicies with explicit platform, dependency, monitoring and scanner exceptions.
+- Prometheus Operator and Grafana resources are optional so the chart can still run without their CRDs.
+
+## Observability
+
+Enable the resources after installing Prometheus Operator and a Grafana dashboard sidecar:
+
+```yaml
+observability:
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  grafanaDashboard:
+    enabled: true
+```
+
+Operational setup, metric ports, network assumptions and alert behavior are documented in [`infra/OBSERVABILITY.md`](../../OBSERVABILITY.md).
 
 ## Expected secrets
 

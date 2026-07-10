@@ -8,6 +8,44 @@ global:
     name: ""
     annotations: {}
   imagePullSecrets: []
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  terminationGracePeriodSeconds: 35
+  preStopDelaySeconds: 5
+  tmpVolume:
+    sizeLimit: 1Gi
+  deployment:
+    minReadySeconds: 10
+    progressDeadlineSeconds: 600
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+  autoscaling:
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 0
+        policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 60
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+        selectPolicy: Max
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Percent
+            value: 25
+            periodSeconds: 60
+        selectPolicy: Max
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
   podLabels: {}
   podAnnotations: {}
   podSecurityContext:
@@ -17,7 +55,7 @@ global:
     runAsUser: 10001
     runAsGroup: 10001
     allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
+    readOnlyRootFilesystem: true
     capabilities:
       drop:
         - ALL
@@ -27,6 +65,59 @@ global:
   ingress:
     className: nginx
     annotations: {}
+
+observability:
+  runbookBaseUrl: https://github.com/maccedofilho/virtualrift/blob/main/infra/runbooks
+  metrics:
+    enabled: true
+    path: /actuator/prometheus
+    ports:
+      gateway: 9080
+      auth: 9081
+      tenant: 9082
+      orchestrator: 9083
+      reports: 9084
+      web-scanner: 9085
+      api-scanner: 9086
+      network-scanner: 9087
+      sast: 9088
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+  prometheusRule:
+    enabled: false
+    labels: {}
+  grafanaDashboard:
+    enabled: false
+    labels:
+      grafana_dashboard: "1"
+
+networkPolicy:
+  enabled: false
+  ingress:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: ingress-nginx
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: ingress-nginx
+  monitoring:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+  dns:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    podSelector:
+      matchLabels:
+        k8s-app: kube-dns
+  dependencyPorts:
+    - 5432
+    - 6379
+    - 9092
 
 platform:
   publicApiUrl: https://api.virtualrift.example.com
@@ -71,16 +162,23 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9080
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
         type: http
-        path: /actuator/health
-        port: 8080
+        path: /actuator/health/liveness
+        port: 9080
       readiness:
         enabled: true
         type: http
         path: /actuator/health
-        port: 8080
+        port: 9080
     env:
       AUTH_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "auth")) 8081 }}'
       TENANT_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "tenant")) 8082 }}'
@@ -127,16 +225,23 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9081
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
         type: http
-        path: /actuator/health
-        port: 8081
+        path: /actuator/health/liveness
+        port: 9081
       readiness:
         enabled: true
         type: http
         path: /actuator/health
-        port: 8081
+        port: 9081
     env:
       DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_auth'
       DB_USER: virtualrift_auth
@@ -202,16 +307,23 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9082
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
         type: http
-        path: /actuator/health
-        port: 8082
+        path: /actuator/health/liveness
+        port: 9082
       readiness:
         enabled: true
         type: http
         path: /actuator/health
-        port: 8082
+        port: 9082
     env:
       DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_tenant'
       DB_USER: virtualrift_tenant
@@ -255,16 +367,23 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9083
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
         type: http
-        path: /actuator/health
-        port: 8083
+        path: /actuator/health/liveness
+        port: 9083
       readiness:
         enabled: true
         type: http
         path: /actuator/health
-        port: 8083
+        port: 9083
     env:
       DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_orchestrator'
       DB_USER: virtualrift_orchestrator
@@ -306,16 +425,23 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9084
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
         type: http
-        path: /actuator/health
-        port: 8084
+        path: /actuator/health/liveness
+        port: 9084
       readiness:
         enabled: true
         type: http
         path: /actuator/health
-        port: 8084
+        port: 9084
     env:
       DB_URL: 'jdbc:postgresql://{{ .Values.dependencies.postgres.host }}:{{ .Values.dependencies.postgres.port }}/virtualrift_reports'
       DB_USER: virtualrift_reports
@@ -353,14 +479,23 @@ components:
     podDisruptionBudget:
       enabled: false
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9085
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
-        type: tcp
-        port: 8085
+        type: http
+        path: /actuator/health/liveness
+        port: 9085
       readiness:
         enabled: true
-        type: tcp
-        port: 8085
+        type: http
+        path: /actuator/health
+        port: 9085
     env:
       KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
     resources:
@@ -391,14 +526,23 @@ components:
     podDisruptionBudget:
       enabled: false
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9086
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
-        type: tcp
-        port: 8086
+        type: http
+        path: /actuator/health/liveness
+        port: 9086
       readiness:
         enabled: true
-        type: tcp
-        port: 8086
+        type: http
+        path: /actuator/health
+        port: 9086
     env:
       KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
     resources:
@@ -429,14 +573,23 @@ components:
     podDisruptionBudget:
       enabled: false
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9087
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
-        type: tcp
-        port: 8087
+        type: http
+        path: /actuator/health/liveness
+        port: 9087
       readiness:
         enabled: true
-        type: tcp
-        port: 8087
+        type: http
+        path: /actuator/health
+        port: 9087
     env:
       KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
     resources:
@@ -467,14 +620,23 @@ components:
     podDisruptionBudget:
       enabled: false
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /actuator/health/liveness
+        port: 9088
+        periodSeconds: 5
+        failureThreshold: 30
       liveness:
         enabled: true
-        type: tcp
-        port: 8088
+        type: http
+        path: /actuator/health/liveness
+        port: 9088
       readiness:
         enabled: true
-        type: tcp
-        port: 8088
+        type: http
+        path: /actuator/health
+        port: 9088
     env:
       KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
       SAST_WORKSPACE_ROOT: /tmp/virtualrift-sast
@@ -513,6 +675,13 @@ components:
       enabled: true
       minAvailable: 1
     probes:
+      startup:
+        enabled: true
+        type: http
+        path: /healthz
+        port: 8080
+        periodSeconds: 3
+        failureThreshold: 20
       liveness:
         enabled: true
         type: http

@@ -1,0 +1,75 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum by (component) (rate(http_server_requests_seconds_count{release=\"$release\"}[5m]))", "legendFormat": "{{component}}", "refId": "A"}],
+      "title": "Request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "sum by (component) (rate(http_server_requests_seconds_count{release=\"$release\",status=~\"5..\"}[5m])) / clamp_min(sum by (component) (rate(http_server_requests_seconds_count{release=\"$release\"}[5m])), 0.001)", "legendFormat": "{{component}}", "refId": "A"}],
+      "title": "HTTP 5xx ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, component) (rate(http_server_requests_seconds_bucket{release=\"$release\"}[5m])))", "legendFormat": "{{component}}", "refId": "A"}],
+      "title": "HTTP latency p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "sum by (component) (jvm_memory_used_bytes{release=\"$release\",area=\"heap\"}) / clamp_min(sum by (component) (jvm_memory_max_bytes{release=\"$release\",area=\"heap\"}), 1)", "legendFormat": "{{component}}", "refId": "A"}],
+      "title": "JVM heap usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=~\"$release-.*\"}[1h]))", "legendFormat": "{{pod}}", "refId": "A"}],
+      "title": "Container restarts (1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 6,
+      "targets": [{"expr": "kube_deployment_status_replicas_unavailable{namespace=\"$namespace\",deployment=~\"$release-.*\"}", "legendFormat": "{{deployment}}", "refId": "A"}],
+      "title": "Unavailable replicas",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["virtualrift", "platform"],
+  "templating": {
+    "list": [
+      {"name": "namespace", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(kube_deployment_labels, namespace)", "refId": "VariableQuery"}, "refresh": 1},
+      {"name": "release", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(http_server_requests_seconds_count, release)", "refId": "VariableQuery"}, "refresh": 1}
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "VirtualRift Platform Overview",
+  "uid": "virtualrift-overview",
+  "version": 1
+}

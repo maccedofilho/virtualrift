@@ -5,7 +5,7 @@ escape_javascript_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-runtime_config=/usr/share/nginx/html/runtime-config.js
+runtime_config=/tmp/runtime-config.js
 temporary_config=$(mktemp /tmp/virtualrift-runtime-config.XXXXXX)
 
 environment=$(escape_javascript_string "${VITE_VIRTUALRIFT_ENVIRONMENT:-local}")

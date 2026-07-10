@@ -32,6 +32,7 @@
     <properties>
         <java.version>21</java.version>
         <springdoc-openapi.version>2.5.0</springdoc-openapi.version>
+        <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
     </properties>
 
     <dependencyManagement>

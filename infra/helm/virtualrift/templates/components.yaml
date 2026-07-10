@@ -3,12 +3,27 @@
 {{- $globalEnv := default (dict) $.Values.global.env }}
 {{- $componentEnv := default (dict) $component.env }}
 {{- $env := mergeOverwrite (deepCopy $globalEnv) $componentEnv }}
+{{- $globalSecurityContext := default (dict) $.Values.global.containerSecurityContext }}
+{{- $componentSecurityContext := default (dict) $component.containerSecurityContext }}
+{{- $containerSecurityContext := mergeOverwrite (deepCopy $globalSecurityContext) $componentSecurityContext }}
+{{- $metricsPort := get $.Values.observability.metrics.ports $name }}
+{{- $metricsEnabled := and $.Values.observability.metrics.enabled $metricsPort }}
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
   labels:
     {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 4 }}
+    {{- if $metricsEnabled }}
+    observability.virtualrift.io/scrape: "true"
+    {{- end }}
+  {{- if $metricsEnabled }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: {{ $.Values.observability.metrics.path | quote }}
+    prometheus.io/port: {{ $metricsPort | quote }}
+  {{- end }}
 spec:
   type: {{ default $.Values.global.service.type $component.service.type }}
   selector:
@@ -17,6 +32,11 @@ spec:
     - name: http
       port: {{ $component.service.port }}
       targetPort: {{ default $component.service.port $component.service.targetPort }}
+    {{- if $metricsEnabled }}
+    - name: metrics
+      port: {{ $metricsPort }}
+      targetPort: {{ $metricsPort }}
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -29,6 +49,10 @@ spec:
   replicas: {{ default 1 $component.replicas }}
   {{- end }}
   revisionHistoryLimit: {{ default 3 $component.revisionHistoryLimit }}
+  minReadySeconds: {{ default 10 $.Values.global.deployment.minReadySeconds }}
+  progressDeadlineSeconds: {{ default 600 $.Values.global.deployment.progressDeadlineSeconds }}
+  strategy:
+    {{- toYaml $.Values.global.deployment.strategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 6 }}
@@ -36,6 +60,9 @@ spec:
     metadata:
       labels:
         {{- include "virtualrift.commonLabels" (dict "root" $ "name" $name) | nindent 8 }}
+        {{- if $metricsEnabled }}
+        observability.virtualrift.io/scrape: "true"
+        {{- end }}
         {{- with $.Values.global.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -53,6 +80,9 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "virtualrift.serviceAccountName" $ }}
+      automountServiceAccountToken: {{ $.Values.global.automountServiceAccountToken }}
+      enableServiceLinks: {{ $.Values.global.enableServiceLinks }}
+      terminationGracePeriodSeconds: {{ $.Values.global.terminationGracePeriodSeconds }}
       {{- with $.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
@@ -75,6 +105,15 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if $.Values.global.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ $.Values.global.topologySpread.maxSkew }}
+          topologyKey: {{ $.Values.global.topologySpread.topologyKey | quote }}
+          whenUnsatisfiable: {{ $.Values.global.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 14 }}
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: {{ printf "%s:%s" $component.image.repository $component.image.tag | quote }}
@@ -90,6 +129,10 @@ spec:
           ports:
             - name: http
               containerPort: {{ default $component.service.port $component.containerPort }}
+            {{- if $metricsEnabled }}
+            - name: metrics
+              containerPort: {{ $metricsPort }}
+            {{- end }}
           {{- if or (gt (len $env) 0) $component.secretEnv }}
           env:
             {{- include "virtualrift.renderEnv" (dict "root" $ "env" $env "secretEnv" $component.secretEnv) | nindent 12 }}
@@ -116,9 +159,25 @@ spec:
             {{- include "virtualrift.renderProbe" . | nindent 12 }}
           {{- end }}
           {{- end }}
+          {{- if gt (int $.Values.global.preStopDelaySeconds) 0 }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - {{ printf "sleep %d" (int $.Values.global.preStopDelaySeconds) | quote }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           securityContext:
-            {{- toYaml (default $.Values.global.containerSecurityContext $component.containerSecurityContext) | nindent 12 }}
+            {{- toYaml $containerSecurityContext | nindent 12 }}
           resources:
             {{- toYaml $component.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ $.Values.global.tmpVolume.sizeLimit }}
 {{- end }}
 {{- end }}

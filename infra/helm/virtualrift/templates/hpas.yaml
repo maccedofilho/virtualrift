@@ -1,5 +1,6 @@
 {{- range $name, $component := .Values.components }}
 {{- if and $component.enabled $component.autoscaling.enabled }}
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -13,6 +14,8 @@ spec:
     name: {{ include "virtualrift.componentFullname" (dict "root" $ "name" $name) }}
   minReplicas: {{ $component.autoscaling.minReplicas }}
   maxReplicas: {{ $component.autoscaling.maxReplicas }}
+  behavior:
+    {{- toYaml $.Values.global.autoscaling.behavior | nindent 4 }}
   metrics:
     - type: Resource
       resource:
