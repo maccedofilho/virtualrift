@@ -1,4 +1,3 @@
-import { useSession } from '../session';
 import type { Route } from './useRoute';
 
 export type NavSection = {
@@ -91,11 +90,6 @@ const NavIcon = ({ id }: { id: Route }) => {
 };
 
 export function Sidebar({ sections, activeId }: SidebarProps) {
-  const { session } = useSession();
-
-  const initial = session?.userId ? session.userId.slice(0, 2).toUpperCase() : 'VR';
-  const tenantId = session?.tenantId ?? '';
-
   return (
     <aside className="dashboard-sidebar" aria-label="navegação">
       <div className="dashboard-sidebar-brand">
@@ -104,12 +98,12 @@ export function Sidebar({ sections, activeId }: SidebarProps) {
         </div>
         <div className="dashboard-sidebar-brand-copy">
           <strong>Virtualrift</strong>
-          <span>Console beta</span>
+          <span>Proteção digital</span>
         </div>
       </div>
 
       <nav className="dashboard-sidebar-nav" aria-label="seções do dashboard">
-        <span className="dashboard-sidebar-section-label">Workspace</span>
+        <span className="dashboard-sidebar-section-label">Sua empresa</span>
         <ul className="dashboard-sidebar-list">
           {sections.map((section) => (
             <li key={section.id}>
@@ -124,7 +118,6 @@ export function Sidebar({ sections, activeId }: SidebarProps) {
                 </span>
                 <span className="dashboard-sidebar-link-copy">
                   <strong>{section.label}</strong>
-                  <span>{section.description}</span>
                 </span>
               </a>
             </li>
@@ -132,15 +125,6 @@ export function Sidebar({ sections, activeId }: SidebarProps) {
         </ul>
       </nav>
 
-      <div className="dashboard-sidebar-footer">
-        <div className="dashboard-sidebar-avatar" aria-hidden="true">
-          {initial}
-        </div>
-        <div className="dashboard-sidebar-footer-copy">
-          <strong>Sessão ativa</strong>
-          <span title={tenantId}>{tenantId ? `tenant ${tenantId.slice(0, 8)}…` : 'sem tenant'}</span>
-        </div>
-      </div>
     </aside>
   );
 }

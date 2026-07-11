@@ -19,94 +19,67 @@ type PlanCatalogItem = {
 const PLAN_CATALOG: readonly PlanCatalogItem[] = [
   {
     plan: 'TRIAL',
-    label: 'Trial',
+    label: 'Teste grátis',
     price: 'R$ 0',
     cadence: '/14 dias',
-    tagline: 'Para experimentar.',
-    bestFor: 'Quem está conhecendo a plataforma e quer rodar os primeiros scans.',
+    tagline: 'Para conhecer sem compromisso.',
+    bestFor: 'Quem está lançando o primeiro projeto e quer entender os riscos.',
     features: [
-      '3 scans por dia',
-      '1 scan rodando por vez',
-      'Até 1 alvo cadastrado',
-      'Análise de código não inclusa',
+      '3 verificações por dia',
+      '1 verificação por vez',
+      '1 site ou sistema protegido',
+      'Resultados guardados por 7 dias',
     ],
-    cta: 'Começar trial',
+    cta: 'Começar grátis',
   },
   {
     plan: 'STARTER',
-    label: 'Starter',
+    label: 'Começando',
     price: 'R$ 399',
     cadence: '/mês',
-    tagline: 'Para times pequenos.',
-    bestFor: 'Cobrir um site, uma API e alguns repositórios sem complicação.',
+    tagline: 'Para quem está colocando a ideia no ar.',
+    bestFor: 'Proteger os primeiros sites, sistemas e projetos sem complicação.',
     features: [
-      '20 scans por dia',
-      '3 scans em paralelo',
-      'Até 5 alvos cadastrados',
-      'Relatórios guardados por 30 dias',
+      '20 verificações por dia',
+      '3 verificações ao mesmo tempo',
+      'Até 5 sites ou sistemas',
+      'Resultados guardados por 30 dias',
     ],
-    cta: 'Quero o Starter',
+    cta: 'Escolher Começando',
   },
   {
     plan: 'PROFESSIONAL',
-    label: 'Professional',
+    label: 'Negócio',
     price: 'R$ 1.290',
     cadence: '/mês',
-    tagline: 'Para times que já rodam scans no dia a dia.',
-    bestFor: 'Várias superfícies, análise de código ativa e volume contínuo.',
+    tagline: 'Para quem já tem clientes ou está em produção.',
+    bestFor: 'Proteger vários projetos e verificar cada mudança com frequência.',
     features: [
-      '100 scans por dia',
-      '10 scans em paralelo',
-      'Até 25 alvos cadastrados',
-      'Análise de código (SAST), Web, API e rede',
+      '100 verificações por dia',
+      '10 verificações ao mesmo tempo',
+      'Até 25 sites ou sistemas',
+      'Site, integrações, código e servidores',
     ],
-    cta: 'Quero o Professional',
+    cta: 'Escolher Negócio',
     recommended: true,
   },
   {
     plan: 'ENTERPRISE',
-    label: 'Enterprise',
+    label: 'Empresa',
     price: 'Sob consulta',
     cadence: '',
-    tagline: 'Para empresas com governança avançada.',
-    bestFor: 'Vários times, retenção maior, integrações e SLA dedicado.',
+    tagline: 'Para operações maiores e várias equipes.',
+    bestFor: 'Mais volume, acompanhamento próximo e necessidades personalizadas.',
     features: [
-      'Scans diários e alvos sem limite',
-      '25 scans em paralelo',
-      'SLA e retenção dedicados',
-      'Onboarding com nosso time',
-      'Integrações e políticas sob contrato',
+      'Verificações e itens sem limite',
+      '25 verificações ao mesmo tempo',
+      'Histórico e suporte personalizados',
+      'Configuração acompanhada pelo nosso time',
+      'Integrações sob medida',
     ],
     cta: 'Falar com vendas',
   },
 ] as const;
-
-const FAQ: ReadonlyArray<{ question: string; answer: string }> = [
-  {
-    question: 'Como faço para mudar de plano?',
-    answer:
-      'Nesta beta, a solicitação já é registrada pelo dashboard. Depois disso, nosso time revisa a mudança e confirma a migração com você.',
-  },
-  {
-    question: 'O que conta como um scan?',
-    answer:
-      'Cada execução iniciada conta como um scan, independente do tipo (Web, API, SAST ou rede). Reanálises automáticas em janela curta não são contabilizadas.',
-  },
-  {
-    question: 'Posso cancelar quando quiser?',
-    answer:
-      'Sim. O cancelamento entra em vigor no fim do ciclo atual e os relatórios continuam disponíveis durante o período de retenção do plano.',
-  },
-];
-
-const workspaceStatusLabel = (status: 'loading' | 'ready'): string => {
-  switch (status) {
-    case 'loading':
-      return 'Carregando seu plano…';
-    case 'ready':
-      return 'Plano em dia';
-  }
-};
 
 export function PlansPanel() {
   const { client, session } = useSession();
@@ -182,66 +155,13 @@ export function PlansPanel() {
 
   return (
     <section aria-label="plans-page" className="plans-page">
-      <header className="plans-hero glass-card">
-        <div className="plans-hero-copy">
-          <span className="eyebrow">Seu plano</span>
-          <h2>Planos e cobrança</h2>
-          <p>
-            {currentPlan ? (
-              <>
-                Você está no plano <strong>{currentPlan}</strong>. Veja o que está incluso, compare opções e
-                descubra quando faz sentido subir.
-              </>
-            ) : (
-              'Compare os planos disponíveis e veja qual cabe melhor no seu time.'
-            )}
-          </p>
-        </div>
+      {error ? <p className="alert alert-danger" role="alert">{error}</p> : null}
 
-        <div className="plans-hero-stats">
-          <div>
-            <span>Scans por dia</span>
-            <strong>{billingSummary?.quota.maxScansPerDay ?? '—'}</strong>
-          </div>
-          <div>
-            <span>Em paralelo</span>
-            <strong>{billingSummary?.quota.maxConcurrentScans ?? '—'}</strong>
-          </div>
-          <div>
-            <span>Alvos</span>
-            <strong>{billingSummary?.quota.maxScanTargets ?? '—'}</strong>
-          </div>
-          <div>
-            <span>Histórico</span>
-            <strong>{billingSummary ? `${billingSummary.quota.reportRetentionDays}d` : '—'}</strong>
-          </div>
-        </div>
-
-        <div className="plans-hero-meta">
-          <span className="status-indicator">
-            <span className={`status-dot ${status === 'loading' ? 'status-dot-pending' : 'status-dot-active'}`} />
-            {workspaceStatusLabel(status)}
-          </span>
-          {billingSummary ? (
-            <span className="plans-hero-workspace">
-              {billingSummary.tenantName} <em>· {billingSummary.tenantSlug}</em>
-            </span>
-          ) : null}
-        </div>
-
-        {error ? (
-          <p className="alert alert-danger" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {pendingRequest ? (
-          <p className="alert alert-info plans-hint" role="status">
-            Existe uma solicitação pendente para mudar do plano <strong>{pendingRequest.currentPlan}</strong> para{' '}
-            <strong>{pendingRequest.requestedPlan}</strong>.
-          </p>
-        ) : null}
-      </header>
+      {pendingRequest ? (
+        <p className="alert alert-info plans-hint" role="status">
+          Sua mudança de plano está em análise.
+        </p>
+      ) : null}
 
       <section className="plans-catalog" aria-label="comparação de planos">
         {PLAN_CATALOG.map((plan) => {
@@ -261,7 +181,6 @@ export function PlansPanel() {
               ) : null}
 
               <header className="plan-card-head">
-                <span className="plan-card-tier">{plan.plan}</span>
                 <h3>{plan.label}</h3>
                 <p>{plan.tagline}</p>
               </header>
@@ -270,11 +189,6 @@ export function PlansPanel() {
                 <strong>{plan.price}</strong>
                 {plan.cadence ? <span>{plan.cadence}</span> : null}
               </div>
-
-              <p className="plan-card-best-for">
-                <span>Ideal para</span>
-                {plan.bestFor}
-              </p>
 
               <ul className="plan-card-features">
                 {plan.features.map((feature) => (
@@ -308,7 +222,7 @@ export function PlansPanel() {
                       ? requestingPlan === plan.plan
                         ? 'Enviando…'
                         : plan.cta
-                      : 'Somente OWNER pode solicitar'}
+                      : 'Peça ao administrador da conta'}
               </button>
             </article>
           );
@@ -323,28 +237,13 @@ export function PlansPanel() {
 
       {!canManagePlans ? (
         <p className="alert alert-info plans-hint" role="status">
-          Você pode consultar os detalhes do plano atual, mas apenas usuários com papel <strong>OWNER</strong> podem solicitar troca de plano nesta beta.
+          Você pode consultar o plano atual. Para trocar, peça ajuda à pessoa que administra esta conta.
         </p>
       ) : null}
 
-      <section className="plans-faq glass-card" aria-label="perguntas frequentes">
-        <header>
-          <span className="eyebrow">Dúvidas comuns</span>
-          <h3>Antes de mudar de plano</h3>
-        </header>
-        <ul>
-          {FAQ.map((item) => (
-            <li key={item.question}>
-              <strong>{item.question}</strong>
-              <span>{item.answer}</span>
-            </li>
-          ))}
-        </ul>
-
-        <a className="button-ghost plans-back-link" href="#/account">
-          Voltar para minha conta
-        </a>
-      </section>
+      <a className="button-ghost plans-back-link" href="#/account">
+        Voltar para minha conta
+      </a>
     </section>
   );
 }

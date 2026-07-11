@@ -5,45 +5,31 @@ import { DashboardLayout } from './layout/DashboardLayout';
 
 function LoadingState() {
   return (
-    <section className="glass-card dashboard-empty">
-      <span className="eyebrow">Sessão</span>
+    <section className="auth-state">
       <h2>Restaurando sessão...</h2>
-      <p>Hidratando credenciais, contexto do tenant e estado do painel.</p>
+      <p>Preparando sua conta.</p>
     </section>
   );
 }
 
 function OAuthCallbackState() {
   return (
-    <section className="glass-card dashboard-empty">
-      <span className="eyebrow">Login social</span>
+    <section className="auth-state">
       <h2>Concluindo autenticação...</h2>
-      <p>Validando o retorno do provedor e preparando a sessão do workspace.</p>
+      <p>Validando o acesso com segurança.</p>
     </section>
   );
 }
 
 function PublicShell({ children }: { children: ReactNode }) {
   return (
-    <main className="dashboard-app">
-      <div className="dashboard-blob dashboard-blob-primary" />
-      <div className="dashboard-blob dashboard-blob-warm" />
-      <div className="dashboard-blob dashboard-blob-success" />
-      <div className="dashboard-shell">
-        <header className="dashboard-header">
-          <div className="dashboard-header-copy">
-            <span className="eyebrow">Console beta</span>
-            <h1 className="dashboard-title">Virtualrift</h1>
-            <p className="dashboard-subtitle">
-              Base pronta para autenticação, gestão de alvos e execução dos primeiros fluxos do produto.
-            </p>
-          </div>
-          <div className="dashboard-header-meta">
-            <span className="header-pill header-pill-accent">Workspace de segurança</span>
-            <span className="header-pill header-pill-soft">Beta orientada por backend</span>
-          </div>
-        </header>
+    <main className="auth-app">
+      <div className="auth-shell">
         {children}
+        <footer className="auth-page-footer">
+          <span>Segurança simples, do começo ao crescimento</span>
+          <span>Virtualrift © 2026</span>
+        </footer>
       </div>
     </main>
   );

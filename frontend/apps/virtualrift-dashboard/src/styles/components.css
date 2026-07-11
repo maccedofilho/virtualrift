@@ -1,11 +1,9 @@
 .glass-card {
   position: relative;
-  border: 1px solid var(--vr-glass-border);
+  border: 1px solid var(--vr-border);
   border-radius: var(--vr-radius-card);
-  background: var(--vr-glass);
-  backdrop-filter: blur(40px) saturate(1.8);
-  -webkit-backdrop-filter: blur(40px) saturate(1.8);
-  box-shadow: var(--vr-shadow-lg);
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-sm);
 }
 
 .header-pill,
@@ -118,14 +116,15 @@
 
 .button-primary {
   color: #fff;
-  background: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
-  box-shadow: 0 14px 24px rgba(0, 113, 227, 0.24);
+  background: var(--vr-ink);
+  box-shadow: none;
 }
 
 .button-secondary {
   color: var(--vr-text-primary);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--vr-shadow-sm);
+  background: var(--vr-surface);
+  border: 1px solid var(--vr-border);
+  box-shadow: none;
 }
 
 .button-ghost {
@@ -163,9 +162,9 @@
   width: 100%;
   min-height: 48px;
   padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--vr-border);
   border-radius: var(--vr-radius-input);
-  background: rgba(0, 0, 0, 0.03);
+  background: #f5f8fb;
   color: var(--vr-text-primary);
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
@@ -176,9 +175,9 @@
 
 .input:focus,
 .select:focus {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(0, 113, 227, 0.18);
-  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.14);
+  background: #fff;
+  border-color: rgba(200, 74, 33, 0.5);
+  box-shadow: 0 0 0 3px rgba(200, 74, 33, 0.12);
 }
 
 .alert {
@@ -195,6 +194,68 @@
 
 .alert-info {
   background: rgba(255, 255, 255, 0.84);
+}
+
+.empty-state {
+  margin: 0;
+  padding: 28px;
+  border: 1px dashed rgba(20, 32, 26, 0.18);
+  border-radius: var(--vr-radius-card);
+  color: var(--vr-text-secondary);
+  background: rgba(255, 255, 255, 0.62);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.secondary-tool {
+  overflow: hidden;
+  border: 1px solid var(--vr-border);
+  border-radius: var(--vr-radius-card);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.secondary-tool summary {
+  padding: 18px 20px;
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.secondary-tool summary::-webkit-details-marker {
+  display: none;
+}
+
+.secondary-tool summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.secondary-tool summary strong {
+  color: var(--vr-text-primary);
+  font-size: 0.9rem;
+}
+
+.secondary-tool summary small {
+  color: var(--vr-text-tertiary);
+  font-size: 0.78rem;
+}
+
+.secondary-tool summary i {
+  color: var(--vr-accent);
+  font-size: 1.2rem;
+  font-style: normal;
+  transition: transform 180ms ease;
+}
+
+.secondary-tool[open] summary i {
+  transform: rotate(45deg);
+}
+
+.secondary-tool-body {
+  padding: 4px 20px 20px;
 }
 
 .status-indicator {

@@ -1,22 +1,10 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import type { Plan, WorkspaceInvitationPreviewResponse } from '@virtualrift/types';
+import type { WorkspaceInvitationPreviewResponse } from '@virtualrift/types';
 import { useSession } from '../../session';
 import type { OAuthProvider } from '../../session/types';
 
-const HERO_FLOW_STEPS: ReadonlyArray<{ idx: string; label: string; detail: string }> = [
-  { idx: '01', label: 'Sessão autenticada', detail: 'Token JWT validado e contexto do tenant aplicado.' },
-  { idx: '02', label: 'Alvos verificados', detail: 'Ownership confirmada antes do primeiro scan.' },
-  { idx: '03', label: 'Scans orquestrados', detail: 'Web, API, SAST e rede no mesmo workspace.' },
-  { idx: '04', label: 'Findings rastreáveis', detail: 'Relatórios alinhados de ponta a ponta.' },
-];
-
 type AuthMode = 'login' | 'register' | 'invite';
-
-const SELF_SERVICE_PLANS: ReadonlyArray<{ value: Plan; label: string; detail: string }> = [
-  { value: 'TRIAL', label: 'Trial', detail: 'Comece sem custo para validar o workspace.' },
-  { value: 'STARTER', label: 'Starter', detail: 'Melhor para equipes menores iniciando a operação.' },
-  { value: 'PROFESSIONAL', label: 'Professional', detail: 'Mais capacidade para times já em operação contínua.' },
-];
+const SOCIAL_LOGIN_ENABLED: boolean = false;
 
 const normalizeWorkspaceSlug = (value: string): string =>
   value
@@ -71,23 +59,17 @@ export function LoginForm() {
   const [password, setPassword] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
-  const [plan, setPlan] = useState<Plan>('TRIAL');
   const [hint, setHint] = useState<string | null>(null);
   const [availabilityHint, setAvailabilityHint] = useState<string | null>(null);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
-  const [slugEditedManually, setSlugEditedManually] = useState(false);
   const [invitationToken, setInvitationToken] = useState(readInitialInvitationToken());
   const [invitationPreview, setInvitationPreview] = useState<WorkspaceInvitationPreviewResponse | null>(null);
   const [invitationHint, setInvitationHint] = useState<string | null>(null);
   const [isLoadingInvitation, setIsLoadingInvitation] = useState(false);
 
   useEffect(() => {
-    if (slugEditedManually) {
-      return;
-    }
-
     setWorkspaceSlug(normalizeWorkspaceSlug(workspaceName));
-  }, [slugEditedManually, workspaceName]);
+  }, [workspaceName]);
 
   useEffect(() => {
     if (mode !== 'register') {
@@ -116,13 +98,13 @@ export function LoginForm() {
         }
 
         if (availability.emailAvailable && availability.workspaceSlugAvailable) {
-          setAvailabilityHint('E-mail e identificador do workspace estão disponíveis.');
+          setAvailabilityHint('E-mail e endereço da conta estão disponíveis.');
         } else if (!availability.emailAvailable && !availability.workspaceSlugAvailable) {
-          setAvailabilityHint('Esse e-mail e esse identificador já estão em uso.');
+          setAvailabilityHint('Esse e-mail já está em uso e já existe uma conta com esse nome.');
         } else if (!availability.emailAvailable) {
           setAvailabilityHint('Esse e-mail já está em uso.');
         } else {
-          setAvailabilityHint('Esse identificador de workspace já está em uso.');
+          setAvailabilityHint('Já existe uma conta com esse nome. Tente usar um nome mais específico.');
         }
       } catch {
         if (!cancelled) {
@@ -151,7 +133,7 @@ export function LoginForm() {
 
     const normalizedToken = invitationToken.trim();
     if (!normalizedToken) {
-      setInvitationHint('Cole o token do convite ou abra o link recebido para entrar no workspace.');
+      setInvitationHint('Cole o código do convite ou abra o link que você recebeu.');
       setInvitationPreview(null);
       setIsLoadingInvitation(false);
       return;
@@ -168,7 +150,7 @@ export function LoginForm() {
 
         setInvitationPreview(preview);
         setEmail(preview.email);
-        setInvitationHint(`Convite válido para ${preview.tenantName} com perfil ${preview.roles.join(', ')}.`);
+        setInvitationHint(`Convite válido para entrar em ${preview.tenantName}.`);
       } catch {
         if (!cancelled) {
           setInvitationPreview(null);
@@ -196,7 +178,7 @@ export function LoginForm() {
       await createWorkspace({
         workspaceName: workspaceName.trim(),
         workspaceSlug: normalizeWorkspaceSlug(workspaceSlug),
-        plan,
+        plan: 'TRIAL',
         email: email.trim().toLowerCase(),
         password,
       });
@@ -217,35 +199,34 @@ export function LoginForm() {
 
   const description = (() => {
     if (mode === 'login') {
-      return 'Conecte-se ao workspace do tenant para gerenciar alvos, validações de autorização e fluxos de execução.';
+      return 'Acesse sua conta e continue protegendo seu negócio.';
     }
 
     if (mode === 'invite') {
-      return 'Aceite um convite para entrar em um workspace existente com o papel definido pelo owner.';
+      return 'Entre na conta da sua equipe usando o convite recebido.';
     }
 
-    return 'Crie um novo workspace, defina o plano inicial e já entre como owner da operação.';
+    return 'Conte um pouco sobre seu negócio e comece gratuitamente.';
   })();
   const submitLabel = (() => {
     if (mode === 'login') {
-      return status === 'refreshing' ? 'Entrando...' : 'Entrar com e-mail';
+      return status === 'refreshing' ? 'Entrando...' : 'Entrar';
     }
 
     if (mode === 'invite') {
       return status === 'refreshing' ? 'Aceitando convite...' : 'Entrar com convite';
     }
 
-    return status === 'refreshing' ? 'Criando workspace...' : 'Criar workspace';
+    return status === 'refreshing' ? 'Criando sua conta...' : 'Criar minha conta';
   })();
   const heading = mode === 'invite' ? 'Aceitar convite' : mode === 'login' ? 'Entrar' : 'Criar conta';
+  const availableOAuthProviders = SOCIAL_LOGIN_ENABLED ? oauthProviders.filter((entry) => entry.available) : [];
 
   const handleOAuthClick = (provider: OAuthProvider) => {
     const config = oauthProviders.find((entry) => entry.provider === provider);
     setHint(null);
 
     if (!config?.available) {
-      const providerLabel = provider === 'github' ? 'GitHub' : 'Google';
-      setHint(`Login com ${providerLabel} ainda não foi configurado neste ambiente.`);
       return;
     }
 
@@ -262,88 +243,26 @@ export function LoginForm() {
   const inviteDisabled = status === 'refreshing' || isLoadingInvitation || invitationToken.trim().length === 0 || password.trim().length === 0;
 
   return (
-    <section aria-label="login" className="dashboard-login">
-      <div className="glass-card dashboard-login-hero">
-        <div className="dashboard-login-hero-copy">
-          <span className="eyebrow">Acesso ao workspace</span>
-          <h2>Proteja cada superfície a partir de um único centro de controle.</h2>
-          <p>
-            Reúna autenticação, verificação de ownership, orquestração de scans e relatórios em um fluxo único antes que um finding chegue em produção.
-          </p>
+    <section aria-label="login" className="auth-layout">
+      <div className="auth-story">
+        <div className="auth-story-copy">
+          <span className="auth-overline">Segurança para quem está construindo</span>
+          <h2>Você cria.<br />A gente ajuda<br />a proteger.</h2>
+          <p>Conecte seu site ou sistema e descubra o que pode colocar seu negócio e seus clientes em risco.</p>
         </div>
 
-        <ol className="dashboard-login-hero-flow" aria-label="fluxo do produto">
-          {HERO_FLOW_STEPS.map((step) => (
-            <li key={step.idx} className="dashboard-login-hero-flow-item">
-              <span className="dashboard-login-hero-flow-mark">{step.idx}</span>
-              <div className="dashboard-login-hero-flow-copy">
-                <strong>{step.label}</strong>
-                <span>{step.detail}</span>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        <div className="dashboard-login-highlight-grid">
-          <div className="dashboard-login-highlight">
-            <span className="dashboard-login-highlight-label">Alvos</span>
-            <strong>Defina o escopo antes do scan começar.</strong>
-          </div>
-          <div className="dashboard-login-highlight">
-            <span className="dashboard-login-highlight-label">Execução</span>
-            <strong>Dispare fluxos web, API, SAST e rede no mesmo workspace.</strong>
-          </div>
-          <div className="dashboard-login-highlight">
-            <span className="dashboard-login-highlight-label">Relatórios</span>
-            <strong>Mantenha contexto do tenant, findings e status alinhados de ponta a ponta.</strong>
-          </div>
-        </div>
       </div>
 
-      <aside className="glass-card dashboard-login-pane">
-        <div className="dashboard-login-pane-header">
-          <span className="badge badge-accent">Workspace de segurança</span>
-          <span className="badge">Acesso beta</span>
-        </div>
-        <div className="dashboard-side-card-copy dashboard-login-pane-copy">
-          <span className="eyebrow">Autenticação</span>
+      <aside className="auth-panel">
+        <div className="auth-panel-heading">
           <h2>{heading}</h2>
           <p>{description}</p>
-        </div>
-        <div className="dashboard-auth-tabs" role="tablist" aria-label="modo de acesso">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'login'}
-            className={`dashboard-auth-tab${mode === 'login' ? ' is-active' : ''}`}
-            onClick={() => switchMode('login')}
-          >
-            Entrar
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'register'}
-            className={`dashboard-auth-tab${mode === 'register' ? ' is-active' : ''}`}
-            onClick={() => switchMode('register')}
-          >
-            Criar conta
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'invite'}
-            className={`dashboard-auth-tab${mode === 'invite' ? ' is-active' : ''}`}
-            onClick={() => switchMode('invite')}
-          >
-            Tenho convite
-          </button>
         </div>
         <form onSubmit={handleSubmit} className="auth-grid">
           {mode === 'register' ? (
             <>
               <div className="field">
-                <label htmlFor="workspace-name">Nome do workspace</label>
+                <label htmlFor="workspace-name">Nome da empresa</label>
                 <input
                   className="input"
                   id="workspace-name"
@@ -351,59 +270,16 @@ export function LoginForm() {
                   type="text"
                   value={workspaceName}
                   onChange={(event) => setWorkspaceName(event.target.value)}
-                  placeholder="Ex.: Acme Security"
+                  placeholder="Digite o nome da sua empresa ou sistema"
                   autoComplete="organization"
                 />
-              </div>
-              <div className="field-grid">
-                <div className="field">
-                  <label htmlFor="workspace-slug">Identificador do workspace</label>
-                  <input
-                    className="input"
-                    id="workspace-slug"
-                    name="workspace-slug"
-                    type="text"
-                    value={workspaceSlug}
-                    onChange={(event) => {
-                      setSlugEditedManually(true);
-                      setWorkspaceSlug(normalizeWorkspaceSlug(event.target.value));
-                    }}
-                    placeholder="acme-security"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="plan">Plano inicial</label>
-                  <select
-                    className="select"
-                    id="plan"
-                    name="plan"
-                    value={plan}
-                    onChange={(event) => setPlan(event.target.value as Plan)}
-                  >
-                    {SELF_SERVICE_PLANS.map((entry) => (
-                      <option key={entry.value} value={entry.value}>
-                        {entry.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="form-help">
-                <strong>Autoatendimento</strong>
-                <span>
-                  {SELF_SERVICE_PLANS.find((entry) => entry.value === plan)?.detail ??
-                    'Escolha um plano inicial para abrir o workspace.'}
-                </span>
               </div>
             </>
           ) : null}
           {mode === 'invite' ? (
             <>
               <div className="field">
-                <label htmlFor="invite-token">Token do convite</label>
+                <label htmlFor="invite-token">Código do convite</label>
                 <input
                   className="input"
                   id="invite-token"
@@ -421,7 +297,7 @@ export function LoginForm() {
                 <div className="form-help">
                   <strong>{invitationPreview.tenantName}</strong>
                   <span>
-                    Você vai entrar em <strong>{invitationPreview.tenantSlug}</strong> com papel <strong>{invitationPreview.roles.join(', ')}</strong>.
+                    Você foi convidado para fazer parte desta conta.
                   </span>
                 </div>
               ) : null}
@@ -436,7 +312,7 @@ export function LoginForm() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="owner@virtualrift.test"
+              placeholder="Digite seu email"
               autoComplete="email"
               readOnly={mode === 'invite'}
             />
@@ -479,46 +355,53 @@ export function LoginForm() {
             </button>
           </div>
         </form>
-        <div className="dashboard-login-divider">
-          <span>ou continue com</span>
-        </div>
-        <div className="dashboard-social-auth">
-          <button
-            className="button-secondary dashboard-social-button"
-            type="button"
-            aria-label="Continuar com GitHub"
-            onClick={() => handleOAuthClick('github')}
-            disabled={oauthStatus === 'redirecting'}
-          >
-            <GitHubIcon />
-            <span>GitHub</span>
-          </button>
-          <button
-            className="button-secondary dashboard-social-button"
-            type="button"
-            aria-label="Continuar com Google"
-            onClick={() => handleOAuthClick('google')}
-            disabled={oauthStatus === 'redirecting'}
-          >
-            <GoogleIcon />
-            <span>Google</span>
-          </button>
-        </div>
+        {availableOAuthProviders.length > 0 ? (
+          <>
+            <div className="auth-divider"><span>ou</span></div>
+            <div className="auth-social">
+              {availableOAuthProviders.map((entry) => (
+                <button
+                  key={entry.provider}
+                  className="button-secondary auth-social-button"
+                  type="button"
+                  aria-label={`Continuar com ${entry.label}`}
+                  onClick={() => handleOAuthClick(entry.provider)}
+                  disabled={oauthStatus === 'redirecting'}
+                >
+                  {entry.provider === 'github' ? <GitHubIcon /> : <GoogleIcon />}
+                  <span>Continuar com {entry.label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
         {oauthStatus === 'redirecting' ? (
           <p className="alert alert-info dashboard-social-hint" role="status">
             Redirecionando para o provedor social e preparando o retorno ao dashboard.
           </p>
         ) : null}
         {hint ? <p className="alert alert-info dashboard-social-hint">{hint}</p> : null}
-        <div className="dashboard-login-footer">
-          <span>Beta backend-first · Painel web</span>
+        <div className="auth-mode-links" role="tablist" aria-label="modo de acesso">
           <button
             type="button"
-            className="dashboard-login-footer-link"
+            role="tab"
+            aria-selected={mode === 'register'}
+            className="auth-mode-link"
             onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
           >
-            {mode === 'login' ? 'Não tem conta? Criar conta' : 'Já tem conta? Entrar'}
+            {mode === 'login' ? 'Criar uma conta' : 'Voltar para o login'}
           </button>
+          {mode === 'login' ? (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={false}
+              className="auth-mode-link"
+              onClick={() => switchMode('invite')}
+            >
+              Usar convite
+            </button>
+          ) : null}
         </div>
       </aside>
     </section>

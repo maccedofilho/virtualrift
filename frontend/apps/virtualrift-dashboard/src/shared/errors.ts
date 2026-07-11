@@ -24,16 +24,16 @@ const translateApiError = (error: VirtualRiftApiError): string => {
       if (error.response.url.includes('/api/v1/auth/refresh')) {
         return 'Sua sessão expirou. Entre novamente.';
       }
-      return 'Sua sessão não é válida para esta operação.';
+      return 'Seu acesso expirou. Entre novamente para continuar.';
     case 403:
       if (url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
-        return 'Seu perfil atual não pode alterar alvos do tenant. Use uma conta com papel OWNER para cadastrar, verificar ou remover alvos.';
+        return 'Somente quem administra a conta pode adicionar, confirmar ou remover sites e sistemas.';
       }
       if (url.includes('/api/v1/scans') && !url.includes('/status') && !url.includes('/findings') && !url.includes('/result')) {
-        return 'Seu perfil atual não pode criar scans. Use uma conta com papel OWNER ou ANALYST para iniciar novas execuções.';
+        return 'Seu acesso permite acompanhar resultados, mas não iniciar uma nova verificação.';
       }
       if (url.includes('/api/v1/reports/scans/')) {
-        return 'Seu perfil atual não pode gerar relatórios. Use uma conta com papel OWNER ou ANALYST para concluir esta ação.';
+        return 'Seu acesso permite consultar, mas não criar um novo resultado para compartilhar.';
       }
       return 'Você não tem permissão para concluir esta ação.';
     case 404:
@@ -47,7 +47,7 @@ const translateApiError = (error: VirtualRiftApiError): string => {
           return 'Esse e-mail já está em uso.';
         }
         if (detail.includes('workspace slug is already in use')) {
-          return 'Esse identificador de workspace já está em uso.';
+          return 'Esse endereço de conta já está em uso.';
         }
         if (detail.includes('selected plan is not available')) {
           return 'Esse plano não está disponível para autoatendimento neste momento.';
@@ -62,28 +62,28 @@ const translateApiError = (error: VirtualRiftApiError): string => {
         }
       }
       if (url.includes('/api/v1/tenants/') && url.includes('/invitations')) {
-        return 'Já existe um convite pendente para esse e-mail neste workspace.';
+        return 'Já existe um convite pendente para esse e-mail nesta conta.';
       }
       return error.message;
     case 429:
-      return 'Você atingiu um limite operacional do seu plano ou tentou a ação rápido demais.';
+      return 'Você atingiu o limite do seu plano ou tentou novamente rápido demais.';
     default:
       if (error.status === 400 && url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
         if (detail.includes('credentials are invalid') || detail.includes('do not have access')) {
           return 'As credenciais configuradas para esse repositório não funcionaram ou não têm acesso suficiente.';
         }
         if (detail.includes('repository was not found') || detail.includes('repository target must be a valid remote repository url')) {
-          return 'O repositório informado não pôde ser validado. Revise a URL e confirme se ele está acessível pelo clone HTTPS.';
+          return 'Não conseguimos acessar o projeto informado. Revise o link e confirme se a credencial está correta.';
         }
         if (detail.includes('repository host could not be resolved')) {
-          return 'O backend não conseguiu resolver o host desse repositório durante a validação.';
+          return 'Não conseguimos localizar o endereço desse projeto. Confira o link e tente novamente.';
         }
       }
       if (error.status === 503 && (url.includes('/api/v1/auth/onboarding/workspaces') || url.includes('/api/v1/auth/onboarding/availability'))) {
-        return 'O onboarding self-service não está disponível neste ambiente agora.';
+        return 'A criação de contas está temporariamente indisponível. Tente novamente em alguns minutos.';
       }
       if (error.status >= 500) {
-        return 'O backend não conseguiu concluir a solicitação agora. Tente novamente em instantes.';
+        return 'Algo deu errado ao concluir esta ação. Tente novamente em alguns minutos.';
       }
       return error.message;
   }
@@ -96,7 +96,7 @@ export const toErrorMessage = (error: unknown, fallback: string): string => {
 
   if (error instanceof Error && error.message.trim().length > 0) {
     if (isNetworkFailure(error.message)) {
-      return 'Não foi possível alcançar o gateway da API. Verifique se o backend está em execução e se o CORS está configurado.';
+      return 'Não conseguimos conectar ao serviço agora. Verifique sua internet e tente novamente.';
     }
 
     return error.message;
