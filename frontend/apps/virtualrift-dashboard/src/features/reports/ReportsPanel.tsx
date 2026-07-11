@@ -54,7 +54,7 @@ export function ReportsPanel() {
         setStatus('ready');
       } catch (loadError) {
         setStatus('ready');
-        setError(toErrorMessage(loadError, 'Não foi possível carregar os relatórios do tenant agora.'));
+        setError(toErrorMessage(loadError, 'Não foi possível carregar seus resultados agora.'));
       }
     };
 
@@ -139,47 +139,9 @@ export function ReportsPanel() {
     }
   };
 
-  const highestRiskReport = useMemo(
-    () => reports.reduce<ReportResponse | null>((current, report) => (current === null || report.riskScore > current.riskScore ? report : current), null),
-    [reports],
-  );
-  const criticalReports = useMemo(() => reports.filter((report) => report.criticalCount > 0).length, [reports]);
-  const totalFindings = useMemo(() => reports.reduce((sum, report) => sum + report.totalFindings, 0), [reports]);
-
   return (
     <section aria-label="reports-panel" className="glass-card dashboard-panel">
-      <div className="dashboard-panel-header">
-        <div className="dashboard-panel-copy">
-          <span className="eyebrow">Relatórios</span>
-          <h2>Snapshots prontos para compartilhar</h2>
-          <p>Abra relatórios já gerados, compare risco e findings persistidos e recupere o contexto do scan original sem sair do dashboard.</p>
-        </div>
-        <span className="status-indicator">
-          <span className={`status-dot ${status === 'loading' || status === 'loading-detail' ? 'status-dot-pending' : 'status-dot-active'}`} />
-          {status === 'loading' ? 'carregando' : status === 'loading-detail' ? 'abrindo' : 'pronto'}
-        </span>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <span className="stat-label">Relatórios</span>
-          <span className="stat-value">{reports.length}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Com críticos</span>
-          <span className="stat-value">{criticalReports}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Findings persistidos</span>
-          <span className="stat-value">{totalFindings}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Maior risco</span>
-          <span className="stat-value">{highestRiskReport?.riskScore ?? '—'}</span>
-        </div>
-      </div>
-
-      {status === 'loading' ? <p className="alert alert-info">Carregando relatórios gerados para este tenant...</p> : null}
+      {status === 'loading' ? <p className="alert alert-info">Carregando seus resultados...</p> : null}
       {error ? (
         <p className="alert alert-danger" role="alert">
           {error}
@@ -190,8 +152,7 @@ export function ReportsPanel() {
       <section aria-label="tenant-reports" className="panel-section">
         <div className="panel-section-header">
           <div>
-            <h3 className="panel-section-title">Histórico de relatórios</h3>
-            <p>O painel lista snapshots já gerados e deixa você alternar entre artefatos sem depender da tela de scans.</p>
+            <h3 className="panel-section-title">Resultados anteriores</h3>
           </div>
           <span className="badge">{filteredReports.length} de {reports.length}</span>
         </div>
@@ -199,7 +160,7 @@ export function ReportsPanel() {
         {reports.length > 0 ? (
           <div className="field-grid scan-history-toolbar">
             <div className="field">
-              <label htmlFor="report-type-filter">Filtrar por tipo de scan</label>
+              <label htmlFor="report-type-filter">Filtrar por tipo de verificação</label>
               <select
                 className="select"
                 id="report-type-filter"
@@ -229,12 +190,12 @@ export function ReportsPanel() {
         ) : null}
 
         {reports.length === 0 ? (
-          <div className="alert alert-info">
-            Nenhum relatório foi gerado ainda. Vá para <a href="#/scans">Scans</a>, conclua uma execução e gere o primeiro snapshot.
+          <div className="empty-state">
+            Você ainda não tem resultados salvos. Vá para <a href="#/scans">Verificar</a> e faça sua primeira análise.
           </div>
         ) : null}
         {reports.length > 0 && filteredReports.length === 0 ? (
-          <p className="alert alert-info">Nenhum relatório combina com o tipo selecionado agora.</p>
+          <p className="alert alert-info">Nenhum resultado corresponde a este filtro.</p>
         ) : null}
 
         <div className="list-stack">
@@ -250,20 +211,12 @@ export function ReportsPanel() {
                     {report.scanType} · gerado em {formatDateTime(report.generatedAt)}
                   </div>
                 </div>
-                <span className={`badge ${reportStatusTone(report.status)}`}>Status: {report.status}</span>
+                <span className={`badge ${reportStatusTone(report.status)}`}>{report.status === 'COMPLETED' ? 'Pronto' : report.status}</span>
               </div>
 
               <div className="kv-grid">
                 <div className="kv-item">
-                  <span className="kv-label">ID do relatório</span>
-                  <span className="technical-value">{report.id}</span>
-                </div>
-                <div className="kv-item">
-                  <span className="kv-label">Scan vinculado</span>
-                  <span className="technical-value">{report.scanId}</span>
-                </div>
-                <div className="kv-item">
-                  <span className="kv-label">Findings</span>
+                  <span className="kv-label">Problemas encontrados</span>
                   <span className="kv-value">{report.totalFindings}</span>
                 </div>
                 <div className="kv-item">
@@ -277,7 +230,7 @@ export function ReportsPanel() {
                   Abrir relatório
                 </button>
                 <a className="button-ghost" href="#/scans">
-                  Ver scan relacionado
+                  Ver verificação relacionada
                 </a>
               </div>
             </article>
@@ -285,32 +238,21 @@ export function ReportsPanel() {
         </div>
       </section>
 
-      <section aria-label="selected-report-detail" className="panel-section">
+      {selectedReport ? <section aria-label="selected-report-detail" className="panel-section">
         <div className="panel-section-header">
           <div>
-            <h3 className="panel-section-title">Detalhe do relatório selecionado</h3>
-            <p>Abra o snapshot completo, contexto do scan e findings persistidos para compartilhar ou revisar com o time.</p>
+              <h3 className="panel-section-title">Detalhes do resultado</h3>
+              <p>Entenda os riscos e compartilhe as informações com sua equipe.</p>
           </div>
           <span className={`badge ${selectedReport ? reportStatusTone(selectedReport.status) : ''}`}>
             {selectedReport ? selectedReport.status : 'Nenhum relatório'}
           </span>
         </div>
 
-        {!selectedReport ? (
-          <p className="alert alert-info">Selecione um relatório da lista acima para abrir os detalhes completos.</p>
-        ) : (
           <>
             <div className="kv-grid">
               <div className="kv-item">
-                <span className="kv-label">ID do relatório</span>
-                <span className="technical-value">{selectedReport.id}</span>
-              </div>
-              <div className="kv-item">
-                <span className="kv-label">ID do scan</span>
-                <span className="technical-value">{selectedReport.scanId}</span>
-              </div>
-              <div className="kv-item">
-                <span className="kv-label">Target</span>
+                <span className="kv-label">Item verificado</span>
                 <span className="technical-value">{selectedReport.target}</span>
               </div>
               <div className="kv-item">
@@ -325,17 +267,17 @@ export function ReportsPanel() {
                 <span className="stat-value">{selectedReport.riskScore}</span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Total de findings</span>
+                <span className="stat-label">Problemas encontrados</span>
                 <span className="stat-value">{selectedReport.totalFindings}</span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Críticos</span>
+                <span className="stat-label">Urgentes</span>
                 <span className={`badge ${selectedReport.criticalCount > 0 ? 'badge-danger' : 'badge'}`}>
                   {selectedReport.criticalCount}
                 </span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Altos</span>
+                <span className="stat-label">Importantes</span>
                 <span className={`badge ${selectedReport.highCount > 0 ? 'badge-warning' : 'badge'}`}>
                   {selectedReport.highCount}
                 </span>
@@ -344,13 +286,13 @@ export function ReportsPanel() {
 
             <div className="stats-grid">
               <div className="stat-card">
-                <span className="stat-label">Médios</span>
+                <span className="stat-label">Pedem atenção</span>
                 <span className={`badge ${selectedReport.mediumCount > 0 ? 'badge-accent' : 'badge'}`}>
                   {selectedReport.mediumCount}
                 </span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Baixos</span>
+                <span className="stat-label">Baixa prioridade</span>
                 <span className={`badge ${selectedReport.lowCount > 0 ? 'badge-success' : 'badge'}`}>
                   {selectedReport.lowCount}
                 </span>
@@ -362,7 +304,7 @@ export function ReportsPanel() {
                 </span>
               </div>
               <div className="stat-card">
-                <span className="stat-label">Scan concluído em</span>
+                <span className="stat-label">Verificação concluída em</span>
                 <span className="stat-value">{formatDateTime(selectedReport.scanCompletedAt)}</span>
               </div>
             </div>
@@ -374,7 +316,7 @@ export function ReportsPanel() {
                 onClick={() => void handleExport('json')}
                 disabled={status === 'exporting'}
               >
-                Baixar JSON
+                Baixar dados
               </button>
               <button
                 className="button-ghost"
@@ -382,7 +324,7 @@ export function ReportsPanel() {
                 onClick={() => void handleExport('html')}
                 disabled={status === 'exporting'}
               >
-                Abrir versão imprimível
+                Abrir para imprimir
               </button>
             </div>
 
@@ -391,7 +333,7 @@ export function ReportsPanel() {
             ) : null}
 
             {selectedReport.findings.length === 0 ? (
-              <p className="alert alert-info">Este relatório não tem findings persistidos no snapshot atual.</p>
+              <p className="alert alert-info">Nenhum problema foi registrado neste resultado.</p>
             ) : (
               <div className="list-stack">
                 {selectedReport.findings.map((finding) => (
@@ -419,8 +361,7 @@ export function ReportsPanel() {
               </div>
             )}
           </>
-        )}
-      </section>
+      </section> : null}
     </section>
   );
 }

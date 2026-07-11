@@ -1,7 +1,7 @@
 const ROLE_LABELS: Record<string, string> = {
-  OWNER: 'Proprietário',
-  ANALYST: 'Analista',
-  READER: 'Leitor',
+  OWNER: 'Administrador',
+  ANALYST: 'Pode verificar',
+  READER: 'Somente leitura',
 };
 
 export const hasAnyRole = (grantedRoles: readonly string[], allowedRoles: readonly string[]): boolean =>

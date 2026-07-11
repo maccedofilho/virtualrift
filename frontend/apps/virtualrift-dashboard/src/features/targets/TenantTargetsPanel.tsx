@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import {
   REPOSITORY_AUTHENTICATION_MODES,
   SCAN_TYPES,
@@ -11,8 +11,6 @@ import {
   type ScanTargetResponse,
   type ScanType,
   type TargetType,
-  type TenantQuotaResponse,
-  type TenantResponse,
   type UpdateScanTargetRequest,
   type UUID,
 } from '@virtualrift/types';
@@ -26,17 +24,6 @@ type AuthorizationCheckResult = {
   scanType: ScanType;
   target: string;
 } | null;
-
-const workspaceStatusLabel = (status: 'loading' | 'ready' | 'submitting'): string => {
-  switch (status) {
-    case 'loading':
-      return 'carregando';
-    case 'ready':
-      return 'pronto';
-    case 'submitting':
-      return 'processando';
-  }
-};
 
 const canVerifyTarget = (target: ScanTargetResponse): boolean =>
   target.verificationGuide.supported && !isVerifiedScanTarget(target.verificationStatus);
@@ -66,6 +53,19 @@ const targetPlaceholder = (type: TargetType): string => {
     case 'URL':
     default:
       return 'https://app.example.com';
+  }
+};
+
+const targetTypeLabel = (type: TargetType): string => {
+  switch (type) {
+    case 'URL':
+      return 'Aplicação web';
+    case 'API_SPEC':
+      return 'Especificação de API';
+    case 'REPOSITORY':
+      return 'Repositório';
+    case 'IP_RANGE':
+      return 'Faixa de IP';
   }
 };
 
@@ -116,8 +116,6 @@ const buildRepositoryCredentialsPayload = (
 
 export function TenantTargetsPanel() {
   const { client, session } = useSession();
-  const [tenant, setTenant] = useState<TenantResponse | null>(null);
-  const [quota, setQuota] = useState<TenantQuotaResponse | null>(null);
   const [targets, setTargets] = useState<ScanTargetResponse[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'submitting'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -150,14 +148,7 @@ export function TenantTargetsPanel() {
     setError(null);
 
     try {
-      const [nextTenant, nextQuota, nextTargets] = await Promise.all([
-        client.tenants.getById(activeTenantId),
-        client.tenants.getQuota(activeTenantId),
-        client.tenants.listScanTargets(activeTenantId),
-      ]);
-
-      setTenant(nextTenant);
-      setQuota(nextQuota);
+      const nextTargets = await client.tenants.listScanTargets(activeTenantId);
       setTargets(nextTargets);
       setStatus('ready');
     } catch (loadError) {
@@ -173,11 +164,6 @@ export function TenantTargetsPanel() {
 
     void loadWorkspace(tenantId);
   }, [client, tenantId]);
-
-  const verifiedTargets = useMemo(
-    () => targets.filter((target) => isVerifiedScanTarget(target.verificationStatus)).length,
-    [targets],
-  );
 
   const resetTargetEditor = () => {
     setEditingTargetId(null);
@@ -408,65 +394,7 @@ export function TenantTargetsPanel() {
 
   return (
     <section aria-label="tenant-targets" className="glass-card dashboard-panel">
-      <div className="dashboard-panel-header">
-        <div className="dashboard-panel-copy">
-          <span className="eyebrow">Superfície do tenant</span>
-          <h2>Alvos do tenant</h2>
-          <p>Cadastre ativos sob seu controle, valide ownership e confirme se os caminhos solicitados permanecem dentro do limite do tenant.</p>
-        </div>
-        <span className="status-indicator">
-          <span className={`status-dot ${status === 'loading' ? 'status-dot-pending' : 'status-dot-active'}`} />
-          {workspaceStatusLabel(status)}
-        </span>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <span className="stat-label">Tenant</span>
-          <span className="stat-value">{tenant?.name ?? 'Carregando'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Plano</span>
-          <span className="stat-value">{tenant?.plan ?? '...'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Limite</span>
-          <span className="stat-value">{quota ? `${targets.length}/${quota.maxScanTargets}` : '...'}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Verificados</span>
-          <span className="stat-value">{verifiedTargets}</span>
-        </div>
-      </div>
-
-      <div className="meta-grid">
-        {tenant ? (
-          <>
-            <div className="meta-card">
-              <span className="meta-label">Tenant</span>
-              <span className="meta-value">Tenant: {tenant.name} ({tenant.slug})</span>
-            </div>
-            <div className="meta-card">
-              <span className="meta-label">Plano</span>
-              <span className="meta-value">Plano: {tenant.plan}</span>
-            </div>
-          </>
-        ) : null}
-        {quota ? (
-          <>
-            <div className="meta-card">
-              <span className="meta-label">Limite</span>
-              <span className="meta-value">Limite: {targets.length}/{quota.maxScanTargets} alvos cadastrados</span>
-            </div>
-            <div className="meta-card">
-              <span className="meta-label">Alvos verificados</span>
-              <span className="meta-value">Alvos verificados: {verifiedTargets}</span>
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      {status === 'loading' ? <p className="alert alert-info">Carregando workspace do tenant...</p> : null}
+      {status === 'loading' ? <p className="alert alert-info">Carregando seus dados...</p> : null}
       {error ? (
         <p className="alert alert-danger" role="alert">
           {error}
@@ -475,14 +403,13 @@ export function TenantTargetsPanel() {
 
       <section aria-label="create-target" className="panel-section">
         <div className="panel-section-header">
-          <h3 className="panel-section-title">Adicionar alvo de scan</h3>
-          <span className="badge badge-accent">Ownership primeiro</span>
+          <h3 className="panel-section-title">Adicionar site ou sistema</h3>
         </div>
         {canManageTargets ? (
           <form onSubmit={handleCreateTarget} className="form-stack">
             <div className="field-grid">
               <div className="field">
-                <label htmlFor="target-value">Alvo</label>
+                <label htmlFor="target-value">Endereço</label>
                 <input
                   className="input"
                   id="target-value"
@@ -495,7 +422,7 @@ export function TenantTargetsPanel() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="target-type">Tipo</label>
+                <label htmlFor="target-type">O que você quer proteger?</label>
                 <select
                   className="select"
                   id="target-type"
@@ -504,14 +431,12 @@ export function TenantTargetsPanel() {
                   onChange={(event) => setCreateType(event.target.value as TargetType)}
                 >
                   {TARGET_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
+                    <option key={type} value={type}>{targetTypeLabel(type)}</option>
                   ))}
                 </select>
               </div>
               <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="target-description">Descrição</label>
+                <label htmlFor="target-description">Nome para identificar</label>
                 <input
                   className="input"
                   id="target-description"
@@ -519,7 +444,7 @@ export function TenantTargetsPanel() {
                   type="text"
                   value={createDescription}
                   onChange={(event) => setCreateDescription(event.target.value)}
-                  placeholder="Aplicação principal de produção"
+                  placeholder="Ex.: Meu site principal"
                 />
               </div>
               {createType === 'REPOSITORY' ? (
@@ -597,8 +522,8 @@ export function TenantTargetsPanel() {
               ) : null}
             </div>
             <p className="form-help">
-              <strong>Tipos de alvo</strong>
-              Use URLs para fluxos web/app, especificações de API para scans guiados por contrato, repositórios em HTTPS, sem esquema ou `git@...` para onboarding SAST e IP ranges quando sua operação já tiver um processo manual de aprovação para NETWORK scan.
+              <strong>Por que pedimos isso?</strong>
+              Antes de verificar, confirmamos que você tem permissão para analisar esse endereço. É uma proteção para você e para terceiros.
             </p>
             {createType === 'REPOSITORY' ? (
               <p className="form-help">
@@ -608,25 +533,29 @@ export function TenantTargetsPanel() {
             ) : null}
             <div className="form-actions">
               <button className="button-primary" type="submit" disabled={status === 'submitting'}>
-                {status === 'submitting' ? 'Salvando...' : 'Adicionar alvo'}
+                {status === 'submitting' ? 'Adicionando...' : 'Adicionar e continuar'}
               </button>
             </div>
           </form>
         ) : (
           <p className="alert alert-info">
-            Seu perfil atual pode consultar o escopo do tenant, mas apenas um usuário com papel <strong>OWNER</strong> pode cadastrar, verificar ou remover alvos.
+            Você pode consultar estes itens, mas somente quem administra a conta pode adicionar, confirmar ou remover endereços.
           </p>
         )}
       </section>
 
-      <section aria-label="authorization-check" className="panel-section">
-        <div className="panel-section-header">
-          <h3 className="panel-section-title">Validar autorização do scan</h3>
-          <span className="badge badge-warning">Validação de limite</span>
-        </div>
+      <details className="secondary-tool" aria-label="authorization-check">
+        <summary>
+          <span>
+            <strong>Verificar um endereço específico</strong>
+            <small>Opção avançada para conferir se um endereço está incluído</small>
+          </span>
+          <i aria-hidden="true">+</i>
+        </summary>
+        <div className="secondary-tool-body">
         <form onSubmit={handleAuthorizationCheck} className="field-grid">
           <div className="field">
-            <label htmlFor="authorize-target">Alvo solicitado</label>
+            <label htmlFor="authorize-target">Endereço para conferir</label>
             <input
               className="input"
               id="authorize-target"
@@ -639,7 +568,7 @@ export function TenantTargetsPanel() {
             />
           </div>
           <div className="field">
-            <label htmlFor="authorize-scan-type">Tipo de scan</label>
+            <label htmlFor="authorize-scan-type">Tipo de verificação</label>
             <select
               className="select"
               id="authorize-scan-type"
@@ -656,23 +585,24 @@ export function TenantTargetsPanel() {
           </div>
           <div className="toolbar" style={{ gridColumn: '1 / -1' }}>
             <button className="button-secondary" type="submit" disabled={authorizeStatus === 'checking'}>
-              {authorizeStatus === 'checking' ? 'Validando...' : 'Validar autorização'}
+              {authorizeStatus === 'checking' ? 'Conferindo...' : 'Conferir endereço'}
             </button>
           </div>
         </form>
         {authorizationResult ? (
           <p className={`alert ${authorizationResult.authorized ? 'alert-info' : 'alert-danger'}`}>
-            Autorização para {authorizationResult.scanType} em {authorizationResult.target}: {authorizationResult.authorized ? 'permitida' : 'negada'}
+            {authorizationResult.authorized ? 'Este endereço pode ser verificado.' : 'Este endereço ainda não pode ser verificado.'}
           </p>
         ) : null}
-      </section>
+        </div>
+      </details>
 
       <section aria-label="registered-targets" className="panel-section">
         <div className="panel-section-header">
-          <h3 className="panel-section-title">Alvos cadastrados</h3>
-          <span className="badge">{targets.length} itens</span>
+          <h3 className="panel-section-title">O que você já protege</h3>
+          <span className="badge">{targets.length} {targets.length === 1 ? 'item' : 'itens'}</span>
         </div>
-        {targets.length === 0 ? <p className="alert alert-info">Nenhum alvo de scan cadastrado até agora.</p> : null}
+        {targets.length === 0 ? <p className="empty-state">Você ainda não adicionou nada. Comece pelo seu site, sistema ou projeto principal.</p> : null}
         <div className="list-stack">
           {targets.map((target) => (
             <article key={target.id} className="list-item-card">

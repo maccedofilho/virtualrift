@@ -17,9 +17,9 @@
   gap: 24px;
   padding: 32px 36px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(0, 113, 227, 0.12), transparent 55%),
-    radial-gradient(circle at 0% 100%, rgba(255, 149, 0, 0.08), transparent 50%),
-    rgba(255, 255, 255, 0.78);
+    radial-gradient(circle at 100% 0%, rgba(0, 113, 227, 0.09), transparent 58%),
+    radial-gradient(circle at 0% 100%, rgba(90, 200, 250, 0.05), transparent 52%),
+    rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
 

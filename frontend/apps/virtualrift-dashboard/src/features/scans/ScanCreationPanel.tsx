@@ -30,7 +30,16 @@ const scanTypesForTarget = (target: ScanTargetResponse): ScanType[] => {
   }
 };
 
-const targetLabel = (target: ScanTargetResponse): string => `${target.target} (${target.type})`;
+const scanTypeLabel = (scanType: ScanType): string => {
+  switch (scanType) {
+    case 'WEB': return 'Site ou sistema web';
+    case 'API': return 'Integração ou API';
+    case 'SAST': return 'Código do projeto';
+    case 'NETWORK': return 'Rede ou servidor';
+  }
+};
+
+const targetLabel = (target: ScanTargetResponse): string => target.description || target.target;
 
 const supportsAuthenticationHeaders = (scanType: ScanType): boolean => scanType === 'WEB' || scanType === 'API' || scanType === 'SAST';
 
@@ -39,13 +48,13 @@ const supportsAuthenticationCookies = (scanType: ScanType): boolean => scanType 
 const authenticationHint = (scanType: ScanType): string => {
   switch (scanType) {
     case 'WEB':
-      return 'Headers e cookies serão reaplicados durante as requisições do scanner web.';
+      return 'Use esta opção somente se a área que deseja verificar exige login.';
     case 'API':
-      return 'Use headers para Bearer, Basic, API keys ou headers customizados da API.';
+      return 'Informe uma credencial apenas se sua integração não for pública.';
     case 'SAST':
-      return 'Headers HTTP serão enviados ao clone do repositório, úteis para Authorization, PRIVATE-TOKEN ou x-api-key.';
+      return 'Use uma credencial apenas quando o código estiver em um repositório privado.';
     case 'NETWORK':
-      return 'Scans de rede não aceitam credenciais HTTP.';
+      return 'Este tipo de verificação não precisa de login.';
   }
 };
 
@@ -67,13 +76,13 @@ const requestedTargetPlaceholder = (target: ScanTargetResponse | null): string =
 const requestedTargetHint = (target: ScanTargetResponse | null): string | null => {
   switch (target?.type) {
     case 'REPOSITORY':
-      return 'Aceita URLs HTTPS, sem esquema, SSH curto e links de página do provedor. O worker normaliza tudo para o clone HTTPS da branch default.';
+      return 'Cole o link principal do seu projeto no GitHub, GitLab ou outro provedor.';
     case 'API_SPEC':
-      return 'Você pode ajustar o caminho final do contrato desde que ele permaneça dentro do host já verificado.';
+      return 'Use o endereço do arquivo que descreve sua integração.';
     case 'URL':
-      return 'O caminho pode variar, mas o host continua preso ao escopo já validado para o tenant.';
+      return 'Você pode informar uma página específica do site já confirmado.';
     case 'IP_RANGE':
-      return 'Scans de rede usam host:porta dentro da faixa aprovada manualmente.';
+      return 'Informe o servidor e a porta que sua equipe autorizou.';
     default:
       return null;
   }
@@ -83,25 +92,6 @@ const encodeBase64 = (value: string): string => {
   const encodedBytes = new TextEncoder().encode(value);
   const binary = Array.from(encodedBytes, (byte) => String.fromCharCode(byte)).join('');
   return window.btoa(binary);
-};
-
-const scanCreationStatusLabel = (
-  status: 'loading' | 'ready' | 'submitting' | 'refreshing' | 'loading-result' | 'generating-report',
-): string => {
-  switch (status) {
-    case 'loading':
-      return 'carregando';
-    case 'ready':
-      return 'pronto';
-    case 'submitting':
-      return 'criando';
-    case 'refreshing':
-      return 'atualizando';
-    case 'loading-result':
-      return 'lendo resultado';
-    case 'generating-report':
-      return 'gerando relatório';
-  }
 };
 
 const scanStatusTone = (status: ScanResponse['status'] | ScanResultResponse['status']): string => {
@@ -243,8 +233,6 @@ export function ScanCreationPanel() {
     [scans],
   );
   const hasActiveFilters = scanTypeFilter !== 'ALL' || scanStatusFilter !== 'ALL';
-  const runningScans = useMemo(() => scans.filter((scan) => scan.status === 'RUNNING').length, [scans]);
-  const completedScans = useMemo(() => scans.filter((scan) => scan.status === 'COMPLETED').length, [scans]);
   const canUseAuthenticationHeaders = useMemo(() => supportsAuthenticationHeaders(scanType), [scanType]);
   const canUseAuthenticationCookies = useMemo(() => supportsAuthenticationCookies(scanType), [scanType]);
   const authHint = useMemo(() => authenticationHint(scanType), [scanType]);
@@ -477,48 +465,7 @@ export function ScanCreationPanel() {
 
   return (
     <section aria-label="scan-creation" className="glass-card dashboard-panel">
-      <div className="dashboard-panel-header">
-        <div className="dashboard-panel-copy">
-          <span className="eyebrow">Execução</span>
-          <h2>Scans e resultados</h2>
-          <p>Dispare novos scans, acompanhe o histórico do tenant e abra o resultado agregado sem sair desta área.</p>
-        </div>
-        <span className="status-indicator">
-          <span
-            className={`status-dot ${
-              status === 'loading' || status === 'submitting' || status === 'refreshing' || status === 'loading-result' || status === 'generating-report'
-                ? 'status-dot-pending'
-                : 'status-dot-active'
-            }`}
-          />
-          {scanCreationStatusLabel(status)}
-        </span>
-      </div>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <span className="stat-label">Alvos elegíveis</span>
-          <span className="stat-value">{verifiedTargets.length}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Scans do tenant</span>
-          <span className="stat-value">{scans.length}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Em execução</span>
-          <span className="stat-value">{runningScans}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Concluídos</span>
-          <span className="stat-value">{completedScans}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-label">Risco</span>
-          <span className="stat-value">{selectedScanResult?.riskScore ?? '—'}</span>
-        </div>
-      </div>
-
-      {status === 'loading' ? <p className="alert alert-info">Carregando alvos verificados e histórico de scans...</p> : null}
+      {status === 'loading' ? <p className="alert alert-info">Carregando suas verificações...</p> : null}
       {error ? (
         <p className="alert alert-danger" role="alert">
           {error}
@@ -531,23 +478,23 @@ export function ScanCreationPanel() {
       ) : null}
 
       {verifiedTargets.length === 0 ? (
-        <p className="alert alert-info">Nenhum alvo verificado disponível para criação de scan ainda.</p>
+        <p className="empty-state">
+          Primeiro, <a href="#/targets">adicione e confirme um site ou sistema</a>. Depois você poderá verificar a segurança dele aqui.
+        </p>
       ) : null}
 
       {verifiedTargets.length > 0 ? (
         <section className="panel-section" aria-label="scan-request">
           <div className="panel-section-header">
             <div>
-              <h3 className="panel-section-title">Disparar uma solicitação de scan</h3>
-              <p>O formulário segue bloqueando superfícies fora do escopo verificado do tenant.</p>
+              <h3 className="panel-section-title">Iniciar nova verificação</h3>
             </div>
-            <span className="badge badge-accent">Escopo verificado</span>
           </div>
           {canCreateNewScans ? (
             <form onSubmit={handleCreateScan} className="form-stack">
               <div className="field-grid">
                 <div className="field">
-                  <label htmlFor="scan-target-select">Alvo verificado</label>
+                  <label htmlFor="scan-target-select">O que você quer verificar?</label>
                   <select
                     className="select"
                     id="scan-target-select"
@@ -564,7 +511,7 @@ export function ScanCreationPanel() {
                 </div>
 
                 <div className="field">
-                  <label htmlFor="scan-type-select">Tipo de scan solicitado</label>
+                  <label htmlFor="scan-type-select">Tipo de verificação</label>
                   <select
                     className="select"
                     id="scan-type-select"
@@ -574,14 +521,14 @@ export function ScanCreationPanel() {
                   >
                     {availableScanTypes.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {scanTypeLabel(type)}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="field" style={{ gridColumn: '1 / -1' }}>
-                  <label htmlFor="requested-scan-target">Alvo solicitado para o scan</label>
+                  <label htmlFor="requested-scan-target">Endereço que será verificado</label>
                   <input
                     className="input"
                     id="requested-scan-target"
@@ -594,14 +541,26 @@ export function ScanCreationPanel() {
                   />
                   {requestedTargetHint(selectedTarget) ? (
                     <p className="form-help" style={{ marginTop: '0.5rem' }}>
-                      <strong>Como esse alvo é interpretado</strong>
+                      <strong>Sobre este endereço</strong>
                       {` ${requestedTargetHint(selectedTarget)}`}
                     </p>
                   ) : null}
                 </div>
+              </div>
+
+              <details className="secondary-tool">
+                <summary>
+                  <span>
+                    <strong>Opções avançadas</strong>
+                    <small>Login, profundidade e tempo da verificação</small>
+                  </span>
+                  <i aria-hidden="true">+</i>
+                </summary>
+                <div className="secondary-tool-body">
+                  <div className="field-grid">
 
                 <div className="field">
-                  <label htmlFor="scan-depth">Profundidade do scan</label>
+                  <label htmlFor="scan-depth">Nível da análise</label>
                   <input
                     className="input"
                     id="scan-depth"
@@ -614,7 +573,7 @@ export function ScanCreationPanel() {
                 </div>
 
                 <div className="field">
-                  <label htmlFor="scan-timeout">Timeout do scan (segundos)</label>
+                  <label htmlFor="scan-timeout">Tempo máximo (segundos)</label>
                   <input
                     className="input"
                     id="scan-timeout"
@@ -627,7 +586,7 @@ export function ScanCreationPanel() {
                 </div>
 
                 <div className="field">
-                  <label htmlFor="scan-auth-mode">Autenticação do scan</label>
+                  <label htmlFor="scan-auth-mode">O sistema exige login?</label>
                   <select
                     className="select"
                     id="scan-auth-mode"
@@ -644,9 +603,9 @@ export function ScanCreationPanel() {
                 </div>
 
                 <div className="field" style={{ gridColumn: '1 / -1' }}>
-                  <label>Contexto autenticado</label>
+                  <label>Acesso a áreas restritas</label>
                   <p className="form-help" style={{ margin: 0 }}>
-                    <strong>Como este scan usa credenciais</strong>
+                    <strong>Quando preencher</strong>
                     {` ${authHint}`}
                   </p>
                 </div>
@@ -755,44 +714,28 @@ export function ScanCreationPanel() {
                     </div>
                   </>
                 ) : null}
-              </div>
-
-              <div className="meta-grid">
-                <div className="meta-card">
-                  <span className="meta-label">Alvo selecionado</span>
-                  <span className="technical-value">
-                    {selectedTarget ? `Alvo selecionado: ${selectedTarget.target}` : 'Alvo selecionado: Nenhum alvo selecionado'}
-                  </span>
+                  </div>
                 </div>
-                <div className="meta-card">
-                  <span className="meta-label">Tipos compatíveis</span>
-                  <span className="meta-value">{availableScanTypes.join(', ') || 'Nenhum tipo de scan disponível'}</span>
-                </div>
-              </div>
+              </details>
 
-              <p className="form-help">
-                <strong>Política de scan</strong>
-                Somente alvos verificados com tipos de superfície suportados aparecem aqui, para manter a solicitação alinhada ao escopo do tenant.
-              </p>
               <div className="form-actions">
                 <button className="button-primary" type="submit" disabled={status !== 'ready'}>
-                  {status === 'submitting' ? 'Criando scan...' : 'Criar scan'}
+                  {status === 'submitting' ? 'Iniciando...' : 'Iniciar verificação'}
                 </button>
               </div>
             </form>
           ) : (
             <p className="alert alert-info">
-              Seu perfil atual pode acompanhar scans já existentes, mas apenas usuários com papel <strong>OWNER</strong> ou <strong>ANALYST</strong> podem criar novas execuções.
+              Você pode acompanhar os resultados, mas não iniciar uma nova verificação. Peça ajuda a quem administra a conta.
             </p>
           )}
         </section>
       ) : null}
 
-      <section aria-label="tenant-scans" className="panel-section">
+      {scans.length > 0 ? <section aria-label="tenant-scans" className="panel-section">
         <div className="panel-section-header">
           <div>
-            <h3 className="panel-section-title">Histórico de scans do tenant</h3>
-            <p>Agora o painel consome a listagem real do backend, em vez de ficar preso ao que foi criado na sessão atual.</p>
+            <h3 className="panel-section-title">Verificações anteriores</h3>
           </div>
           <span className="badge">{filteredScans.length} de {scans.length}</span>
         </div>
@@ -849,9 +792,8 @@ export function ScanCreationPanel() {
           </div>
         ) : null}
 
-        {scans.length === 0 ? <p className="alert alert-info">Nenhum scan encontrado para este tenant ainda.</p> : null}
-        {scans.length > 0 && filteredScans.length === 0 ? (
-          <p className="alert alert-info">Nenhum scan combina com os filtros aplicados agora.</p>
+        {filteredScans.length === 0 ? (
+          <p className="alert alert-info">Nenhuma verificação combina com os filtros escolhidos.</p>
         ) : null}
         <div className="list-stack">
           {filteredScans.map((scan) => (
@@ -859,16 +801,12 @@ export function ScanCreationPanel() {
               <div className="list-item-header">
                 <div>
                   <h4 className="list-item-title">{scan.target}</h4>
-                  <div className="list-item-subtitle">Tipo: {scan.scanType}</div>
+                  <div className="list-item-subtitle">{scanTypeLabel(scan.scanType)}</div>
                 </div>
                 <span className={`badge ${scanStatusTone(scan.status)}`}>Status: {scan.status}</span>
               </div>
 
               <div className="kv-grid">
-                <div className="kv-item">
-                  <span className="kv-label">ID do scan</span>
-                  <span className="technical-value">ID do scan: {scan.id}</span>
-                </div>
                 <div className="kv-item">
                   <span className="kv-label">Criado em</span>
                   <span className="kv-value">Criado em: {formatDateTime(scan.createdAt)}</span>
@@ -903,33 +841,26 @@ export function ScanCreationPanel() {
             </article>
           ))}
         </div>
-      </section>
+      </section> : null}
 
-      <section aria-label="selected-scan-result" className="panel-section">
+      {selectedScan ? <section aria-label="selected-scan-result" className="panel-section">
           <div className="panel-section-header">
             <div>
-              <h3 className="panel-section-title">Resultado do scan selecionado</h3>
-              <p>Abra detalhes, acompanhe severidade, risco e gere relatório quando o scan estiver concluído.</p>
+              <h3 className="panel-section-title">Resultado da verificação</h3>
+              <p>Veja os problemas encontrados e o que merece atenção primeiro.</p>
             </div>
           <div className="toolbar">
             <span className={`badge ${selectedScan ? scanStatusTone(selectedScan.status) : ''}`}>
-              {selectedScan ? selectedScan.status : 'Nenhum scan'}
+              {selectedScan ? selectedScan.status : 'Nenhuma verificação'}
             </span>
             {selectedScanIsInProgress ? <span className="badge badge-accent">Atualização automática ativa</span> : null}
           </div>
         </div>
 
-        {!selectedScan ? (
-          <p className="alert alert-info">Selecione um scan da lista acima para abrir o detalhe completo.</p>
-        ) : (
           <>
             <div className="kv-grid">
               <div className="kv-item">
-                <span className="kv-label">ID</span>
-                <span className="technical-value">{selectedScan.id}</span>
-              </div>
-              <div className="kv-item">
-                <span className="kv-label">Target</span>
+                <span className="kv-label">Item verificado</span>
                 <span className="technical-value">{selectedScan.target}</span>
               </div>
               <div className="kv-item">
@@ -944,7 +875,7 @@ export function ScanCreationPanel() {
 
             <div className="stats-grid">
               <div className="stat-card">
-                <span className="stat-label">Findings</span>
+                <span className="stat-label">Problemas encontrados</span>
                 <span className="stat-value">{selectedScanResult?.totalFindings ?? '—'}</span>
               </div>
               <div className="stat-card">
@@ -992,13 +923,13 @@ export function ScanCreationPanel() {
 
             {selectedScan.status === 'FAILED' ? (
               <p className="alert alert-danger">
-                Este scan falhou. {selectedScan.errorMessage ?? 'O backend não retornou um motivo detalhado.'}
+                Não foi possível concluir esta verificação. {selectedScan.errorMessage ?? 'Tente novamente em alguns minutos.'}
               </p>
             ) : null}
 
             {selectedScan.status === 'PENDING' || selectedScan.status === 'RUNNING' ? (
               <p className="alert alert-info">
-                Este scan ainda está em andamento. O painel faz atualização automática a cada 15 segundos, mas você também pode forçar uma leitura manual.
+                A verificação ainda está em andamento. Esta página será atualizada automaticamente.
               </p>
             ) : null}
 
@@ -1029,7 +960,7 @@ export function ScanCreationPanel() {
                 ))}
               </div>
             ) : selectedScan.status === 'COMPLETED' ? (
-              <p className="alert alert-info">Este scan concluiu sem findings persistidos até agora.</p>
+              <p className="alert alert-info">Boa notícia: nenhum problema foi encontrado nesta verificação.</p>
             ) : null}
 
             <div className="form-actions">
@@ -1057,8 +988,7 @@ export function ScanCreationPanel() {
               ) : null}
             </div>
           </>
-        )}
-      </section>
+      </section> : null}
     </section>
   );
 }
