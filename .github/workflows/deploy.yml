@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
   id-token: write
   packages: read
 
@@ -33,11 +34,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  production-promotion-gate:
+    name: Verify production promotion
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+    env:
+      IMAGE_SHA: ${{ inputs.image_sha }}
+    steps:
+      - name: Checkout trusted gate source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Verify staging promotion gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./infra/scripts/verify-staging-promotion.sh "$IMAGE_SHA"
+
   deploy:
     name: Deploy to ${{ github.event_name == 'workflow_run' && 'staging' || inputs.environment }}
+    needs: production-promotion-gate
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      ) &&
+      (
+        needs.production-promotion-gate.result == 'success' ||
+        needs.production-promotion-gate.result == 'skipped'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -49,12 +82,21 @@ jobs:
       KUBERNETES_NAMESPACE: ${{ vars.KUBERNETES_NAMESPACE }}
       HELM_RELEASE_NAME: ${{ vars.HELM_RELEASE_NAME }}
       API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
       FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
     steps:
       - name: Checkout trusted deployment source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.repository.default_branch }}
+
+      - name: Validate beta E2E configuration
+        env:
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_VALIDATE_ONLY: "true"
+        run: ./infra/scripts/e2e-test-release.sh "$API_BASE_URL" "$FRONTEND_URL" "$DEPLOY_ENVIRONMENT"
 
       - name: Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -95,8 +137,17 @@ jobs:
         continue-on-error: true
         run: ./infra/scripts/smoke-test-release.sh "$API_HEALTH_URL" "$FRONTEND_HEALTH_URL"
 
-      - name: Recover previous release after smoke test failure
-        if: steps.smoke.outcome == 'failure'
+      - name: Run authenticated beta E2E gate
+        id: e2e
+        if: steps.smoke.outcome == 'success'
+        continue-on-error: true
+        env:
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: ./infra/scripts/e2e-test-release.sh "$API_BASE_URL" "$FRONTEND_URL" "$DEPLOY_ENVIRONMENT"
+
+      - name: Recover previous release after release gate failure
+        if: steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure'
         env:
           PREVIOUS_REVISION: ${{ steps.deploy.outputs.previous_revision }}
         run: |
@@ -108,11 +159,26 @@ jobs:
             helm uninstall "$release_name" --namespace "$namespace" --wait --timeout 15m
           fi
 
+      - name: Record failed staging promotion gate
+        if: >-
+          always() &&
+          env.DEPLOY_ENVIRONMENT == 'staging' &&
+          (steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./infra/scripts/record-staging-promotion.sh "$IMAGE_SHA" failure
+
       - name: Fail deployment after recovery
-        if: steps.smoke.outcome == 'failure'
+        if: steps.smoke.outcome == 'failure' || steps.e2e.outcome == 'failure'
         run: |
-          echo "Smoke tests failed and the previous state was restored." >&2
+          echo "A release gate failed and the previous state was restored." >&2
           exit 1
+
+      - name: Record staging promotion gate
+        if: env.DEPLOY_ENVIRONMENT == 'staging' && steps.e2e.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./infra/scripts/record-staging-promotion.sh "$IMAGE_SHA" success
 
       - name: Publish deployment summary
         if: always()
@@ -121,6 +187,7 @@ jobs:
           RELEASE_NAMESPACE: ${{ steps.deploy.outputs.namespace }}
           RELEASE_NAME: ${{ steps.deploy.outputs.release_name }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          E2E_OUTCOME: ${{ steps.e2e.outcome }}
         run: |
           {
             echo "## VirtualRift deployment"
@@ -130,4 +197,5 @@ jobs:
             echo "- Release: \`${RELEASE_NAME:-not-deployed}\`"
             echo "- Namespace: \`${RELEASE_NAMESPACE:-not-deployed}\`"
             echo "- Smoke tests: \`${SMOKE_OUTCOME:-not-run}\`"
+            echo "- Authenticated E2E: \`${E2E_OUTCOME:-not-run}\`"
           } >>"$GITHUB_STEP_SUMMARY"

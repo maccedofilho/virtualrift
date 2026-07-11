@@ -68,7 +68,7 @@ This monorepo already contains a working backend platform, an operational fronte
 - production container images for every backend service and the frontend dashboard
 - GHCR image validation/publication with immutable commit tags and a mainline `edge` tag
 - Helm runtime coverage for the complete platform, including the frontend ingress
-- automated staging delivery, protected production deployment and deterministic Helm rollback
+- automated staging delivery, authenticated release E2E, same-SHA production promotion and deterministic Helm rollback
 - Prometheus metrics, structured JSON logs, operational alerts, Grafana dashboard and incident runbooks
 - production pod, rollout, autoscaling and NetworkPolicy hardening
 - Vault-backed External Secrets synchronization and authenticated Kafka clients with SASL/TLS enforcement outside local development
