@@ -16,6 +16,7 @@ output "gke" {
     name                       = module.gke.name
     location                   = module.gke.location
     endpoint                   = module.gke.endpoint
+    fleet_membership_name      = module.gke.fleet_membership_name
     node_service_account_email = module.gke.node_service_account_email
   }
 }

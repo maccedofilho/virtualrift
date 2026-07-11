@@ -51,7 +51,7 @@ gh attestation verify \
 
 Security exceptions must identify one finding, stay limited to the narrowest path, explain why exploitation is not currently possible and include an expiration date. Expired exceptions fail the next scheduled scan.
 
-`GCP-0061` is temporarily accepted for the GKE module because GitHub-hosted deployment runners need the public control-plane endpoint. It expires on `2026-10-01`; the resilience branch must replace this path with Connect Gateway or a private runner before that date.
+There are no active IaC exceptions. The GKE public control-plane exception was removed after Fleet registration and Connect Gateway became the deployment path.
 
 ## Local verification
 

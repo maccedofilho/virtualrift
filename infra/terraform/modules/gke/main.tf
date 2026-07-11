@@ -34,8 +34,19 @@ resource "google_container_cluster" "this" {
 
   private_cluster_config {
     enable_private_nodes    = true
-    enable_private_endpoint = false
+    enable_private_endpoint = var.enable_private_endpoint
     master_ipv4_cidr_block  = var.master_ipv4_cidr_block
+  }
+
+  master_authorized_networks_config {
+    dynamic "cidr_blocks" {
+      for_each = var.master_authorized_networks
+
+      content {
+        cidr_block   = cidr_blocks.value.cidr_block
+        display_name = cidr_blocks.value.display_name
+      }
+    }
   }
 
   network_policy {
@@ -67,6 +78,19 @@ resource "google_container_cluster" "this" {
   master_auth {
     client_certificate_config {
       issue_client_certificate = false
+    }
+  }
+}
+
+resource "google_gke_hub_membership" "this" {
+  count = var.register_fleet_membership ? 1 : 0
+
+  project       = var.project_id
+  membership_id = var.name
+
+  endpoint {
+    gke_cluster {
+      resource_link = "//container.googleapis.com/${google_container_cluster.this.id}"
     }
   }
 }

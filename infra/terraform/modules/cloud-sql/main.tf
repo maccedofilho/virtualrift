@@ -16,7 +16,13 @@ resource "google_sql_database_instance" "this" {
     backup_configuration {
       enabled                        = true
       point_in_time_recovery_enabled = true
-      transaction_log_retention_days = 7
+      start_time                     = var.backup_start_time
+      transaction_log_retention_days = var.transaction_log_retention_days
+
+      backup_retention_settings {
+        retained_backups = var.retained_backups
+        retention_unit   = "COUNT"
+      }
     }
 
     ip_configuration {

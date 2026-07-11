@@ -55,6 +55,21 @@ variable "master_ipv4_cidr_block" {
   default     = "172.18.0.0/28"
 }
 
+variable "gke_enable_private_endpoint" {
+  description = "Whether the GKE control plane uses only its private endpoint."
+  type        = bool
+  default     = true
+}
+
+variable "gke_master_authorized_networks" {
+  description = "Temporary CIDRs allowed to reach a public GKE endpoint during migration."
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = []
+}
+
 variable "node_machine_type" {
   description = "GKE node machine type."
   type        = string
@@ -95,6 +110,24 @@ variable "sql_availability_type" {
   description = "Cloud SQL availability mode."
   type        = string
   default     = "REGIONAL"
+}
+
+variable "sql_backup_start_time" {
+  description = "UTC start time for the daily Cloud SQL backup."
+  type        = string
+  default     = "01:00"
+}
+
+variable "sql_retained_backups" {
+  description = "Number of automated Cloud SQL backups to retain."
+  type        = number
+  default     = 30
+}
+
+variable "sql_transaction_log_retention_days" {
+  description = "Number of days of PostgreSQL logs retained for PITR."
+  type        = number
+  default     = 7
 }
 
 variable "redis_memory_size_gb" {

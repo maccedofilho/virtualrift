@@ -67,16 +67,28 @@ jobs:
             koalaman/shellcheck-alpine:v0.10.0@sha256:5921d946dac740cbeec2fb1c898747b6105e585130cc7f0602eec9a10f7ddb63 \
             shellcheck --external-sources --source-path=infra/scripts \
             infra/scripts/deploy-release.sh \
+            infra/scripts/cloud-sql-pitr-drill.sh \
             infra/scripts/e2e-test-release.sh \
             infra/scripts/record-staging-promotion.sh \
             infra/scripts/rollback-release.sh \
             infra/scripts/smoke-test-release.sh \
+            infra/scripts/validate-cloud-sql-backups.sh \
+            infra/scripts/validate-gke-private-access.sh \
             infra/scripts/verify-release-images.sh \
             infra/scripts/verify-staging-promotion.sh \
-            infra/scripts/tests/release-gates-test.sh
+            infra/scripts/tests/release-gates-test.sh \
+            infra/scripts/tests/resilience-gates-test.sh
 
       - name: Test release gates
-        run: ./infra/scripts/tests/release-gates-test.sh
+        run: |
+          ./infra/scripts/tests/release-gates-test.sh
+          ./infra/scripts/tests/resilience-gates-test.sh
+
+      - name: Validate capacity test
+        run: >-
+          docker run --rm -v "$PWD:/work" --workdir /work
+          grafana/k6:2.0.0@sha256:a33a0cfdc4d2483d6b7a3a22e726a499ff2831a671a49239104cd34a9937523c
+          inspect infra/load-tests/beta-readiness.js
 
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4

@@ -55,6 +55,21 @@ variable "master_ipv4_cidr_block" {
   type        = string
 }
 
+variable "gke_enable_private_endpoint" {
+  description = "Whether the GKE control plane is reachable only through its private endpoint."
+  type        = bool
+  default     = true
+}
+
+variable "gke_master_authorized_networks" {
+  description = "Temporary CIDRs allowed to reach a public GKE endpoint during migration."
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = []
+}
+
 variable "node_machine_type" {
   description = "Default GKE node machine type."
   type        = string
@@ -89,6 +104,24 @@ variable "sql_availability_type" {
   description = "Cloud SQL availability type."
   type        = string
   default     = "REGIONAL"
+}
+
+variable "sql_backup_start_time" {
+  description = "UTC start time for the daily Cloud SQL backup window."
+  type        = string
+  default     = "01:00"
+}
+
+variable "sql_retained_backups" {
+  description = "Number of successful automated Cloud SQL backups to retain."
+  type        = number
+  default     = 30
+}
+
+variable "sql_transaction_log_retention_days" {
+  description = "Number of days of Cloud SQL transaction logs retained for PITR."
+  type        = number
+  default     = 7
 }
 
 variable "redis_memory_size_gb" {
@@ -195,6 +228,10 @@ variable "enabled_google_services" {
   default = [
     "compute.googleapis.com",
     "container.googleapis.com",
+    "connectgateway.googleapis.com",
+    "gkeconnect.googleapis.com",
+    "gkehub.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
     "sqladmin.googleapis.com",
     "redis.googleapis.com",
     "servicenetworking.googleapis.com",

@@ -1,0 +1,147 @@
+name: Launch readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to validate
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      gate:
+        description: Resilience gate to run
+        required: true
+        default: backup
+        type: choice
+        options:
+          - backup
+          - capacity
+          - restore-drill
+          - full
+      confirmation:
+        description: Enter RESTORE for a restore drill; ignored by other gates
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: launch-readiness-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    name: ${{ inputs.gate }} on ${{ inputs.environment }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.FRONTEND_URL }}
+    env:
+      READINESS_ENVIRONMENT: ${{ inputs.environment }}
+      READINESS_GATE: ${{ inputs.gate }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      CLOUD_SQL_INSTANCE_NAME: ${{ vars.CLOUD_SQL_INSTANCE_NAME }}
+      GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+      GKE_LOCATION: ${{ vars.GKE_LOCATION }}
+      GKE_FLEET_MEMBERSHIP_NAME: ${{ vars.GKE_FLEET_MEMBERSHIP_NAME }}
+    steps:
+      - name: Checkout trusted readiness source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Validate gate request
+        env:
+          RESTORE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$READINESS_GATE" =~ ^(capacity|full)$ && "$READINESS_ENVIRONMENT" != staging ]]; then
+            echo "Capacity tests and the full gate are restricted to staging." >&2
+            exit 1
+          fi
+          if [[ "$READINESS_GATE" =~ ^(restore-drill|full)$ && "$RESTORE_CONFIRMATION" != RESTORE ]]; then
+            echo "Restore drills require the exact RESTORE confirmation." >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        if: inputs.gate == 'backup' || inputs.gate == 'restore-drill' || inputs.gate == 'full'
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Set up Google Cloud CLI
+        if: inputs.gate == 'backup' || inputs.gate == 'restore-drill' || inputs.gate == 'full'
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Validate Cloud SQL backup health
+        if: inputs.gate == 'backup' || inputs.gate == 'restore-drill' || inputs.gate == 'full'
+        run: >-
+          ./infra/scripts/validate-cloud-sql-backups.sh
+          "${{ vars.GCP_PROJECT_ID }}"
+          "$CLOUD_SQL_INSTANCE_NAME"
+          "$READINESS_ENVIRONMENT"
+          30
+
+      - name: Validate private GKE access
+        if: inputs.gate == 'backup' || inputs.gate == 'restore-drill' || inputs.gate == 'full'
+        run: >-
+          ./infra/scripts/validate-gke-private-access.sh
+          "${{ vars.GCP_PROJECT_ID }}"
+          "$GKE_CLUSTER_NAME"
+          "$GKE_LOCATION"
+          "$GKE_FLEET_MEMBERSHIP_NAME"
+
+      - name: Run point-in-time restore drill
+        if: inputs.gate == 'restore-drill' || inputs.gate == 'full'
+        env:
+          RESTORE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: >-
+          ./infra/scripts/cloud-sql-pitr-drill.sh
+          "${{ vars.GCP_PROJECT_ID }}"
+          "$CLOUD_SQL_INSTANCE_NAME"
+          "$RESTORE_CONFIRMATION"
+
+      - name: Run staging capacity gate
+        if: inputs.gate == 'capacity' || inputs.gate == 'full'
+        env:
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: |
+          docker run --rm \
+            --env API_BASE_URL \
+            --env E2E_USERNAME \
+            --env E2E_PASSWORD \
+            --volume "$PWD:/work" \
+            --workdir /work \
+            grafana/k6:2.0.0@sha256:a33a0cfdc4d2483d6b7a3a22e726a499ff2831a671a49239104cd34a9937523c \
+            run --summary-export=/work/k6-summary.json infra/load-tests/beta-readiness.js
+
+      - name: Upload capacity summary
+        if: always() && (inputs.gate == 'capacity' || inputs.gate == 'full')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: capacity-summary-${{ inputs.environment }}-${{ github.run_id }}
+          path: k6-summary.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish readiness summary
+        if: always()
+        run: |
+          {
+            echo "## Launch readiness"
+            echo
+            echo "- Environment: \`$READINESS_ENVIRONMENT\`"
+            echo "- Gate: \`$READINESS_GATE\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Result: \`${{ job.status }}\`"
+          } >>"$GITHUB_STEP_SUMMARY"

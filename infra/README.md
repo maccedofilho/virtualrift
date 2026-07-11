@@ -16,13 +16,13 @@ Concentra os artefatos de infraestrutura usados para levar o VirtualRift de ambi
 - metricas Prometheus, logs JSON, alertas, dashboard Grafana e runbooks operacionais
 - hardening de pods, probes, rollouts, autoscaling e politicas de rede
 - gates de CodeQL, dependencias, segredos, IaC e imagens com attestations verificaveis
+- control plane privado acessado por Connect Gateway, backups auditaveis, restore drill PITR e gate de capacidade
 
 O contrato de segredos, os caminhos esperados no Vault, os requisitos do operador e o fluxo de rotacao estao em [`SECRETS_AND_MESSAGING.md`](SECRETS_AND_MESSAGING.md).
 
-## Proximas validacoes de producao
+## Prontidao de producao
 
-- testes E2E de navegador contra staging
-- teste de restauracao, capacidade e conectividade privada do control plane
+Os criterios de go/no-go, metas de recuperacao e evidencias necessarias para abrir o beta estao em [`LAUNCH_READINESS.md`](LAUNCH_READINESS.md).
 
 Consulte [`DEPLOYMENT.md`](DEPLOYMENT.md) para configurar os GitHub Environments, o acesso OIDC ao GKE, os pre-requisitos de Secrets e os procedimentos de deploy e rollback.
 

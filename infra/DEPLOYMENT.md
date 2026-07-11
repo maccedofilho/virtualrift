@@ -27,6 +27,8 @@ Create GitHub Environments named `staging` and `production`. Configure these var
 | `GCP_PROJECT_ID` | yes | Project that owns the GKE cluster |
 | `GKE_CLUSTER_NAME` | yes | Cluster name from the Terraform `foundation.gke.name` output |
 | `GKE_LOCATION` | yes | Cluster location from the Terraform `foundation.gke.location` output |
+| `GKE_FLEET_MEMBERSHIP_NAME` | yes | Membership from the Terraform `foundation.gke.fleet_membership_name` output |
+| `CLOUD_SQL_INSTANCE_NAME` | yes | Instance from the Terraform `foundation.cloud_sql.instance_name` output |
 | `API_BASE_URL` | yes | Public HTTPS gateway base URL without a trailing path |
 | `API_HEALTH_URL` | yes | Full HTTPS gateway health URL, ending in `/actuator/health` |
 | `FRONTEND_HEALTH_URL` | yes | Full HTTPS dashboard health URL, ending in `/healthz` |
@@ -43,11 +45,22 @@ Configure these GitHub Environment secrets separately in `staging` and `producti
 
 The synthetic user must be `ACTIVE`, belong to an active tenant and have at least the `READER` role. Do not reuse a human account. The E2E journey logs in, verifies identity, tenant, quota, scan and report read paths, logs out, and confirms that the access token was revoked. It does not create scans, targets or reports, so repeated releases do not accumulate domain data.
 
-The Google service account must be allowed to obtain GKE credentials, and its Kubernetes identity must have the minimum RBAC permissions required to manage the release namespace.
+The Google service account must have `roles/container.viewer`, `roles/gkehub.viewer` and `roles/gkehub.gatewayEditor`, plus Kubernetes RBAC limited to the release namespace. The readiness workflow also needs `roles/cloudsql.viewer`; the identity approved for restore drills needs `roles/cloudsql.admin` so it can create and remove the temporary PITR clone.
 
 Configure required reviewers and prevent self-review on the `production` environment. This keeps production manual even though staging follows successful `main` image builds automatically. The workflow uses `deployments: write` to record the explicit `staging-release-gate` qualification and verify its latest status before production. This logical environment carries no credentials; it only prevents the operational `staging` deployment status from superseding the qualification record.
 
 ## Cluster prerequisites
+
+### Private control-plane migration
+
+Staging and production deploy only through Connect Gateway. Existing clusters must be migrated in two phases to avoid losing administrative access:
+
+1. set `gke_enable_private_endpoint=false` and `gke_master_authorized_networks` to only the operator's `/32` CIDR temporarily, then apply Terraform so the Fleet membership and required APIs are created
+2. grant the workflow service account `roles/gkehub.viewer` and `roles/gkehub.gatewayEditor`, then generate and apply Gateway RBAC for that identity
+3. verify `gcloud container fleet memberships get-credentials <membership>` followed by a read and a namespaced write operation
+4. restore `gke_enable_private_endpoint=true`, clear `gke_master_authorized_networks`, apply Terraform, and run staging deploy plus rollback drills
+
+Do not close the public endpoint until the Gateway identity can manage the release namespace. New environments use the private endpoint by default. The membership name is available at `foundation.gke.fleet_membership_name`.
 
 Staging and production use External Secrets Operator. Before the first deployment:
 

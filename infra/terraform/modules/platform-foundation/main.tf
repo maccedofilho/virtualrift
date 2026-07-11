@@ -53,6 +53,8 @@ module "gke" {
   pod_secondary_range_name     = module.vpc.pod_secondary_range_name
   service_secondary_range_name = module.vpc.service_secondary_range_name
   master_ipv4_cidr_block       = var.master_ipv4_cidr_block
+  enable_private_endpoint      = var.gke_enable_private_endpoint
+  master_authorized_networks   = var.gke_master_authorized_networks
   machine_type                 = var.node_machine_type
   disk_size_gb                 = var.node_disk_size_gb
   min_node_count               = var.node_min_count
@@ -67,16 +69,19 @@ module "gke" {
 module "cloud_sql" {
   source = "../cloud-sql"
 
-  project_id                = var.project_id
-  region                    = var.region
-  name                      = "${local.base_name}-postgres"
-  private_network_self_link = module.vpc.network_self_link
-  tier                      = var.sql_tier
-  disk_size_gb              = var.sql_disk_size_gb
-  availability_type         = var.sql_availability_type
-  database_names            = local.database_names
-  deletion_protection       = var.deletion_protection
-  labels                    = local.labels
+  project_id                     = var.project_id
+  region                         = var.region
+  name                           = "${local.base_name}-postgres"
+  private_network_self_link      = module.vpc.network_self_link
+  tier                           = var.sql_tier
+  disk_size_gb                   = var.sql_disk_size_gb
+  availability_type              = var.sql_availability_type
+  backup_start_time              = var.sql_backup_start_time
+  retained_backups               = var.sql_retained_backups
+  transaction_log_retention_days = var.sql_transaction_log_retention_days
+  database_names                 = local.database_names
+  deletion_protection            = var.deletion_protection
+  labels                         = local.labels
 
   depends_on = [module.vpc]
 }
