@@ -8,6 +8,7 @@ import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.TenantId;
 import com.virtualrift.common.model.VulnerabilityFinding;
 import com.virtualrift.orchestrator.kafka.ScanEventConsumer;
+import com.virtualrift.orchestrator.config.OrchestratorDatabaseContext;
 import com.virtualrift.orchestrator.model.Scan;
 import com.virtualrift.orchestrator.model.ScanFinding;
 import com.virtualrift.orchestrator.repository.ScanFindingRepository;
@@ -42,11 +43,14 @@ class ScanEventConsumerTest {
     @Mock
     private ScanFindingRepository scanFindingRepository;
 
+    @Mock
+    private OrchestratorDatabaseContext databaseContext;
+
     private ScanEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new ScanEventConsumer(scanRepository, scanFindingRepository);
+        consumer = new ScanEventConsumer(scanRepository, scanFindingRepository, databaseContext);
     }
 
     private Scan createRunningScan(UUID scanId, UUID tenantId) {
@@ -82,7 +86,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(tenantId), List.of(), 0, 0, Instant.now().minusSeconds(30), completedAt
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.of(scan));
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             consumer.onScanCompleted(event);
@@ -107,7 +111,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(tenantId), List.of(finding), 1, 50, Instant.now().minusSeconds(30), Instant.now()
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.of(scan));
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             consumer.onScanCompleted(event);
@@ -130,7 +134,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(UUID.randomUUID()), List.of(), 0, 0, Instant.now(), Instant.now()
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.of(scan));
 
             assertThrows(IllegalArgumentException.class, () -> consumer.onScanCompleted(event));
         }
@@ -143,7 +147,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(UUID.randomUUID()), List.of(), 0, 0, Instant.now(), Instant.now()
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.empty());
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.empty());
 
             assertThrows(IllegalArgumentException.class, () -> consumer.onScanCompleted(event));
         }
@@ -162,7 +166,7 @@ class ScanEventConsumerTest {
             Instant failedAt = Instant.now();
             ScanFailedEvent event = new ScanFailedEvent(scanId, TenantId.of(tenantId), "timeout", "TIMEOUT", failedAt);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.of(scan));
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             consumer.onScanFailed(event);
@@ -182,7 +186,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(UUID.randomUUID()), "timeout", "TIMEOUT", Instant.now()
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.empty());
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.empty());
 
             assertThrows(IllegalArgumentException.class, () -> consumer.onScanFailed(event));
         }
@@ -197,7 +201,7 @@ class ScanEventConsumerTest {
                     scanId, TenantId.of(UUID.randomUUID()), "timeout", "TIMEOUT", Instant.now()
             );
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(event.tenantId().value(), scanId)).thenReturn(Optional.of(scan));
 
             assertThrows(IllegalArgumentException.class, () -> consumer.onScanFailed(event));
         }

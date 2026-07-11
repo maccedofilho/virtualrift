@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.exception.ExpiredTokenException;
 import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.model.RefreshToken;
@@ -35,11 +36,14 @@ class RefreshTokenServiceTest {
     @Mock
     private TokenDenylist denylist;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     private RefreshTokenService service;
 
     @BeforeEach
     void setUp() {
-        service = new RefreshTokenService(repository, denylist);
+        service = new RefreshTokenService(repository, denylist, databaseContext);
     }
 
     private String hashToken(String token) {
@@ -305,7 +309,8 @@ class RefreshTokenServiceTest {
         void cleanupExpiredTokens_quandoChamado_deletaExpirados() {
             service.cleanupExpired();
 
-            verify(repository).deleteByExpirationBefore(any(Instant.class));
+            verify(databaseContext).useRefreshTokenMaintenance();
+            verify(repository).deleteExpiredBefore(any(Instant.class));
         }
 
         @Test
@@ -315,7 +320,7 @@ class RefreshTokenServiceTest {
             service.cleanupExpired();
             Instant afterCleanup = Instant.now();
 
-            verify(repository).deleteByExpirationBefore(argThat(cutoff ->
+            verify(repository).deleteExpiredBefore(argThat(cutoff ->
                     cutoff.isAfter(beforeCleanup.minusSeconds(1)) &&
                     cutoff.isBefore(afterCleanup.plusSeconds(1))
             ));

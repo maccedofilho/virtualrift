@@ -1,6 +1,7 @@
 package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.dto.AcceptWorkspaceInvitationRequest;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.WorkspaceInvitationAcceptanceResponse;
 import com.virtualrift.auth.dto.WorkspaceInvitationPreviewResponse;
 import com.virtualrift.auth.exception.WorkspaceInvitationConflictException;
@@ -25,19 +26,22 @@ public class WorkspaceInvitationService {
     private final PasswordService passwordService;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final AuthDatabaseContext databaseContext;
 
     public WorkspaceInvitationService(
             TenantProvisioningClient tenantProvisioningClient,
             UserRepository userRepository,
             PasswordService passwordService,
             JwtService jwtService,
-            RefreshTokenService refreshTokenService
+            RefreshTokenService refreshTokenService,
+            AuthDatabaseContext databaseContext
     ) {
         this.tenantProvisioningClient = tenantProvisioningClient;
         this.userRepository = userRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional(readOnly = true)
@@ -64,6 +68,8 @@ public class WorkspaceInvitationService {
     public WorkspaceInvitationAcceptanceResponse acceptInvitation(AcceptWorkspaceInvitationRequest request) {
         TenantProvisioningClient.InvitedWorkspace invitation = tenantProvisioningClient.previewInvitation(request.token());
         String normalizedEmail = invitation.email().trim().toLowerCase();
+        databaseContext.useEmail(normalizedEmail);
+        databaseContext.useTenant(invitation.tenantId());
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new WorkspaceInvitationConflictException("This invitation email already belongs to an existing account");

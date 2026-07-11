@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.config.OnboardingConfig;
 import com.virtualrift.auth.dto.CreateWorkspaceOnboardingRequest;
 import com.virtualrift.auth.dto.OnboardingAvailabilityResponse;
@@ -54,6 +55,9 @@ class OnboardingServiceTest {
     @Mock
     private TenantProvisioningClient tenantProvisioningClient;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     private OnboardingConfig config;
     private OnboardingService onboardingService;
 
@@ -68,7 +72,8 @@ class OnboardingServiceTest {
                 passwordService,
                 jwtService,
                 refreshTokenService,
-                tenantProvisioningClient
+                tenantProvisioningClient,
+                databaseContext
         );
     }
 

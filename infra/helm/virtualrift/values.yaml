@@ -14,6 +14,14 @@ global:
   preStopDelaySeconds: 5
   tmpVolume:
     sizeLimit: 1Gi
+  databaseMigration:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
   deployment:
     minReadySeconds: 10
     progressDeadlineSeconds: 600
@@ -337,6 +345,14 @@ components:
       TENANT_INTERNAL_API_KEY:
         secretName: virtualrift-shared-secrets
         key: tenant-internal-api-key
+    migration:
+      enabled: true
+      user: virtualrift_auth_migrator
+      locations: classpath:db/migration/auth
+      table: auth_flyway_schema_history
+      password:
+        secretName: virtualrift-auth-db
+        key: migration-password
     resources:
       requests:
         cpu: 250m
@@ -398,6 +414,14 @@ components:
       TENANT_REPOSITORY_CREDENTIALS_KEY_BASE64:
         secretName: virtualrift-tenant-secrets
         key: repository-credentials-key-base64
+    migration:
+      enabled: true
+      user: virtualrift_tenant_migrator
+      locations: classpath:db/migration/tenant
+      table: tenant_flyway_schema_history
+      password:
+        secretName: virtualrift-tenant-db
+        key: migration-password
     resources:
       requests:
         cpu: 250m
@@ -457,6 +481,17 @@ components:
       TENANT_INTERNAL_API_KEY:
         secretName: virtualrift-shared-secrets
         key: tenant-internal-api-key
+      ORCHESTRATOR_OUTBOX_ENCRYPTION_KEY_BASE64:
+        secretName: virtualrift-shared-secrets
+        key: orchestrator-outbox-encryption-key-base64
+    migration:
+      enabled: true
+      user: virtualrift_orchestrator_migrator
+      locations: classpath:db/migration/orchestrator
+      table: orchestrator_flyway_schema_history
+      password:
+        secretName: virtualrift-orchestrator-db
+        key: migration-password
     resources:
       requests:
         cpu: 250m
@@ -509,10 +544,19 @@ components:
       DB_USER: virtualrift_reports
       KAFKA_BOOTSTRAP_SERVERS: '{{ .Values.dependencies.kafka.bootstrapServers }}'
       ORCHESTRATOR_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "orchestrator")) 8083 }}'
+      TENANT_SERVICE_URL: '{{ printf "http://%s:%d" (include "virtualrift.componentFullname" (dict "root" $ "name" "tenant")) 8082 }}'
     secretEnv:
       DB_PASSWORD:
         secretName: virtualrift-reports-db
         key: password
+    migration:
+      enabled: true
+      user: virtualrift_reports_migrator
+      locations: classpath:db/migration/reports
+      table: reports_flyway_schema_history
+      password:
+        secretName: virtualrift-reports-db
+        key: migration-password
     resources:
       requests:
         cpu: 250m

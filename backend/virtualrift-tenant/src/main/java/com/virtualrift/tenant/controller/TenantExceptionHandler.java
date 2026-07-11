@@ -9,9 +9,11 @@ import com.virtualrift.tenant.exception.TenantInvitationConflictException;
 import com.virtualrift.tenant.exception.TenantInvitationNotFoundException;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
 import com.virtualrift.tenant.exception.TenantQuotaExceededException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -36,6 +38,24 @@ public class TenantExceptionHandler {
     })
     public ResponseEntity<ProblemDetail> handleConflict(RuntimeException exception) {
         return build(HttpStatus.CONFLICT, "Tenant request conflicts with current state", exception.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityConflict(DataIntegrityViolationException exception) {
+        return build(
+                HttpStatus.CONFLICT,
+                "Tenant request conflicts with current state",
+                "The requested data already exists or conflicts with a concurrent change"
+        );
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleConcurrentChange(ObjectOptimisticLockingFailureException exception) {
+        return build(
+                HttpStatus.CONFLICT,
+                "Tenant resource changed concurrently",
+                "Reload the resource and retry the operation"
+        );
     }
 
     @ExceptionHandler(InvalidPlanChangeRequestException.class)

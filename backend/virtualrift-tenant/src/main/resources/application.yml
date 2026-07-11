@@ -8,7 +8,7 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/virtualrift_tenant}
-    username: ${DB_USER:virtualrift}
+    username: ${DB_USER:virtualrift_tenant}
     password: ${DB_PASSWORD:virtualrift}
     driver-class-name: org.postgresql.Driver
 
@@ -25,6 +25,8 @@ spring:
     locations: classpath:db/migration/tenant
     baseline-on-migrate: true
     table: tenant_flyway_schema_history
+    user: ${DB_MIGRATION_USER:virtualrift_tenant_migrator}
+    password: ${DB_MIGRATION_PASSWORD:virtualrift}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -51,7 +53,8 @@ tenant:
   internal:
     api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
   repository-credentials:
-    encryption-key-base64: ${TENANT_REPOSITORY_CREDENTIALS_KEY_BASE64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  maintenance:
+    invitation-cleanup-delay-ms: ${TENANT_INVITATION_CLEANUP_DELAY_MS:3600000}
 
 virtualrift:
   runtime:

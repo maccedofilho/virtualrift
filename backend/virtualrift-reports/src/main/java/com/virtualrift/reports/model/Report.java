@@ -10,6 +10,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -68,7 +71,8 @@ public class Report {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(name = "findings_json", nullable = false, columnDefinition = "TEXT")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "findings_json", nullable = false, columnDefinition = "jsonb")
     private String findingsJson;
 
     @Column(name = "scan_created_at")
@@ -85,6 +89,13 @@ public class Report {
 
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
+
+    @Column(name = "expires_at", nullable = false)
+    private Instant expiresAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     public Report() {
     }
@@ -124,6 +135,7 @@ public class Report {
     public Instant getScanCompletedAt() { return scanCompletedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getGeneratedAt() { return generatedAt; }
+    public Instant getExpiresAt() { return expiresAt; }
 
     public void setUserId(UUID userId) { this.userId = userId; }
     public void setTarget(String target) { this.target = target; }
@@ -142,4 +154,5 @@ public class Report {
     public void setScanStartedAt(Instant scanStartedAt) { this.scanStartedAt = scanStartedAt; }
     public void setScanCompletedAt(Instant scanCompletedAt) { this.scanCompletedAt = scanCompletedAt; }
     public void setGeneratedAt(Instant generatedAt) { this.generatedAt = generatedAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 }

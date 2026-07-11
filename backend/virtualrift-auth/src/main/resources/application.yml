@@ -6,7 +6,7 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/virtualrift_auth}
-    username: ${DB_USER:virtualrift}
+    username: ${DB_USER:virtualrift_auth}
     password: ${DB_PASSWORD:virtualrift}
     driver-class-name: org.postgresql.Driver
 
@@ -28,6 +28,8 @@ spring:
     locations: classpath:db/migration/auth
     baseline-on-migrate: true
     table: auth_flyway_schema_history
+    user: ${DB_MIGRATION_USER:virtualrift_auth_migrator}
+    password: ${DB_MIGRATION_PASSWORD:virtualrift}
 
 # JWT Configuration
 auth:
@@ -59,6 +61,8 @@ auth:
     allowed-plans: ${AUTH_ONBOARDING_ALLOWED_PLANS:TRIAL,STARTER,PROFESSIONAL}
     tenant-service-url: ${TENANT_SERVICE_URL:http://localhost:8082}
     internal-api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
+  maintenance:
+    refresh-token-cleanup-delay-ms: ${AUTH_REFRESH_TOKEN_CLEANUP_DELAY_MS:3600000}
 
 virtualrift:
   runtime:

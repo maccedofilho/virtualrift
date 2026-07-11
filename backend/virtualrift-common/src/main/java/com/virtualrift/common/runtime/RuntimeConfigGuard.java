@@ -2,6 +2,10 @@ package com.virtualrift.common.runtime;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -10,7 +14,8 @@ import java.util.Set;
 public final class RuntimeConfigGuard {
 
     public static final String DEFAULT_INTERNAL_API_KEY = "virtualrift-dev-onboarding-key";
-    public static final String DEFAULT_REPOSITORY_CREDENTIALS_KEY_BASE64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+    public static final String DEFAULT_REPOSITORY_CREDENTIALS_KEY_BASE64 = localEncryptionKey("repository-credentials");
+    public static final String DEFAULT_OUTBOX_ENCRYPTION_KEY_BASE64 = localEncryptionKey("outbox-encryption");
 
     private static final Set<String> LOOPBACK_TOKENS = Set.of("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0");
 
@@ -166,6 +171,18 @@ public final class RuntimeConfigGuard {
     private static boolean containsLoopbackToken(String value) {
         String normalized = value.toLowerCase(Locale.ROOT);
         return LOOPBACK_TOKENS.stream().anyMatch(normalized::contains);
+    }
+
+    // These deterministic values support local startup only; production rejects both defaults.
+    private static String localEncryptionKey(String purpose) {
+        String material = "virtualrift-local-development-material:" + purpose;
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(material.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 must be available to derive local encryption defaults", exception);
+        }
     }
 
     private static IllegalStateException invalid(String propertyName, String reason, RuntimeEnvironment environment) {

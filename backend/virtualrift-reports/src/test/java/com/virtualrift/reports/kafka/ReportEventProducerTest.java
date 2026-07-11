@@ -1,6 +1,10 @@
 package com.virtualrift.reports.kafka;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.virtualrift.common.events.ReportGeneratedEvent;
+import com.virtualrift.reports.model.OutboxEvent;
+import com.virtualrift.reports.repository.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,48 +12,48 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReportEventProducer Tests")
 class ReportEventProducerTest {
 
     @Mock
-    private KafkaTemplate<String, ReportGeneratedEvent> kafkaTemplate;
+    private OutboxEventRepository outboxRepository;
 
     private ReportEventProducer producer;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        producer = new ReportEventProducer(kafkaTemplate);
+        objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        producer = new ReportEventProducer(outboxRepository, objectMapper);
     }
 
     @Test
-    @DisplayName("should publish report generated event")
-    void publishReportGenerated_quandoChamado_publicaEvento() {
+    @DisplayName("should persist report generated event in the transactional outbox")
+    void publishReportGenerated_quandoChamado_persisteOutbox() throws Exception {
         UUID reportId = UUID.randomUUID();
         UUID tenantId = UUID.randomUUID();
         UUID scanId = UUID.randomUUID();
         Instant generatedAt = Instant.parse("2026-04-17T01:00:00Z");
-        ArgumentCaptor<ReportGeneratedEvent> eventCaptor = ArgumentCaptor.forClass(ReportGeneratedEvent.class);
-
-        when(kafkaTemplate.send(eq("report.generated"), eq(reportId.toString()), any(ReportGeneratedEvent.class)))
-                .thenReturn(CompletableFuture.completedFuture(null));
+        ArgumentCaptor<OutboxEvent> eventCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
 
         producer.publishReportGenerated(reportId, tenantId, scanId, generatedAt);
 
-        verify(kafkaTemplate).send(eq("report.generated"), eq(reportId.toString()), eventCaptor.capture());
-        ReportGeneratedEvent event = eventCaptor.getValue();
+        verify(outboxRepository).save(eventCaptor.capture());
+        OutboxEvent stored = eventCaptor.getValue();
+        assertEquals(tenantId, stored.getTenantId());
+        assertEquals(reportId, stored.getAggregateId());
+        assertEquals("report.generated", stored.getTopic());
+        assertEquals(reportId.toString(), stored.getEventKey());
+
+        ReportGeneratedEvent event = objectMapper.readValue(stored.getPayload(), ReportGeneratedEvent.class);
         assertEquals(reportId, event.reportId());
         assertEquals(tenantId, event.tenantId().value());
         assertEquals(scanId, event.scanId());
@@ -57,5 +61,4 @@ class ReportEventProducerTest {
         assertEquals("/api/v1/reports/" + reportId, event.storageUrl());
         assertEquals(generatedAt, event.generatedAt());
     }
-
 }

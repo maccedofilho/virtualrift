@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
@@ -42,6 +44,20 @@ public class UserIdentity {
 
     @Column(name = "updated_at")
     private Instant updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        Instant now = Instant.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
+    }
 
     protected UserIdentity() {
     }

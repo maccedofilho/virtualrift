@@ -7,12 +7,15 @@ import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.Severity;
 import com.virtualrift.reports.client.OrchestratorClient;
+import com.virtualrift.reports.client.TenantClient;
+import com.virtualrift.reports.config.ReportsDatabaseContext;
 import com.virtualrift.reports.dto.OrchestratorScanFindingResponse;
 import com.virtualrift.reports.dto.ReportExportResource;
 import com.virtualrift.reports.dto.OrchestratorScanResponse;
 import com.virtualrift.reports.dto.OrchestratorScanResultResponse;
 import com.virtualrift.reports.dto.ReportFindingResponse;
 import com.virtualrift.reports.dto.ReportResponse;
+import com.virtualrift.reports.dto.TenantQuotaResponse;
 import com.virtualrift.reports.exception.ReportGenerationException;
 import com.virtualrift.reports.exception.ReportNotFoundException;
 import com.virtualrift.reports.exception.ReportNotReadyException;
@@ -55,6 +58,12 @@ class ReportServiceTest {
     @Mock
     private ReportEventProducer eventProducer;
 
+    @Mock
+    private TenantClient tenantClient;
+
+    @Mock
+    private ReportsDatabaseContext databaseContext;
+
     private ReportService service;
     private ObjectMapper objectMapper;
 
@@ -72,7 +81,16 @@ class ReportServiceTest {
         objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        service = new ReportService(reportRepository, orchestratorClient, objectMapper, eventProducer);
+        service = new ReportService(
+                reportRepository,
+                orchestratorClient,
+                objectMapper,
+                eventProducer,
+                tenantClient,
+                databaseContext
+        );
+        org.mockito.Mockito.lenient().when(tenantClient.getQuota(TENANT_ID, OWNER_ROLES))
+                .thenReturn(new TenantQuotaResponse(100, 10, 25, 90, true));
     }
 
     private OrchestratorScanResponse scan(ScanStatus status) {
@@ -151,6 +169,7 @@ class ReportServiceTest {
         report.setScanStartedAt(STARTED_AT);
         report.setScanCompletedAt(COMPLETED_AT);
         report.setGeneratedAt(COMPLETED_AT);
+        report.setExpiresAt(COMPLETED_AT.plusSeconds(90L * 86400));
         return report;
     }
 

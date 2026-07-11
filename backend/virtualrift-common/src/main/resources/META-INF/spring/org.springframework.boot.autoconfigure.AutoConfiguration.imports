@@ -1,1 +1,2 @@
 com.virtualrift.common.runtime.KafkaSecurityRuntimeAutoConfiguration
+com.virtualrift.common.runtime.DatabaseRuntimeRoleAutoConfiguration

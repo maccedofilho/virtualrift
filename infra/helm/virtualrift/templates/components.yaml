@@ -4,6 +4,10 @@
 {{- $componentEnv := default (dict) $component.env }}
 {{- $env := mergeOverwrite (deepCopy $globalEnv) $componentEnv }}
 {{- $secretEnv := deepCopy (default (dict) $component.secretEnv) }}
+{{- $migration := default (dict) $component.migration }}
+{{- if $migration.enabled }}
+{{- $_ := set $env "SPRING_FLYWAY_ENABLED" "false" }}
+{{- end }}
 {{- if and $component.kafka $.Values.dependencies.kafka.security.enabled }}
 {{- $_ := set $env "KAFKA_SECURITY_PROTOCOL" $.Values.dependencies.kafka.security.protocol }}
 {{- $_ := set $env "KAFKA_SASL_MECHANISM" $.Values.dependencies.kafka.security.saslMechanism }}
@@ -121,6 +125,44 @@ spec:
           labelSelector:
             matchLabels:
               {{- include "virtualrift.selectorLabels" (dict "root" $ "name" $name) | nindent 14 }}
+      {{- end }}
+      {{- if $migration.enabled }}
+      initContainers:
+        - name: database-migration
+          image: {{ printf "%s:%s" $component.image.repository $component.image.tag | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" $component.image.pullPolicy }}
+          command:
+            - java
+          args:
+            - -Dloader.main=com.virtualrift.common.migration.FlywayMigrationMain
+            - -cp
+            - /app/application.jar
+            - org.springframework.boot.loader.launch.PropertiesLauncher
+          env:
+            - name: DB_URL
+              value: {{ tpl (required (printf "components.%s.env.DB_URL is required when migration is enabled" $name) (get $env "DB_URL")) $ | quote }}
+            - name: DB_MIGRATION_USER
+              value: {{ required (printf "components.%s.migration.user is required" $name) $migration.user | quote }}
+            - name: DB_RUNTIME_USER
+              value: {{ required (printf "components.%s.env.DB_USER is required when migration is enabled" $name) (get $env "DB_USER") | quote }}
+            - name: DB_MIGRATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ tpl (required (printf "components.%s.migration.password.secretName is required" $name) $migration.password.secretName) $ | quote }}
+                  key: {{ required (printf "components.%s.migration.password.key is required" $name) $migration.password.key | quote }}
+            - name: DB_MIGRATION_LOCATIONS
+              value: {{ required (printf "components.%s.migration.locations is required" $name) $migration.locations | quote }}
+            - name: DB_MIGRATION_TABLE
+              value: {{ required (printf "components.%s.migration.table is required" $name) $migration.table | quote }}
+            - name: DB_MIGRATION_CONNECT_RETRIES
+              value: {{ default 60 $migration.connectRetries | quote }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            {{- toYaml $containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml $.Values.global.databaseMigration.resources | nindent 12 }}
       {{- end }}
       containers:
         - name: {{ $name }}

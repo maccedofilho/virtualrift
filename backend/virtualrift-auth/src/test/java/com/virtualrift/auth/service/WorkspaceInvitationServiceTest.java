@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.AcceptWorkspaceInvitationRequest;
 import com.virtualrift.auth.dto.WorkspaceInvitationAcceptanceResponse;
 import com.virtualrift.auth.dto.WorkspaceInvitationPreviewResponse;
@@ -50,6 +51,9 @@ class WorkspaceInvitationServiceTest {
     @Mock
     private RefreshTokenService refreshTokenService;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     private WorkspaceInvitationService workspaceInvitationService;
 
     @BeforeEach
@@ -59,7 +63,8 @@ class WorkspaceInvitationServiceTest {
                 userRepository,
                 passwordService,
                 jwtService,
-                refreshTokenService
+                refreshTokenService,
+                databaseContext
         );
     }
 

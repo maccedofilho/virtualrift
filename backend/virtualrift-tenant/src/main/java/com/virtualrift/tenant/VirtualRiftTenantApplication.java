@@ -5,8 +5,10 @@ import com.virtualrift.tenant.config.RepositoryCredentialsConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 @EnableConfigurationProperties({InternalProvisioningConfig.class, RepositoryCredentialsConfig.class})
 public class VirtualRiftTenantApplication {
 

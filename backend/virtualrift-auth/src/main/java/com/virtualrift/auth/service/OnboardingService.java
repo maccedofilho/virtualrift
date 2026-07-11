@@ -1,6 +1,7 @@
 package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.config.OnboardingConfig;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.CreateWorkspaceOnboardingRequest;
 import com.virtualrift.auth.dto.OnboardingAvailabilityResponse;
 import com.virtualrift.auth.dto.WorkspaceOnboardingResponse;
@@ -35,6 +36,7 @@ public class OnboardingService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final TenantProvisioningClient tenantProvisioningClient;
+    private final AuthDatabaseContext databaseContext;
 
     public OnboardingService(
             OnboardingConfig config,
@@ -42,7 +44,8 @@ public class OnboardingService {
             PasswordService passwordService,
             JwtService jwtService,
             RefreshTokenService refreshTokenService,
-            TenantProvisioningClient tenantProvisioningClient
+            TenantProvisioningClient tenantProvisioningClient,
+            AuthDatabaseContext databaseContext
     ) {
         this.config = config;
         this.userRepository = userRepository;
@@ -50,6 +53,7 @@ public class OnboardingService {
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.tenantProvisioningClient = tenantProvisioningClient;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional(readOnly = true)
@@ -59,6 +63,9 @@ public class OnboardingService {
         String normalizedEmail = normalizeEmail(email);
         String normalizedWorkspaceSlug = normalizeWorkspaceSlug(workspaceSlug);
 
+        if (normalizedEmail != null) {
+            databaseContext.useEmail(normalizedEmail);
+        }
         boolean emailAvailable = normalizedEmail != null && !userRepository.existsByEmail(normalizedEmail);
         boolean slugAvailable = normalizedWorkspaceSlug != null && tenantProvisioningClient.isWorkspaceSlugAvailable(normalizedWorkspaceSlug);
 
@@ -77,6 +84,7 @@ public class OnboardingService {
 
         String normalizedEmail = normalizeEmail(request.email());
         String normalizedWorkspaceSlug = normalizeWorkspaceSlug(request.workspaceSlug());
+        databaseContext.useEmail(normalizedEmail);
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new OnboardingConflictException("Email is already in use");
@@ -94,6 +102,7 @@ public class OnboardingService {
                 normalizedWorkspaceSlug,
                 request.plan()
         );
+        databaseContext.useTenant(tenant.id());
 
         try {
             User user = new User(

@@ -1,6 +1,7 @@
 package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.config.OAuthConfig;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.LoginResponse;
 import com.virtualrift.auth.exception.OAuthCallbackException;
 import com.virtualrift.auth.exception.OAuthConfigurationException;
@@ -24,6 +25,7 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,6 +40,7 @@ public class OAuthLoginService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final PasswordService passwordService;
+    private final AuthDatabaseContext databaseContext;
 
     public OAuthLoginService(
             OAuthConfig config,
@@ -47,7 +50,8 @@ public class OAuthLoginService {
             UserIdentityRepository userIdentityRepository,
             JwtService jwtService,
             RefreshTokenService refreshTokenService,
-            PasswordService passwordService
+            PasswordService passwordService,
+            AuthDatabaseContext databaseContext
     ) {
         this.config = config;
         this.stateService = stateService;
@@ -57,6 +61,7 @@ public class OAuthLoginService {
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.passwordService = passwordService;
+        this.databaseContext = databaseContext;
     }
 
     public URI buildGitHubStartRedirect(String redirectUri) {
@@ -102,7 +107,11 @@ public class OAuthLoginService {
         }
 
         GitHubOAuthClient.GitHubIdentity identity = gitHubOAuthClient.exchangeCodeForIdentity(code, buildGitHubCallbackUri().toString());
+        databaseContext.useOAuthIdentity(OAuthProvider.GITHUB, identity.subject());
+        databaseContext.useEmail(identity.email());
         User user = resolveUser(identity);
+        databaseContext.useTenant(user.tenantId());
+        databaseContext.useUser(user.id());
         checkUserStatus(user);
 
         Token token = jwtService.generate(user.id(), user.tenantId(), user.roles());
@@ -121,14 +130,24 @@ public class OAuthLoginService {
     }
 
     private User resolveUser(GitHubOAuthClient.GitHubIdentity identity) {
-        return userIdentityRepository.findByProviderAndProviderSubject(OAuthProvider.GITHUB, identity.subject())
-                .flatMap(existingIdentity -> userRepository.findById(existingIdentity.userId()))
-                .orElseGet(() -> linkOrProvisionUser(identity));
+        Optional<UserIdentity> existingIdentity = userIdentityRepository
+                .findByProviderAndProviderSubject(OAuthProvider.GITHUB, identity.subject());
+        if (existingIdentity.isPresent()) {
+            databaseContext.useUser(existingIdentity.get().userId());
+            Optional<User> existingUser = userRepository.findById(existingIdentity.get().userId());
+            if (existingUser.isPresent()) {
+                databaseContext.useTenant(existingUser.get().tenantId());
+                return existingUser.get();
+            }
+        }
+        return linkOrProvisionUser(identity);
     }
 
     private User linkOrProvisionUser(GitHubOAuthClient.GitHubIdentity identity) {
         return userRepository.findByEmail(identity.email())
                 .map(existingUser -> {
+                    databaseContext.useTenant(existingUser.tenantId());
+                    databaseContext.useUser(existingUser.id());
                     createIdentityIfMissing(existingUser, identity);
                     return existingUser;
                 })
@@ -145,6 +164,7 @@ public class OAuthLoginService {
         if (roles == null || roles.isEmpty()) {
             throw new OAuthConfigurationException("OAuth auto provisioning requires at least one role");
         }
+        databaseContext.useTenant(autoProvision.getTenantId());
 
         User user = userRepository.save(new User(
                 UUID.randomUUID(),
@@ -160,6 +180,8 @@ public class OAuthLoginService {
     }
 
     private void createIdentityIfMissing(User user, GitHubOAuthClient.GitHubIdentity identity) {
+        databaseContext.useTenant(user.tenantId());
+        databaseContext.useUser(user.id());
         if (userIdentityRepository.existsByUserIdAndProvider(user.id(), OAuthProvider.GITHUB)) {
             return;
         }

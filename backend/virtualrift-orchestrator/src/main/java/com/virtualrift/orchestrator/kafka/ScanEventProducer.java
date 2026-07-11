@@ -2,9 +2,11 @@ package com.virtualrift.orchestrator.kafka;
 
 import com.virtualrift.common.events.ScanRequestedEvent;
 import com.virtualrift.common.model.TenantId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.virtualrift.orchestrator.model.OutboxEvent;
+import com.virtualrift.orchestrator.repository.OutboxEventRepository;
+import com.virtualrift.orchestrator.service.OutboxPayloadCipher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -14,13 +16,18 @@ import java.util.UUID;
 @Service
 public class ScanEventProducer {
 
-    private static final Logger log = LoggerFactory.getLogger(ScanEventProducer.class);
     private static final String SCAN_REQUESTED_TOPIC = "scan.requested";
 
-    private final KafkaTemplate<String, ScanRequestedEvent> kafkaTemplate;
+    private final OutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+    private final OutboxPayloadCipher payloadCipher;
 
-    public ScanEventProducer(KafkaTemplate<String, ScanRequestedEvent> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    public ScanEventProducer(OutboxEventRepository outboxRepository,
+                             ObjectMapper objectMapper,
+                             OutboxPayloadCipher payloadCipher) {
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
+        this.payloadCipher = payloadCipher;
     }
 
     public void publishScanRequested(UUID scanId, TenantId tenantId, String target, String scanType,
@@ -39,13 +46,20 @@ public class ScanEventProducer {
                 Instant.now()
         );
 
-        kafkaTemplate.send(SCAN_REQUESTED_TOPIC, scanId.toString(), event)
-                .whenComplete((result, ex) -> {
-                    if (ex == null) {
-                        log.info("Published scan.requested event for scanId: {}", scanId);
-                    } else {
-                        log.error("Failed to publish scan.requested event for scanId: {}", scanId, ex);
-                    }
-                });
+        UUID outboxId = UUID.randomUUID();
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            outboxRepository.save(new OutboxEvent(
+                    outboxId,
+                    tenantId.value(),
+                    scanId,
+                    SCAN_REQUESTED_TOPIC,
+                    scanId.toString(),
+                    ScanRequestedEvent.class.getName(),
+                    payloadCipher.encrypt(payload, outboxId.toString())
+            ));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Could not serialize scan event for the transactional outbox", exception);
+        }
     }
 }

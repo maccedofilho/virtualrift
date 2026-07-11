@@ -1,5 +1,6 @@
 package com.virtualrift.orchestrator;
 
+import com.virtualrift.orchestrator.config.OrchestratorDatabaseContext;
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.orchestrator.dto.ScanResponse;
@@ -41,11 +42,16 @@ class ScanIsolationTest {
     @Mock
     private TenantClient tenantClient;
 
+    @Mock
+    private OrchestratorDatabaseContext databaseContext;
+
     private ScanOrchestratorService scanOrchestratorService;
 
     @BeforeEach
     void setUp() {
-        scanOrchestratorService = new ScanOrchestratorService(scanRepository, scanFindingRepository, eventProducer, tenantClient);
+        scanOrchestratorService = new ScanOrchestratorService(
+                scanRepository, scanFindingRepository, eventProducer, tenantClient, databaseContext
+        );
     }
 
     private Scan scan(UUID scanId, UUID tenantId, UUID userId) {
@@ -63,7 +69,7 @@ class ScanIsolationTest {
             UUID tenantId = UUID.randomUUID();
             UUID userId = UUID.randomUUID();
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan(scanId, tenantId, userId)));
+            when(scanRepository.findByTenantIdAndId(tenantId, scanId)).thenReturn(Optional.of(scan(scanId, tenantId, userId)));
 
             ScanResponse response = scanOrchestratorService.getScan(scanId, tenantId);
 
@@ -78,7 +84,7 @@ class ScanIsolationTest {
             UUID ownerTenantId = UUID.randomUUID();
             UUID requesterTenantId = UUID.randomUUID();
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan(scanId, ownerTenantId, UUID.randomUUID())));
+            when(scanRepository.findByTenantIdAndId(requesterTenantId, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> scanOrchestratorService.getScan(scanId, requesterTenantId));
         }
@@ -95,7 +101,7 @@ class ScanIsolationTest {
             UUID tenantId = UUID.randomUUID();
             UUID userId = UUID.randomUUID();
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan(scanId, tenantId, userId)));
+            when(scanRepository.findByTenantIdAndId(tenantId, scanId)).thenReturn(Optional.of(scan(scanId, tenantId, userId)));
 
             ScanResponse response = scanOrchestratorService.getScanByTenantAndId(tenantId, scanId);
 
@@ -111,7 +117,7 @@ class ScanIsolationTest {
             UUID requesterTenantId = UUID.randomUUID();
             UUID userId = UUID.randomUUID();
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan(scanId, ownerTenantId, userId)));
+            when(scanRepository.findByTenantIdAndId(requesterTenantId, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> scanOrchestratorService.getStatus(scanId, requesterTenantId));
         }
