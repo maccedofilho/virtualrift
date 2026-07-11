@@ -1,11 +1,12 @@
 package com.virtualrift.orchestrator.config;
 
+import com.virtualrift.common.runtime.RuntimeConfigGuard;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "outbox")
 public class OutboxProperties {
 
-    private String encryptionKeyBase64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+    private String encryptionKeyBase64 = RuntimeConfigGuard.DEFAULT_OUTBOX_ENCRYPTION_KEY_BASE64;
     private final Publisher publisher = new Publisher();
 
     public String getEncryptionKeyBase64() {

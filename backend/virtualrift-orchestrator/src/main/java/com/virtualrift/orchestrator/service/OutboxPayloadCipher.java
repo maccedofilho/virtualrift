@@ -10,7 +10,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Base64;
 
 @Component
@@ -18,6 +17,10 @@ public class OutboxPayloadCipher {
 
     private static final int GCM_TAG_BITS = 128;
     private static final int GCM_IV_LENGTH = 12;
+    private static final int MAX_PLAINTEXT_BYTES = 1024 * 1024;
+    private static final int MAX_ENCRYPTED_BYTES = MAX_PLAINTEXT_BYTES + (GCM_TAG_BITS / Byte.SIZE);
+    private static final String CIPHERTEXT_PREFIX = "v1:";
+    private static final String CIPHERTEXT_SEPARATOR = ":";
 
     private final SecretKey secretKey;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -27,30 +30,43 @@ public class OutboxPayloadCipher {
     }
 
     public String encrypt(String value, String associatedData) {
+        byte[] plaintext = value.getBytes(StandardCharsets.UTF_8);
+        if (plaintext.length > MAX_PLAINTEXT_BYTES) {
+            throw new IllegalStateException("Outbox payload exceeds the maximum supported size");
+        }
+
         byte[] iv = new byte[GCM_IV_LENGTH];
         secureRandom.nextBytes(iv);
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
             cipher.updateAAD(associatedData.getBytes(StandardCharsets.UTF_8));
-            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
-            byte[] combined = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, combined, 0, iv.length);
-            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            return Base64.getEncoder().encodeToString(combined);
+            byte[] encrypted = cipher.doFinal(plaintext);
+            return CIPHERTEXT_PREFIX
+                    + Base64.getEncoder().encodeToString(iv)
+                    + CIPHERTEXT_SEPARATOR
+                    + Base64.getEncoder().encodeToString(encrypted);
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("Could not encrypt outbox payload", exception);
         }
     }
 
     public String decrypt(String value, String associatedData) {
-        byte[] combined = Base64.getDecoder().decode(value);
-        if (combined.length <= GCM_IV_LENGTH) {
+        if (!value.startsWith(CIPHERTEXT_PREFIX)) {
             throw new IllegalStateException("Encrypted outbox payload is invalid");
         }
 
-        byte[] iv = Arrays.copyOfRange(combined, 0, GCM_IV_LENGTH);
-        byte[] encrypted = Arrays.copyOfRange(combined, GCM_IV_LENGTH, combined.length);
+        String[] components = value.substring(CIPHERTEXT_PREFIX.length()).split(CIPHERTEXT_SEPARATOR, -1);
+        if (components.length != 2) {
+            throw new IllegalStateException("Encrypted outbox payload is invalid");
+        }
+
+        byte[] iv = decodeCiphertextComponent(components[0]);
+        byte[] encrypted = decodeCiphertextComponent(components[1]);
+        if (iv.length != GCM_IV_LENGTH || encrypted.length > MAX_ENCRYPTED_BYTES) {
+            throw new IllegalStateException("Encrypted outbox payload is invalid");
+        }
+
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
@@ -58,6 +74,14 @@ public class OutboxPayloadCipher {
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("Could not decrypt outbox payload", exception);
+        }
+    }
+
+    private byte[] decodeCiphertextComponent(String value) {
+        try {
+            return Base64.getDecoder().decode(value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Encrypted outbox payload is invalid", exception);
         }
     }
 

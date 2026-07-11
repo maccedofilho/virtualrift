@@ -53,7 +53,6 @@ tenant:
   internal:
     api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
   repository-credentials:
-    encryption-key-base64: ${TENANT_REPOSITORY_CREDENTIALS_KEY_BASE64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   maintenance:
     invitation-cleanup-delay-ms: ${TENANT_INVITATION_CLEANUP_DELAY_MS:3600000}
 

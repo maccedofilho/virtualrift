@@ -2,6 +2,10 @@
 c996f5b201d65f8edb38f1ac73f7a1c4d1b05d86:backend/virtualrift-common/src/main/java/com/virtualrift/common/runtime/RuntimeConfigGuard.java:generic-api-key:13
 81d5c8a6dccb5faa4228d4221491737699dce44b:backend/virtualrift-tenant/src/main/java/com/virtualrift/tenant/config/RepositoryCredentialsConfig.java:generic-api-key:8
 
+# Development-only outbox fixtures removed from source after the database hardening commit.
+09cb72bee7ee2397ecd8312bd16eb030a34b8794:backend/virtualrift-common/src/main/java/com/virtualrift/common/runtime/RuntimeConfigGuard.java:generic-api-key:14
+09cb72bee7ee2397ecd8312bd16eb030a34b8794:backend/virtualrift-orchestrator/src/main/java/com/virtualrift/orchestrator/config/OutboxProperties.java:generic-api-key:8
+
 # PEM delimiters parsed by JwtService; these findings contain no private key material.
 a2471a9ffaf5851f70ed5135eb3b9338ea66f4cc:backend/virtualrift-auth/src/main/java/com/virtualrift/auth/service/JwtService.java:private-key:34
 3f0c6089d5080fd9d8faa2d5785494c1233bdbe3:backend/virtualrift-auth/src/main/java/com/virtualrift/auth/service/JwtService.java:private-key:34

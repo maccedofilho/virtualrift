@@ -8,6 +8,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -19,6 +20,7 @@ public class RepositoryCredentialCipher {
 
     private static final int GCM_TAG_BITS = 128;
     private static final int GCM_IV_LENGTH = 12;
+    private static final int MAX_PLAINTEXT_BYTES = 64 * 1024;
 
     private final SecretKey secretKey;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -32,17 +34,19 @@ public class RepositoryCredentialCipher {
             return null;
         }
 
+        byte[] plaintext = value.getBytes(StandardCharsets.UTF_8);
+        if (plaintext.length > MAX_PLAINTEXT_BYTES) {
+            throw new IllegalStateException("Repository credential exceeds the maximum supported size");
+        }
+
         byte[] iv = new byte[GCM_IV_LENGTH];
         secureRandom.nextBytes(iv);
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
-            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
-            byte[] combined = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, combined, 0, iv.length);
-            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            return Base64.getEncoder().encodeToString(combined);
+            byte[] encrypted = cipher.doFinal(plaintext);
+            return Base64.getEncoder().encodeToString(combineCiphertext(iv, encrypted));
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("Could not encrypt repository credentials", exception);
         }
@@ -76,5 +80,12 @@ public class RepositoryCredentialCipher {
             throw new IllegalStateException("Repository credential encryption key must be 128, 192 or 256 bits");
         }
         return new SecretKeySpec(keyBytes, "AES");
+    }
+
+    private byte[] combineCiphertext(byte[] iv, byte[] encrypted) {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        output.writeBytes(iv);
+        output.writeBytes(encrypted);
+        return output.toByteArray();
     }
 }

@@ -10,6 +10,7 @@ import java.util.Base64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("OutboxPayloadCipher Tests")
 class OutboxPayloadCipherTest {
@@ -24,6 +25,7 @@ class OutboxPayloadCipherTest {
 
         assertNotEquals("secret payload", first);
         assertNotEquals(first, second);
+        assertTrue(first.startsWith("v1:"));
         assertEquals("secret payload", cipher.decrypt(first, "event-1"));
     }
 
@@ -40,6 +42,14 @@ class OutboxPayloadCipherTest {
     @DisplayName("should reject keys with unsupported AES size")
     void constructor_quandoChaveCurta_rejeitaConfiguracao() {
         assertThrows(IllegalStateException.class, () -> cipherWithKey("short"));
+    }
+
+    @Test
+    @DisplayName("should reject payloads that exceed the outbox size limit")
+    void encrypt_quandoPayloadExcedeLimite_rejeita() {
+        OutboxPayloadCipher cipher = cipherWithKey("0123456789abcdef0123456789abcdef");
+
+        assertThrows(IllegalStateException.class, () -> cipher.encrypt("a".repeat(1_048_577), "event-1"));
     }
 
     private OutboxPayloadCipher cipherWithKey(String key) {
