@@ -38,6 +38,27 @@ variable "master_ipv4_cidr_block" {
   type        = string
 }
 
+variable "enable_private_endpoint" {
+  description = "Whether the GKE control plane is reachable only through its private endpoint."
+  type        = bool
+  default     = true
+}
+
+variable "master_authorized_networks" {
+  description = "Temporary CIDRs allowed to reach a public control-plane endpoint during migration."
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = []
+}
+
+variable "register_fleet_membership" {
+  description = "Whether to register the cluster in the project fleet for Connect Gateway access."
+  type        = bool
+  default     = true
+}
+
 variable "release_channel" {
   description = "GKE release channel."
   type        = string

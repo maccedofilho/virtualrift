@@ -1,6 +1,1 @@
-misconfigurations:
-  - id: GCP-0061
-    paths:
-      - "infra/terraform/modules/gke/main.tf"
-    statement: "Temporary public control-plane access is required by GitHub-hosted deployment runners until Connect Gateway is enabled."
-    expired_at: 2026-10-01
+misconfigurations: []
