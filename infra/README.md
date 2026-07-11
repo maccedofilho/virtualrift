@@ -11,7 +11,7 @@ Concentra os artefatos de infraestrutura usados para levar o VirtualRift de ambi
 - imagens multi-stage executadas sem root para todos os componentes
 - validacao e publicacao automatica das imagens no GHCR
 - configuracao do dashboard no startup para promover a mesma imagem entre ambientes
-- deploy automatico em staging e deploy manual protegido em production
+- deploy automatico em staging, E2E autenticado e promocao manual do mesmo SHA para production
 - rollback Helm manual e recuperacao automatica quando readiness ou smoke tests falham
 - metricas Prometheus, logs JSON, alertas, dashboard Grafana e runbooks operacionais
 - hardening de pods, probes, rollouts, autoscaling e politicas de rede

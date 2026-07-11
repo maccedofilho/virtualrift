@@ -38,10 +38,19 @@ jobs:
       KUBERNETES_NAMESPACE: ${{ vars.KUBERNETES_NAMESPACE }}
       HELM_RELEASE_NAME: ${{ vars.HELM_RELEASE_NAME }}
       API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
       FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+      FRONTEND_URL: ${{ vars.FRONTEND_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate beta E2E configuration
+        env:
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_VALIDATE_ONLY: "true"
+        run: ./infra/scripts/e2e-test-release.sh "$API_BASE_URL" "$FRONTEND_URL" "$DEPLOY_ENVIRONMENT"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -69,6 +78,12 @@ jobs:
 
       - name: Run external smoke tests
         run: ./infra/scripts/smoke-test-release.sh "$API_HEALTH_URL" "$FRONTEND_HEALTH_URL"
+
+      - name: Run authenticated beta E2E gate
+        env:
+          E2E_USERNAME: ${{ secrets.E2E_USERNAME }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+        run: ./infra/scripts/e2e-test-release.sh "$API_BASE_URL" "$FRONTEND_URL" "$DEPLOY_ENVIRONMENT"
 
       - name: Publish rollback summary
         if: always()

@@ -7,10 +7,12 @@ VirtualRift deploys immutable container tags to GKE through GitHub Actions and H
 1. A merge to `main` runs the `Container images` workflow.
 2. Every component is published with the same `sha-<full-commit-sha>` tag.
 3. A successful image workflow automatically starts `Deploy` for `staging`.
-4. Production deploys are started manually from `Deploy` with the full published commit SHA.
-5. The workflow confirms that all ten immutable image manifests exist in GHCR before connecting to the cluster.
-6. Helm waits for every Deployment and automatically restores the previous revision when Kubernetes readiness fails.
-7. External API and frontend smoke tests run after the rollout. A smoke failure restores the previous Helm revision; on a failed first release, the new release is uninstalled.
+4. Staging runs external health checks and an authenticated beta E2E journey through the public gateway.
+5. A successful staging job records a `release:gate` GitHub deployment in `staging-release-gate` for that exact image commit SHA.
+6. Production deploys are started manually from `Deploy` and only accept a SHA with an active successful staging deployment.
+7. The workflow confirms that all ten immutable image manifests exist in GHCR before connecting to the cluster.
+8. Helm waits for every Deployment and automatically restores the previous revision when Kubernetes readiness fails.
+9. External smoke and authenticated E2E tests run after every rollout. A gate failure restores the previous Helm revision; on a failed first release, the new release is uninstalled.
 
 The `Rollback` workflow can restore a specific Helm revision or select the previous successful revision automatically.
 
@@ -25,15 +27,25 @@ Create GitHub Environments named `staging` and `production`. Configure these var
 | `GCP_PROJECT_ID` | yes | Project that owns the GKE cluster |
 | `GKE_CLUSTER_NAME` | yes | Cluster name from the Terraform `foundation.gke.name` output |
 | `GKE_LOCATION` | yes | Cluster location from the Terraform `foundation.gke.location` output |
+| `API_BASE_URL` | yes | Public HTTPS gateway base URL without a trailing path |
 | `API_HEALTH_URL` | yes | Full HTTPS gateway health URL, ending in `/actuator/health` |
 | `FRONTEND_HEALTH_URL` | yes | Full HTTPS dashboard health URL, ending in `/healthz` |
 | `FRONTEND_URL` | yes | Public dashboard URL shown in the GitHub deployment |
 | `KUBERNETES_NAMESPACE` | no | Defaults to `virtualrift-<environment>` |
 | `HELM_RELEASE_NAME` | no | Defaults to `virtualrift` |
 
+Configure these GitHub Environment secrets separately in `staging` and `production`:
+
+| Secret | Required | Purpose |
+|---|---:|---|
+| `E2E_USERNAME` | yes | Email of the synthetic release-validation user |
+| `E2E_PASSWORD` | yes | Password of the synthetic release-validation user |
+
+The synthetic user must be `ACTIVE`, belong to an active tenant and have at least the `READER` role. Do not reuse a human account. The E2E journey logs in, verifies identity, tenant, quota, scan and report read paths, logs out, and confirms that the access token was revoked. It does not create scans, targets or reports, so repeated releases do not accumulate domain data.
+
 The Google service account must be allowed to obtain GKE credentials, and its Kubernetes identity must have the minimum RBAC permissions required to manage the release namespace.
 
-Configure required reviewers and prevent self-review on the `production` environment. This keeps production manual even though staging follows successful `main` image builds automatically.
+Configure required reviewers and prevent self-review on the `production` environment. This keeps production manual even though staging follows successful `main` image builds automatically. The workflow uses `deployments: write` to record the explicit `staging-release-gate` qualification and verify its latest status before production. This logical environment carries no credentials; it only prevents the operational `staging` deployment status from superseding the qualification record.
 
 ## Cluster prerequisites
 
@@ -62,7 +74,7 @@ The workflow creates a missing namespace, but it never creates, copies or prints
 
 ## Manual deployment
 
-Open the `Deploy` workflow from `main`, choose `staging` or `production`, and provide the full 40-character commit SHA produced by `Container images`. The workflow validates that SHA as image data while loading deployment scripts and the chart only from the trusted default branch, then deploys the matching immutable images. Manual deploy and rollback jobs refuse to run from any non-`main` workflow revision.
+Open the `Deploy` workflow from `main`, choose `staging` or `production`, and provide the full 40-character commit SHA produced by `Container images`. The workflow validates that SHA as image data while loading deployment scripts and the chart only from the trusted default branch, then deploys the matching immutable images. A production request is rejected before environment approval or cloud authentication when that exact SHA does not have a current successful staging deployment. Manual deploy and rollback jobs refuse to run from any non-`main` workflow revision.
 
 The same operation can be run from an authenticated workstation:
 
@@ -86,4 +98,4 @@ KUBERNETES_NAMESPACE=virtualrift-staging \
   ./infra/scripts/rollback-release.sh staging 3
 ```
 
-Rollback waits for all Deployments and reruns both external smoke tests before reporting success.
+Rollback waits for all Deployments and reruns the external smoke and authenticated E2E gates before reporting success.
