@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ScanTargetRepository extends JpaRepository<ScanTarget, UUID> {
@@ -20,4 +21,6 @@ public interface ScanTargetRepository extends JpaRepository<ScanTarget, UUID> {
     long countByTenantId(UUID tenantId);
 
     boolean existsByTenantIdAndTarget(UUID tenantId, String target);
+
+    Optional<ScanTarget> findByTenantIdAndId(UUID tenantId, UUID id);
 }

@@ -2,6 +2,7 @@ package com.virtualrift.auth.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.virtualrift.auth.config.OAuthConfig;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.exception.OAuthUserProvisioningException;
 import com.virtualrift.auth.model.OAuthProvider;
 import com.virtualrift.auth.model.RefreshToken;
@@ -57,6 +58,9 @@ class OAuthLoginServiceTest {
     @Mock
     private PasswordService passwordService;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     private OAuthConfig config;
     private OAuthStateService stateService;
     private OAuthLoginService service;
@@ -84,7 +88,8 @@ class OAuthLoginServiceTest {
                 userIdentityRepository,
                 jwtService,
                 refreshTokenService,
-                passwordService
+                passwordService,
+                databaseContext
         );
     }
 

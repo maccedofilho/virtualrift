@@ -26,6 +26,7 @@ This chart groups the Kubernetes resources required to run the complete VirtualR
 - Staging and production enable default-deny NetworkPolicies with explicit platform, dependency, monitoring and scanner exceptions.
 - Prometheus Operator and Grafana resources are optional so the chart can still run without their CRDs.
 - Kafka workloads inherit a shared `SASL_SSL` client configuration in staging and production, including hostname verification and a PEM CA supplied by Secret.
+- Database-backed services run Flyway in a short-lived init container; the application container receives only the restricted runtime credential and starts with Flyway disabled.
 
 ## Observability
 

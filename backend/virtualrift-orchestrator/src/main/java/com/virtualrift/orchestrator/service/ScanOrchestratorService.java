@@ -5,6 +5,7 @@ import com.virtualrift.tenant.model.Plan;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.TenantId;
 import com.virtualrift.orchestrator.dto.CreateScanRequest;
+import com.virtualrift.orchestrator.config.OrchestratorDatabaseContext;
 import com.virtualrift.orchestrator.dto.ScanFindingResponse;
 import com.virtualrift.orchestrator.dto.ScanResponse;
 import com.virtualrift.orchestrator.dto.ScanResultResponse;
@@ -58,19 +59,23 @@ public class ScanOrchestratorService {
     private final ScanFindingRepository scanFindingRepository;
     private final ScanEventProducer eventProducer;
     private final TenantClient tenantClient;
+    private final OrchestratorDatabaseContext databaseContext;
 
     public ScanOrchestratorService(ScanRepository scanRepository,
                                   ScanFindingRepository scanFindingRepository,
                                   ScanEventProducer eventProducer,
-                                  TenantClient tenantClient) {
+                                  TenantClient tenantClient,
+                                  OrchestratorDatabaseContext databaseContext) {
         this.scanRepository = scanRepository;
         this.scanFindingRepository = scanFindingRepository;
         this.eventProducer = eventProducer;
         this.tenantClient = tenantClient;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional
     public ScanResponse createScan(CreateScanRequest request, UUID tenantId, UUID userId) {
+        databaseContext.useTenant(tenantId);
         TenantQuota quota = tenantClient.getQuota(tenantId);
         Plan plan = tenantClient.getPlan(tenantId);
         ScanAuthenticationContext authenticationContext = normalizeAuthenticationContext(request);
@@ -80,6 +85,7 @@ public class ScanOrchestratorService {
 
         validateScanTypeAllowed(request.scanType(), plan);
         validateTargetAuthorized(tenantId, resolvedTarget);
+        databaseContext.lockTenantQuota(tenantId);
         validateDailyQuota(tenantId, quota);
         validateConcurrentScans(tenantId, quota);
 
@@ -109,31 +115,34 @@ public class ScanOrchestratorService {
         return toResponse(scan);
     }
 
+    @Transactional(readOnly = true)
     public ScanResponse getScan(UUID scanId, UUID tenantId) {
-        Scan scan = scanRepository.findById(scanId)
+        databaseContext.useTenant(tenantId);
+        Scan scan = scanRepository.findByTenantIdAndId(tenantId, scanId)
                 .orElseThrow(() -> new ScanNotFoundException("Scan not found: " + scanId));
-
-        if (!scan.getTenantId().equals(tenantId)) {
-            throw new ScanNotFoundException("Scan not found: " + scanId);
-        }
 
         return toResponse(scan);
     }
 
+    @Transactional(readOnly = true)
     public ScanResponse getScanByTenantAndId(UUID tenantId, UUID scanId) {
         return getScan(scanId, tenantId);
     }
 
+    @Transactional(readOnly = true)
     public List<ScanResponse> listScans(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         return scanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public ScanResponse getStatus(UUID scanId, UUID tenantId) {
         return getScan(scanId, tenantId);
     }
 
+    @Transactional(readOnly = true)
     public List<ScanFindingResponse> getFindings(UUID scanId, UUID tenantId) {
         getScan(scanId, tenantId);
         return scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(tenantId, scanId).stream()
@@ -141,13 +150,11 @@ public class ScanOrchestratorService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public ScanResultResponse getResult(UUID scanId, UUID tenantId) {
-        Scan scan = scanRepository.findById(scanId)
+        databaseContext.useTenant(tenantId);
+        Scan scan = scanRepository.findByTenantIdAndId(tenantId, scanId)
                 .orElseThrow(() -> new ScanNotFoundException("Scan not found: " + scanId));
-
-        if (!scan.getTenantId().equals(tenantId)) {
-            throw new ScanNotFoundException("Scan not found: " + scanId);
-        }
 
         List<ScanFindingResponse> findings = scanFindingRepository
                 .findByTenantIdAndScanIdOrderByDetectedAtDesc(tenantId, scanId).stream()
@@ -206,8 +213,12 @@ public class ScanOrchestratorService {
     }
 
     private void validateConcurrentScans(UUID tenantId, TenantQuota quota) {
-        long runningCount = scanRepository.countByTenantIdAndStatus(
-                tenantId, com.virtualrift.common.model.ScanStatus.RUNNING
+        long runningCount = scanRepository.countByTenantIdAndStatusIn(
+                tenantId,
+                List.of(
+                        com.virtualrift.common.model.ScanStatus.PENDING,
+                        com.virtualrift.common.model.ScanStatus.RUNNING
+                )
         );
 
         if (runningCount >= quota.getMaxConcurrentScans()) {

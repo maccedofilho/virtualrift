@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.LoginRequest;
 import com.virtualrift.auth.dto.LoginResponse;
 import com.virtualrift.auth.exception.InvalidTokenException;
@@ -55,6 +56,9 @@ class LoginServiceTest {
     @Mock
     private TokenDenylist denylist;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     private LoginService loginService;
 
     private final UUID userId = UUID.randomUUID();
@@ -71,7 +75,8 @@ class LoginServiceTest {
                 passwordService,
                 jwtService,
                 refreshTokenService,
-                denylist
+                denylist,
+                databaseContext
         );
     }
 

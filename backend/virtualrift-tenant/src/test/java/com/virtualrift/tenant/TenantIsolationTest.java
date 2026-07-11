@@ -1,5 +1,6 @@
 package com.virtualrift.tenant;
 
+import com.virtualrift.tenant.config.TenantDatabaseContext;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.ScanTargetResponse;
 import com.virtualrift.tenant.exception.TenantNotFoundException;
@@ -67,6 +68,9 @@ class TenantIsolationTest {
     @Mock
     private RepositoryAccessValidator repositoryAccessValidator;
 
+    @Mock
+    private TenantDatabaseContext databaseContext;
+
     private TenantService tenantService;
 
     @BeforeEach
@@ -79,7 +83,8 @@ class TenantIsolationTest {
                 tenantInvitationRepository,
                 scanTargetOwnershipVerifier,
                 repositoryCredentialsService,
-                repositoryAccessValidator
+                repositoryAccessValidator,
+                databaseContext
         );
         org.mockito.Mockito.lenient().when(repositoryCredentialsService.summarize(any(ScanTarget.class))).thenReturn(null);
         org.mockito.Mockito.lenient().when(repositoryCredentialsService.resolveHeaders(any(ScanTarget.class))).thenReturn(java.util.Map.of());
@@ -106,7 +111,7 @@ class TenantIsolationTest {
             UUID targetId = UUID.randomUUID();
             ScanTarget foreignTarget = new ScanTarget(targetId, otherTenantId, "https://other.example", TargetType.URL, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(foreignTarget));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.empty());
 
             assertThrows(TenantNotFoundException.class, () -> tenantService.removeScanTarget(tenantId, targetId));
             verify(scanTargetRepository, never()).delete(any(ScanTarget.class));
@@ -145,7 +150,7 @@ class TenantIsolationTest {
             AddScanTargetRequest request = new AddScanTargetRequest("https://shared.example", TargetType.URL, null, null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota(tenantId)));
+            when(quotaRepository.findByTenantIdForUpdate(tenantId)).thenReturn(Optional.of(quota(tenantId)));
             when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://shared.example")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));

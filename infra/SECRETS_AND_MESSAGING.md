@@ -18,16 +18,18 @@ Each Vault object is a map whose property names become keys in the generated Kub
 | Vault path | Kubernetes Secret | Required properties |
 |---|---|---|
 | `<environment>/jwt` | `virtualrift-jwt` | `private-key.pem`, `public-key.pem` |
-| `<environment>/shared-secrets` | `virtualrift-shared-secrets` | `tenant-internal-api-key` |
-| `<environment>/auth-db` | `virtualrift-auth-db` | `password` |
+| `<environment>/shared-secrets` | `virtualrift-shared-secrets` | `tenant-internal-api-key`, `orchestrator-outbox-encryption-key-base64` |
+| `<environment>/auth-db` | `virtualrift-auth-db` | `password`, `migration-password` |
 | `<environment>/auth-secrets` | `virtualrift-auth-secrets` | `oauth-state-secret`; `github-client-id` and `github-client-secret` when GitHub OAuth is enabled |
-| `<environment>/tenant-db` | `virtualrift-tenant-db` | `password` |
+| `<environment>/tenant-db` | `virtualrift-tenant-db` | `password`, `migration-password` |
 | `<environment>/tenant-secrets` | `virtualrift-tenant-secrets` | `repository-credentials-key-base64` |
-| `<environment>/orchestrator-db` | `virtualrift-orchestrator-db` | `password` |
-| `<environment>/reports-db` | `virtualrift-reports-db` | `password` |
+| `<environment>/orchestrator-db` | `virtualrift-orchestrator-db` | `password`, `migration-password` |
+| `<environment>/reports-db` | `virtualrift-reports-db` | `password`, `migration-password` |
 | `<environment>/kafka-client` | `virtualrift-kafka-client` | `sasl-jaas-config`, `ca.crt` |
 
 `sasl-jaas-config` contains the complete JAAS login module configuration expected by the selected mechanism. For the default `SCRAM-SHA-512`, use the provider-issued username and password in a `ScramLoginModule` statement. `ca.crt` contains the PEM certificate chain that signs the Kafka brokers.
+
+Database `password` values belong to the restricted runtime roles. `migration-password` values belong to the matching `<service>_migrator` roles and must never be mounted as `DB_PASSWORD`. The outbox encryption key must be an independently generated 128, 192 or 256-bit AES key encoded as Base64.
 
 ## Kafka enforcement
 
@@ -46,3 +48,5 @@ Custom producer and consumer factories build from Spring Boot `KafkaProperties`,
 Update the value in Vault rather than editing the generated Kubernetes Secret. External Secrets Operator refreshes the Secret, and the reload controller starts a rolling restart so Kafka clients and application processes consume the new value. For credential rotation, keep the old Kafka credential valid until every affected Deployment has completed its rollout, then revoke it at the provider.
 
 If no reload controller is installed, run a controlled `kubectl rollout restart` for the affected Deployments after the ExternalSecret reports `Ready=True`. Deleting or hand-editing generated Secrets is not a supported rotation path.
+
+Before rotating `orchestrator-outbox-encryption-key-base64`, pause new scan creation and wait until `event_outbox` has no rows with `published_at IS NULL`. Pending rows are encrypted with the previous key and cannot be published after a one-key rotation. Published rows do not need to be decrypted and can expire through the normal cleanup job.

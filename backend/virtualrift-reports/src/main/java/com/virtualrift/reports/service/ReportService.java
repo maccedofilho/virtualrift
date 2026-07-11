@@ -6,12 +6,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.virtualrift.common.model.Severity;
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.reports.client.OrchestratorClient;
+import com.virtualrift.reports.client.TenantClient;
+import com.virtualrift.reports.config.ReportsDatabaseContext;
 import com.virtualrift.reports.dto.OrchestratorScanFindingResponse;
 import com.virtualrift.reports.dto.OrchestratorScanResponse;
 import com.virtualrift.reports.dto.OrchestratorScanResultResponse;
 import com.virtualrift.reports.dto.ReportExportResource;
 import com.virtualrift.reports.dto.ReportFindingResponse;
 import com.virtualrift.reports.dto.ReportResponse;
+import com.virtualrift.reports.dto.TenantQuotaResponse;
 import com.virtualrift.reports.exception.ReportGenerationException;
 import com.virtualrift.reports.exception.ReportNotFoundException;
 import com.virtualrift.reports.exception.ReportNotReadyException;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,25 +41,34 @@ public class ReportService {
     private final OrchestratorClient orchestratorClient;
     private final ObjectMapper objectMapper;
     private final ReportEventProducer eventProducer;
+    private final TenantClient tenantClient;
+    private final ReportsDatabaseContext databaseContext;
 
     public ReportService(ReportRepository reportRepository,
                          OrchestratorClient orchestratorClient,
                          ObjectMapper objectMapper,
-                         ReportEventProducer eventProducer) {
+                         ReportEventProducer eventProducer,
+                         TenantClient tenantClient,
+                         ReportsDatabaseContext databaseContext) {
         this.reportRepository = reportRepository;
         this.orchestratorClient = orchestratorClient;
         this.objectMapper = objectMapper;
         this.eventProducer = eventProducer;
+        this.tenantClient = tenantClient;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional
     public ReportResponse generateReport(UUID scanId, UUID tenantId, String rolesHeader) {
+        databaseContext.useTenant(tenantId);
         OrchestratorScanResponse scan = orchestratorClient.getScan(tenantId, scanId, rolesHeader);
         OrchestratorScanResultResponse result = orchestratorClient.getScanResult(tenantId, scanId, rolesHeader);
+        TenantQuotaResponse quota = tenantClient.getQuota(tenantId, rolesHeader);
 
         List<OrchestratorScanFindingResponse> sourceFindings = result.findings() == null ? List.of() : result.findings();
 
         validateSnapshot(tenantId, scan, result, sourceFindings);
+        databaseContext.lockReport(tenantId, scanId);
 
         List<ReportFindingResponse> findings = sourceFindings.stream()
                 .map(this::toFindingResponse)
@@ -65,7 +78,7 @@ public class ReportService {
                 .orElseGet(() -> new Report(UUID.randomUUID(), tenantId, scanId));
 
         Instant generatedAt = Instant.now();
-        applySnapshot(report, scan, result, findings, generatedAt);
+        applySnapshot(report, scan, result, findings, generatedAt, quota.reportRetentionDays());
         Report saved = reportRepository.save(report);
 
         eventProducer.publishReportGenerated(saved.getId(), tenantId, scanId, saved.getGeneratedAt());
@@ -74,6 +87,7 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public ReportResponse getReport(UUID reportId, UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         return reportRepository.findByTenantIdAndId(tenantId, reportId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new ReportNotFoundException("Report not found: " + reportId));
@@ -81,6 +95,7 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public List<ReportResponse> listReports(UUID tenantId, UUID scanId) {
+        databaseContext.useTenant(tenantId);
         List<Report> reports = scanId == null
                 ? reportRepository.findByTenantIdOrderByGeneratedAtDesc(tenantId)
                 : reportRepository.findByTenantIdAndScanIdOrderByGeneratedAtDesc(tenantId, scanId);
@@ -92,6 +107,7 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public ReportExportResource exportReport(UUID reportId, UUID tenantId, ReportExportFormat format) {
+        databaseContext.useTenant(tenantId);
         Report report = reportRepository.findByTenantIdAndId(tenantId, reportId)
                 .orElseThrow(() -> new ReportNotFoundException("Report not found: " + reportId));
 
@@ -155,7 +171,8 @@ public class ReportService {
                                OrchestratorScanResponse scan,
                                OrchestratorScanResultResponse result,
                                List<ReportFindingResponse> findings,
-                               Instant generatedAt) {
+                               Instant generatedAt,
+                               int retentionDays) {
         report.setUserId(scan.userId());
         report.setTarget(scan.target());
         report.setScanType(scan.scanType());
@@ -173,6 +190,7 @@ public class ReportService {
         report.setScanStartedAt(result.startedAt());
         report.setScanCompletedAt(result.completedAt());
         report.setGeneratedAt(generatedAt);
+        report.setExpiresAt(generatedAt.plus(Duration.ofDays(retentionDays)));
     }
 
     private String writeFindings(List<ReportFindingResponse> findings) {

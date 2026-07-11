@@ -1,6 +1,7 @@
 package com.virtualrift.tenant.service;
 
 import com.virtualrift.common.repository.RepositoryTargetNormalizer;
+import com.virtualrift.tenant.config.TenantDatabaseContext;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.BillingUsageResponse;
@@ -76,6 +77,7 @@ public class TenantService {
     private final ScanTargetOwnershipVerifier scanTargetOwnershipVerifier;
     private final RepositoryCredentialsService repositoryCredentialsService;
     private final RepositoryAccessValidator repositoryAccessValidator;
+    private final TenantDatabaseContext databaseContext;
 
     public TenantService(TenantRepository tenantRepository,
                         TenantQuotaRepository quotaRepository,
@@ -84,7 +86,8 @@ public class TenantService {
                         TenantInvitationRepository tenantInvitationRepository,
                         ScanTargetOwnershipVerifier scanTargetOwnershipVerifier,
                         RepositoryCredentialsService repositoryCredentialsService,
-                        RepositoryAccessValidator repositoryAccessValidator) {
+                        RepositoryAccessValidator repositoryAccessValidator,
+                        TenantDatabaseContext databaseContext) {
         this.tenantRepository = tenantRepository;
         this.quotaRepository = quotaRepository;
         this.scanTargetRepository = scanTargetRepository;
@@ -93,12 +96,16 @@ public class TenantService {
         this.scanTargetOwnershipVerifier = scanTargetOwnershipVerifier;
         this.repositoryCredentialsService = repositoryCredentialsService;
         this.repositoryAccessValidator = repositoryAccessValidator;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional
     public TenantResponse createTenant(CreateTenantRequest request) {
+        UUID tenantId = UUID.randomUUID();
+        databaseContext.useTenant(tenantId);
+        databaseContext.useSlug(request.slug());
         return createTenantInternal(
-                UUID.randomUUID(),
+                tenantId,
                 request.name(),
                 request.slug(),
                 request.plan(),
@@ -108,6 +115,8 @@ public class TenantService {
 
     @Transactional
     public TenantResponse provisionTenant(InternalProvisionTenantRequest request) {
+        databaseContext.useTenant(request.id());
+        databaseContext.useSlug(request.slug());
         return createTenantInternal(
                 request.id(),
                 request.name(),
@@ -117,19 +126,26 @@ public class TenantService {
         );
     }
 
+    @Transactional(readOnly = true)
     public TenantResponse getTenant(UUID id) {
+        databaseContext.useTenant(id);
         Tenant tenant = tenantRepository.findById(id)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + id));
         return toResponse(tenant);
     }
 
+    @Transactional(readOnly = true)
     public TenantResponse getTenantBySlug(String slug) {
+        databaseContext.useSlug(slug);
         Tenant tenant = tenantRepository.findBySlug(slug)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + slug));
+        databaseContext.useTenant(tenant.getId());
         return toResponse(tenant);
     }
 
+    @Transactional(readOnly = true)
     public TenantQuotaResponse getQuota(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         TenantQuota quota = quotaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
         return new TenantQuotaResponse(
@@ -141,12 +157,16 @@ public class TenantService {
         );
     }
 
+    @Transactional(readOnly = true)
     public Plan getPlan(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         return tenantRepository.findPlanById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
     }
 
+    @Transactional(readOnly = true)
     public BillingSummaryResponse getBillingSummary(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
         TenantQuota quota = quotaRepository.findByTenantId(tenantId)
@@ -184,6 +204,7 @@ public class TenantService {
             UUID requestedByUserId,
             CreatePlanChangeRequestRequest request
     ) {
+        databaseContext.useTenant(tenantId);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
 
@@ -214,6 +235,7 @@ public class TenantService {
             UUID invitedByUserId,
             CreateTenantInvitationRequest request
     ) {
+        databaseContext.useTenant(tenantId);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
 
@@ -240,6 +262,7 @@ public class TenantService {
 
     @Transactional(readOnly = true)
     public List<TenantInvitationResponse> listInvitations(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         requireTenantExists(tenantId);
         return tenantInvitationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(invitation -> toResponse(invitation, null))
@@ -248,6 +271,7 @@ public class TenantService {
 
     @Transactional
     public void revokeInvitation(UUID tenantId, UUID invitationId) {
+        databaseContext.useTenant(tenantId);
         TenantInvitation invitation = findInvitationForTenant(tenantId, invitationId);
         if (invitation.getStatus() != TenantInvitationStatus.PENDING) {
             throw new TenantInvitationConflictException("Only pending invitations can be revoked");
@@ -258,7 +282,9 @@ public class TenantService {
 
     @Transactional
     public InternalTenantInvitationPreviewResponse previewInvitation(String token) {
+        databaseContext.useInvitationTokenHash(hashToken(token));
         TenantInvitation invitation = findPendingInvitationByToken(token);
+        databaseContext.useTenant(invitation.getTenantId());
         Tenant tenant = tenantRepository.findById(invitation.getTenantId())
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + invitation.getTenantId()));
 
@@ -276,7 +302,9 @@ public class TenantService {
 
     @Transactional
     public InternalAcceptTenantInvitationResponse acceptInvitation(String token) {
+        databaseContext.useInvitationTokenHash(hashToken(token));
         TenantInvitation invitation = findPendingInvitationByToken(token);
+        databaseContext.useTenant(invitation.getTenantId());
         Tenant tenant = tenantRepository.findById(invitation.getTenantId())
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + invitation.getTenantId()));
 
@@ -296,10 +324,11 @@ public class TenantService {
 
     @Transactional
     public ScanTargetResponse addScanTarget(UUID tenantId, AddScanTargetRequest request) {
+        databaseContext.useTenant(tenantId);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
 
-        TenantQuota quota = quotaRepository.findByTenantId(tenantId)
+        TenantQuota quota = quotaRepository.findByTenantIdForUpdate(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
 
         long currentTargets = scanTargetRepository.countByTenantId(tenantId);
@@ -334,6 +363,7 @@ public class TenantService {
             UUID targetId,
             RepositoryCredentialsRequest request
     ) {
+        databaseContext.useTenant(tenantId);
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
         if (scanTarget.getType() != TargetType.REPOSITORY) {
             throw new InvalidScanTargetConfigurationException(
@@ -352,7 +382,9 @@ public class TenantService {
         return toResponse(scanTargetRepository.save(scanTarget));
     }
 
+    @Transactional(readOnly = true)
     public List<ScanTargetResponse> getScanTargets(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         return scanTargetRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(this::toResponse)
                 .toList();
@@ -360,6 +392,7 @@ public class TenantService {
 
     @Transactional
     public ScanTargetResponse updateScanTarget(UUID tenantId, UUID targetId, UpdateScanTargetRequest request) {
+        databaseContext.useTenant(tenantId);
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
         String normalizedTarget = normalizeTargetForPersistence(request.target(), scanTarget.getType());
         String normalizedDescription = normalizeDescription(request.description());
@@ -382,11 +415,15 @@ public class TenantService {
         return toResponse(scanTargetRepository.save(scanTarget));
     }
 
+    @Transactional(readOnly = true)
     public boolean isScanTargetAuthorized(UUID tenantId, String target, String scanType) {
+        databaseContext.useTenant(tenantId);
         return resolveScanTarget(tenantId, target, scanType).authorized();
     }
 
+    @Transactional(readOnly = true)
     public ResolvedScanTargetAuthorization resolveScanTarget(UUID tenantId, String target, String scanType) {
+        databaseContext.useTenant(tenantId);
         if (!tenantRepository.existsById(tenantId)) {
             throw new TenantNotFoundException("Tenant not found: " + tenantId);
         }
@@ -411,6 +448,7 @@ public class TenantService {
 
     @Transactional
     public ScanTargetResponse verifyScanTarget(UUID tenantId, UUID targetId, UUID userId) {
+        databaseContext.useTenant(tenantId);
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
         ScanTargetVerificationGuideResponse verificationGuide = scanTargetOwnershipVerifier.describe(scanTarget);
         if (!verificationGuide.supported()) {
@@ -429,6 +467,7 @@ public class TenantService {
 
     @Transactional
     public ScanTargetResponse approveScanTarget(UUID tenantId, UUID targetId, UUID userId) {
+        databaseContext.useTenant(tenantId);
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
         ScanTargetVerificationGuideResponse verificationGuide = scanTargetOwnershipVerifier.describe(scanTarget);
         if (verificationGuide.supported()) {
@@ -447,25 +486,39 @@ public class TenantService {
 
     @Transactional
     public void removeScanTarget(UUID tenantId, UUID targetId) {
+        databaseContext.useTenant(tenantId);
         ScanTarget scanTarget = findTenantScanTarget(tenantId, targetId);
         scanTargetRepository.delete(scanTarget);
     }
 
+    @Transactional(readOnly = true)
     public void validateQuota(UUID tenantId, String quotaType) {
+        databaseContext.useTenant(tenantId);
         quotaRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Quota not found for tenant: " + tenantId));
     }
 
+    @Transactional(readOnly = true)
     public boolean isSlugAvailable(String slug) {
         String normalizedSlug = slug == null ? null : slug.trim().toLowerCase(Locale.ROOT);
+        if (normalizedSlug != null && !normalizedSlug.isBlank()) {
+            databaseContext.useSlug(normalizedSlug);
+        }
         return normalizedSlug != null && !normalizedSlug.isBlank() && !tenantRepository.existsBySlug(normalizedSlug);
     }
 
     @Transactional
     public void deleteTenant(UUID tenantId) {
+        databaseContext.useTenant(tenantId);
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new TenantNotFoundException("Tenant not found: " + tenantId));
         tenantRepository.delete(tenant);
+    }
+
+    @Transactional
+    public int expirePendingInvitations() {
+        databaseContext.useInvitationMaintenance();
+        return tenantInvitationRepository.expirePendingBefore(Instant.now());
     }
 
     private void requireTenantExists(UUID tenantId) {
@@ -512,22 +565,14 @@ public class TenantService {
     }
 
     private ScanTarget findTenantScanTarget(UUID tenantId, UUID targetId) {
-        ScanTarget scanTarget = scanTargetRepository.findById(targetId)
+        ScanTarget scanTarget = scanTargetRepository.findByTenantIdAndId(tenantId, targetId)
                 .orElseThrow(() -> new TenantNotFoundException("Scan target not found: " + targetId));
-
-        if (!scanTarget.getTenantId().equals(tenantId)) {
-            throw new TenantNotFoundException("Scan target does not belong to tenant");
-        }
         return scanTarget;
     }
 
     private TenantInvitation findInvitationForTenant(UUID tenantId, UUID invitationId) {
-        TenantInvitation invitation = tenantInvitationRepository.findById(invitationId)
+        TenantInvitation invitation = tenantInvitationRepository.findByTenantIdAndId(tenantId, invitationId)
                 .orElseThrow(() -> new TenantInvitationNotFoundException("Invitation not found: " + invitationId));
-
-        if (!invitation.getTenantId().equals(tenantId)) {
-            throw new TenantInvitationNotFoundException("Invitation does not belong to tenant");
-        }
         return invitation;
     }
 

@@ -11,6 +11,7 @@ public final class RuntimeConfigGuard {
 
     public static final String DEFAULT_INTERNAL_API_KEY = "virtualrift-dev-onboarding-key";
     public static final String DEFAULT_REPOSITORY_CREDENTIALS_KEY_BASE64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+    public static final String DEFAULT_OUTBOX_ENCRYPTION_KEY_BASE64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
     private static final Set<String> LOOPBACK_TOKENS = Set.of("localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0");
 

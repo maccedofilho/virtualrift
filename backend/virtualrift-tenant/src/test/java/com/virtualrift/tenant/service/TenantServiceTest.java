@@ -1,5 +1,6 @@
 package com.virtualrift.tenant.service;
 
+import com.virtualrift.tenant.config.TenantDatabaseContext;
 import com.virtualrift.tenant.dto.AddScanTargetRequest;
 import com.virtualrift.tenant.dto.BillingSummaryResponse;
 import com.virtualrift.tenant.dto.CreatePlanChangeRequestRequest;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -84,6 +86,9 @@ class TenantServiceTest {
     @Mock
     private RepositoryAccessValidator repositoryAccessValidator;
 
+    @Mock
+    private TenantDatabaseContext databaseContext;
+
     private TenantService tenantService;
 
     @BeforeEach
@@ -96,7 +101,8 @@ class TenantServiceTest {
                 tenantInvitationRepository,
                 scanTargetOwnershipVerifier,
                 repositoryCredentialsService,
-                repositoryAccessValidator
+                repositoryAccessValidator,
+                databaseContext
         );
         lenient().when(scanTargetOwnershipVerifier.describe(any(ScanTarget.class))).thenReturn(defaultVerificationGuide());
         lenient().when(repositoryCredentialsService.summarize(any(ScanTarget.class))).thenReturn(null);
@@ -250,6 +256,23 @@ class TenantServiceTest {
             assertEquals(1, response.size());
             assertEquals("reader@virtualrift.test", response.getFirst().email());
             assertNull(response.getFirst().inviteToken());
+        }
+    }
+
+    @Nested
+    @DisplayName("Invitation maintenance")
+    class InvitationMaintenance {
+
+        @Test
+        @DisplayName("should enable maintenance context before expiring invitations")
+        void expirePendingInvitations_quandoChamado_usaContextoDeManutencao() {
+            when(tenantInvitationRepository.expirePendingBefore(any(Instant.class))).thenReturn(2);
+
+            int expired = tenantService.expirePendingInvitations();
+
+            assertEquals(2, expired);
+            verify(databaseContext).useInvitationMaintenance();
+            verify(tenantInvitationRepository).expirePendingBefore(any(Instant.class));
         }
     }
 
@@ -418,7 +441,7 @@ class TenantServiceTest {
             AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(quotaRepository.findByTenantIdForUpdate(tenantId)).thenReturn(Optional.of(quota));
             when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://acme.example")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -446,7 +469,7 @@ class TenantServiceTest {
             AddScanTargetRequest request = new AddScanTargetRequest("git@github.com:acme/platform.git", TargetType.REPOSITORY, "core repo", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(quotaRepository.findByTenantIdForUpdate(tenantId)).thenReturn(Optional.of(quota));
             when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://github.com/acme/platform.git")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -470,7 +493,7 @@ class TenantServiceTest {
             AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(quotaRepository.findByTenantIdForUpdate(tenantId)).thenReturn(Optional.of(quota));
             when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(0L);
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://acme.example")).thenReturn(true);
 
@@ -487,7 +510,7 @@ class TenantServiceTest {
             AddScanTargetRequest request = new AddScanTargetRequest("https://acme.example", TargetType.URL, "primary", null);
 
             when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
-            when(quotaRepository.findByTenantId(tenantId)).thenReturn(Optional.of(quota));
+            when(quotaRepository.findByTenantIdForUpdate(tenantId)).thenReturn(Optional.of(quota));
             when(scanTargetRepository.countByTenantId(tenantId)).thenReturn(1L);
 
             assertThrows(TenantQuotaExceededException.class, () -> tenantService.addScanTarget(tenantId, request));
@@ -518,7 +541,7 @@ class TenantServiceTest {
             target.markVerified();
             String originalVerificationToken = target.getVerificationToken();
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ScanTargetResponse response = tenantService.updateScanTarget(
@@ -542,7 +565,7 @@ class TenantServiceTest {
             target.markVerified();
             String originalVerificationToken = target.getVerificationToken();
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://app.example.com/login")).thenReturn(false);
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -569,7 +592,7 @@ class TenantServiceTest {
             target.markVerified();
             String originalVerificationToken = target.getVerificationToken();
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://github.com/acme/platform-v2.git")).thenReturn(false);
             when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("Authorization", "Bearer repo-token"));
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -596,7 +619,7 @@ class TenantServiceTest {
             UUID targetId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://app.example.com", TargetType.URL, "old");
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetRepository.existsByTenantIdAndTarget(tenantId, "https://app.example.com/login")).thenReturn(true);
 
             assertThrows(
@@ -631,7 +654,7 @@ class TenantServiceTest {
                             "ciphertext"
                     );
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(repositoryCredentialsService.prepareForStorage(request)).thenReturn(persisted);
             when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("PRIVATE-TOKEN", "repo-token"));
             when(repositoryCredentialsService.summarize(target)).thenReturn(new RepositoryCredentialsSummaryResponse(
@@ -677,7 +700,7 @@ class TenantServiceTest {
                             "ciphertext"
                     );
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(repositoryCredentialsService.prepareForStorage(request)).thenReturn(persisted);
             when(repositoryCredentialsService.resolveHeaders(target)).thenReturn(Map.of("Authorization", "Bearer next-token"));
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -706,7 +729,7 @@ class TenantServiceTest {
                     "repo-token"
             );
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
 
             assertThrows(
                     InvalidScanTargetConfigurationException.class,
@@ -723,7 +746,7 @@ class TenantServiceTest {
             UUID targetId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://acme.example", TargetType.URL, "primary");
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
 
             tenantService.removeScanTarget(tenantId, targetId);
 
@@ -738,7 +761,7 @@ class TenantServiceTest {
             UUID targetId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, otherTenantId, "https://other.example", TargetType.URL, "other");
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.empty());
 
             assertThrows(TenantNotFoundException.class, () -> tenantService.removeScanTarget(tenantId, targetId));
             verify(scanTargetRepository, never()).delete(any(ScanTarget.class));
@@ -860,7 +883,7 @@ class TenantServiceTest {
             UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.success());
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -881,7 +904,7 @@ class TenantServiceTest {
             UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.verify(target)).thenReturn(ScanTargetOwnershipVerificationResult.failed("missing token"));
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -902,7 +925,7 @@ class TenantServiceTest {
             UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.describe(target)).thenReturn(manualVerificationGuide());
 
             assertThrows(
@@ -920,7 +943,7 @@ class TenantServiceTest {
             UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "203.0.113.0/24", TargetType.IP_RANGE, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
             when(scanTargetOwnershipVerifier.describe(target)).thenReturn(manualVerificationGuide());
             when(scanTargetRepository.save(any(ScanTarget.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -940,7 +963,7 @@ class TenantServiceTest {
             UUID userId = UUID.randomUUID();
             ScanTarget target = new ScanTarget(targetId, tenantId, "https://example.com", TargetType.URL, null);
 
-            when(scanTargetRepository.findById(targetId)).thenReturn(Optional.of(target));
+            when(scanTargetRepository.findByTenantIdAndId(tenantId, targetId)).thenReturn(Optional.of(target));
 
             assertThrows(
                     ScanTargetVerificationConflictException.class,

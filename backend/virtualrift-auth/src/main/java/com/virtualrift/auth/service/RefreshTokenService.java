@@ -1,6 +1,7 @@
 package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.exception.ExpiredTokenException;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.model.RefreshToken;
 import com.virtualrift.auth.repository.RefreshTokenRepository;
@@ -27,10 +28,14 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository repository;
     private final TokenDenylist denylist;
+    private final AuthDatabaseContext databaseContext;
 
-    public RefreshTokenService(RefreshTokenRepository repository, TokenDenylist denylist) {
+    public RefreshTokenService(RefreshTokenRepository repository,
+                               TokenDenylist denylist,
+                               AuthDatabaseContext databaseContext) {
         this.repository = repository;
         this.denylist = denylist;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional
@@ -41,6 +46,8 @@ public class RefreshTokenService {
         if (tenantId == null) {
             throw new IllegalArgumentException("tenantId cannot be null");
         }
+        databaseContext.useTenant(tenantId);
+        databaseContext.useUser(userId);
 
         String tokenString = generateTokenValue();
         Instant expiration = Instant.now().plusSeconds(REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60L);
@@ -71,10 +78,11 @@ public class RefreshTokenService {
 
     @Transactional
     public long cleanupExpired() {
+        databaseContext.useRefreshTokenMaintenance();
         Instant cutoff = Instant.now();
-        repository.deleteByExpirationBefore(cutoff);
-        log.info("Cleaned up expired refresh tokens");
-        return 0;
+        long deleted = repository.deleteExpiredBefore(cutoff);
+        log.info("Cleaned up {} expired refresh tokens", deleted);
+        return deleted;
     }
 
     private void revokeStoredToken(RefreshToken refreshToken, String token) {
@@ -98,7 +106,9 @@ public class RefreshTokenService {
     }
 
     private RefreshToken findStoredToken(String token) {
-        return repository.findByTokenHash(hashToken(token))
+        String tokenHash = hashToken(token);
+        databaseContext.useRefreshTokenHash(tokenHash);
+        return repository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new InvalidTokenException("token not found"));
     }
 

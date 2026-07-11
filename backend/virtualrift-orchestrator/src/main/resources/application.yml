@@ -8,7 +8,7 @@ spring:
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/virtualrift_orchestrator}
-    username: ${DB_USER:virtualrift}
+    username: ${DB_USER:virtualrift_orchestrator}
     password: ${DB_PASSWORD:virtualrift}
     driver-class-name: org.postgresql.Driver
 
@@ -25,6 +25,8 @@ spring:
     locations: classpath:db/migration/orchestrator
     baseline-on-migrate: true
     table: orchestrator_flyway_schema_history
+    user: ${DB_MIGRATION_USER:virtualrift_orchestrator_migrator}
+    password: ${DB_MIGRATION_PASSWORD:virtualrift}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -42,6 +44,13 @@ tenant:
     url: ${TENANT_SERVICE_URL:http://localhost:8082}
   internal:
     api-key: ${TENANT_INTERNAL_API_KEY:virtualrift-dev-onboarding-key}
+
+outbox:
+  encryption-key-base64: ${ORCHESTRATOR_OUTBOX_ENCRYPTION_KEY_BASE64:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  publisher:
+    fixed-delay-ms: ${OUTBOX_PUBLISHER_DELAY_MS:1000}
+    batch-size: ${OUTBOX_PUBLISHER_BATCH_SIZE:25}
+    send-timeout-seconds: ${OUTBOX_SEND_TIMEOUT_SECONDS:10}
 
 virtualrift:
   runtime:

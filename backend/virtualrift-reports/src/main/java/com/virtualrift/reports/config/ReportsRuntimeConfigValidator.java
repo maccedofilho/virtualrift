@@ -13,15 +13,18 @@ public class ReportsRuntimeConfigValidator {
     private final String datasourceUrl;
     private final String kafkaBootstrapServers;
     private final String orchestratorServiceUrl;
+    private final String tenantServiceUrl;
 
     public ReportsRuntimeConfigValidator(@Value("${virtualrift.runtime.environment:local}") String runtimeEnvironmentValue,
                                          @Value("${spring.datasource.url}") String datasourceUrl,
                                          @Value("${spring.kafka.bootstrap-servers}") String kafkaBootstrapServers,
-                                         @Value("${orchestrator.service.url}") String orchestratorServiceUrl) {
+                                         @Value("${orchestrator.service.url}") String orchestratorServiceUrl,
+                                         @Value("${tenant.service.url}") String tenantServiceUrl) {
         this.runtimeEnvironmentValue = runtimeEnvironmentValue;
         this.datasourceUrl = datasourceUrl;
         this.kafkaBootstrapServers = kafkaBootstrapServers;
         this.orchestratorServiceUrl = orchestratorServiceUrl;
+        this.tenantServiceUrl = tenantServiceUrl;
     }
 
     @PostConstruct
@@ -31,5 +34,6 @@ public class ReportsRuntimeConfigValidator {
         RuntimeConfigGuard.requireNonLoopbackValue("spring.datasource.url", datasourceUrl, environment);
         RuntimeConfigGuard.requireNonLoopbackValue("spring.kafka.bootstrap-servers", kafkaBootstrapServers, environment);
         RuntimeConfigGuard.requireServiceUrl("orchestrator.service.url", orchestratorServiceUrl, environment);
+        RuntimeConfigGuard.requireServiceUrl("tenant.service.url", tenantServiceUrl, environment);
     }
 }

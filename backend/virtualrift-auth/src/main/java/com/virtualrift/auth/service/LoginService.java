@@ -2,6 +2,7 @@ package com.virtualrift.auth.service;
 
 import com.virtualrift.auth.dto.LoginRequest;
 import com.virtualrift.auth.dto.LoginResponse;
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.exception.ExpiredTokenException;
 import com.virtualrift.auth.exception.InvalidCredentialsException;
 import com.virtualrift.auth.exception.InvalidTokenException;
@@ -35,6 +36,7 @@ public class LoginService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final TokenDenylist denylist;
+    private final AuthDatabaseContext databaseContext;
 
     public LoginService(
             UserRepository userRepository,
@@ -42,7 +44,8 @@ public class LoginService {
             PasswordService passwordService,
             JwtService jwtService,
             RefreshTokenService refreshTokenService,
-            TokenDenylist denylist
+            TokenDenylist denylist,
+            AuthDatabaseContext databaseContext
     ) {
         this.userRepository = userRepository;
         this.loginAttemptRepository = loginAttemptRepository;
@@ -50,11 +53,13 @@ public class LoginService {
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.denylist = denylist;
+        this.databaseContext = databaseContext;
     }
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String normalizedEmail = request.email().toLowerCase().trim();
+        databaseContext.useEmail(normalizedEmail);
 
         int failedAttempts = loginAttemptRepository.getFailedAttempts(normalizedEmail);
         if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
@@ -68,6 +73,8 @@ public class LoginService {
                     loginAttemptRepository.recordFailedAttempt(normalizedEmail);
                     return new InvalidCredentialsException("Invalid credentials");
                 });
+        databaseContext.useTenant(user.tenantId());
+        databaseContext.useUser(user.id());
 
         boolean passwordValid = passwordService.verify(request.password(), user.password());
         if (!passwordValid) {
@@ -109,8 +116,10 @@ public class LoginService {
     public LoginResponse refreshToken(String refreshTokenValue) {
         UUID userId = refreshTokenService.validate(refreshTokenValue);
 
+        databaseContext.useUser(userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new InvalidTokenException("User not found"));
+        databaseContext.useTenant(user.tenantId());
 
         checkUserStatus(user);
 

@@ -1,5 +1,6 @@
 package com.virtualrift.auth.service;
 
+import com.virtualrift.auth.config.AuthDatabaseContext;
 import com.virtualrift.auth.dto.AccountProfileResponse;
 import com.virtualrift.auth.exception.InvalidTokenException;
 import com.virtualrift.auth.model.User;
@@ -27,6 +28,9 @@ class AccountServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private AuthDatabaseContext databaseContext;
+
     @Test
     @DisplayName("should return the authenticated operator profile")
     void getProfile_quandoUsuarioExiste_retornaPerfil() {
@@ -47,7 +51,7 @@ class AccountServiceTest {
 
         when(userRepository.findByIdAndTenantId(userId, tenantId)).thenReturn(Optional.of(user));
 
-        AccountService accountService = new AccountService(userRepository);
+        AccountService accountService = new AccountService(userRepository, databaseContext);
         AccountProfileResponse response = accountService.getProfile(userId, tenantId);
 
         assertEquals(userId, response.id());
@@ -65,7 +69,7 @@ class AccountServiceTest {
         UUID tenantId = UUID.randomUUID();
         when(userRepository.findByIdAndTenantId(userId, tenantId)).thenReturn(Optional.empty());
 
-        AccountService accountService = new AccountService(userRepository);
+        AccountService accountService = new AccountService(userRepository, databaseContext);
 
         assertThrows(InvalidTokenException.class, () -> accountService.getProfile(userId, tenantId));
     }

@@ -1,5 +1,6 @@
 package com.virtualrift.orchestrator.service;
 
+import com.virtualrift.orchestrator.config.OrchestratorDatabaseContext;
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.ScanType;
 import com.virtualrift.common.model.Severity;
@@ -60,6 +61,9 @@ class ScanOrchestratorServiceTest {
     @Mock
     private TenantClient tenantClient;
 
+    @Mock
+    private OrchestratorDatabaseContext databaseContext;
+
     private ScanOrchestratorService service;
 
     private static final UUID TENANT_ID = UUID.randomUUID();
@@ -68,7 +72,9 @@ class ScanOrchestratorServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ScanOrchestratorService(scanRepository, scanFindingRepository, eventProducer, tenantClient);
+        service = new ScanOrchestratorService(
+                scanRepository, scanFindingRepository, eventProducer, tenantClient, databaseContext
+        );
     }
 
     private TenantQuota createQuota(int maxScansPerDay, int maxConcurrentScans) {
@@ -110,7 +116,9 @@ class ScanOrchestratorServiceTest {
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
             when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
-            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
+            when(scanRepository.countByTenantIdAndStatusIn(
+                    TENANT_ID, List.of(ScanStatus.PENDING, ScanStatus.RUNNING)
+            )).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ScanResponse response = service.createScan(request, TENANT_ID, USER_ID);
@@ -147,7 +155,9 @@ class ScanOrchestratorServiceTest {
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.STARTER);
             when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
-            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
+            when(scanRepository.countByTenantIdAndStatusIn(
+                    TENANT_ID, List.of(ScanStatus.PENDING, ScanStatus.RUNNING)
+            )).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ScanResponse response = service.createScan(request, TENANT_ID, USER_ID);
@@ -186,7 +196,9 @@ class ScanOrchestratorServiceTest {
             when(tenantClient.resolveScanTarget(TENANT_ID, "https://github.com/acme/platform", ScanType.SAST))
                     .thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
-            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(0L);
+            when(scanRepository.countByTenantIdAndStatusIn(
+                    TENANT_ID, List.of(ScanStatus.PENDING, ScanStatus.RUNNING)
+            )).thenReturn(0L);
             when(scanRepository.save(any(Scan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             ScanResponse response = service.createScan(request, TENANT_ID, USER_ID);
@@ -263,7 +275,9 @@ class ScanOrchestratorServiceTest {
             when(tenantClient.getPlan(TENANT_ID)).thenReturn(Plan.TRIAL);
             when(tenantClient.resolveScanTarget(TENANT_ID, TARGET_URL, ScanType.WEB)).thenReturn(authorizedTarget());
             when(scanRepository.countByTenantIdSince(eq(TENANT_ID), any())).thenReturn(0L);
-            when(scanRepository.countByTenantIdAndStatus(TENANT_ID, ScanStatus.RUNNING)).thenReturn(1L);
+            when(scanRepository.countByTenantIdAndStatusIn(
+                    TENANT_ID, List.of(ScanStatus.PENDING, ScanStatus.RUNNING)
+            )).thenReturn(1L);
 
             assertThrows(ScanQuotaExceededException.class, () -> service.createScan(request, TENANT_ID, USER_ID));
         }
@@ -279,7 +293,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.RUNNING);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.of(scan));
 
             ScanResponse response = service.getScan(scanId, TENANT_ID);
 
@@ -293,7 +307,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.RUNNING);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> service.getScan(scanId, TENANT_ID));
         }
@@ -304,7 +318,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.PENDING);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.of(scan));
 
             ScanResponse response = service.getScanByTenantAndId(TENANT_ID, scanId);
 
@@ -323,7 +337,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.of(scan));
 
             ScanResponse response = service.getStatus(scanId, TENANT_ID);
 
@@ -335,7 +349,7 @@ class ScanOrchestratorServiceTest {
         @DisplayName("should throw when scan is missing")
         void getStatus_quandoNaoExiste_lancaScanNotFoundException() {
             UUID scanId = UUID.randomUUID();
-            when(scanRepository.findById(scanId)).thenReturn(Optional.empty());
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId, TENANT_ID));
         }
@@ -346,7 +360,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.RUNNING);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> service.getStatus(scanId, TENANT_ID));
         }
@@ -385,7 +399,7 @@ class ScanOrchestratorServiceTest {
             Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
             ScanFinding finding = createFinding(scanId, TENANT_ID, Severity.CRITICAL);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.of(scan));
             when(scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(TENANT_ID, scanId))
                     .thenReturn(List.of(finding));
 
@@ -402,7 +416,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.COMPLETED);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> service.getFindings(scanId, TENANT_ID));
             verify(scanFindingRepository, never()).findByTenantIdAndScanIdOrderByDetectedAtDesc(any(), any());
@@ -419,7 +433,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, TENANT_ID, USER_ID, ScanStatus.COMPLETED);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.of(scan));
             when(scanFindingRepository.findByTenantIdAndScanIdOrderByDetectedAtDesc(TENANT_ID, scanId))
                     .thenReturn(List.of(
                             createFinding(scanId, TENANT_ID, Severity.CRITICAL),
@@ -443,7 +457,7 @@ class ScanOrchestratorServiceTest {
             UUID scanId = UUID.randomUUID();
             Scan scan = createScan(scanId, UUID.randomUUID(), USER_ID, ScanStatus.COMPLETED);
 
-            when(scanRepository.findById(scanId)).thenReturn(Optional.of(scan));
+            when(scanRepository.findByTenantIdAndId(TENANT_ID, scanId)).thenReturn(Optional.empty());
 
             assertThrows(ScanNotFoundException.class, () -> service.getResult(scanId, TENANT_ID));
             verify(scanFindingRepository, never()).findByTenantIdAndScanIdOrderByDetectedAtDesc(any(), any());

@@ -5,6 +5,7 @@ import com.virtualrift.common.events.ScanFailedEvent;
 import com.virtualrift.common.model.ScanStatus;
 import com.virtualrift.common.model.VulnerabilityFinding;
 import com.virtualrift.orchestrator.model.Scan;
+import com.virtualrift.orchestrator.config.OrchestratorDatabaseContext;
 import com.virtualrift.orchestrator.model.ScanFinding;
 import com.virtualrift.orchestrator.repository.ScanFindingRepository;
 import com.virtualrift.orchestrator.repository.ScanRepository;
@@ -24,10 +25,14 @@ public class ScanEventConsumer {
 
     private final ScanRepository scanRepository;
     private final ScanFindingRepository scanFindingRepository;
+    private final OrchestratorDatabaseContext databaseContext;
 
-    public ScanEventConsumer(ScanRepository scanRepository, ScanFindingRepository scanFindingRepository) {
+    public ScanEventConsumer(ScanRepository scanRepository,
+                             ScanFindingRepository scanFindingRepository,
+                             OrchestratorDatabaseContext databaseContext) {
         this.scanRepository = scanRepository;
         this.scanFindingRepository = scanFindingRepository;
+        this.databaseContext = databaseContext;
     }
 
     @KafkaListener(
@@ -38,8 +43,9 @@ public class ScanEventConsumer {
     @Transactional
     public void onScanCompleted(ScanCompletedEvent event) {
         log.info("Received scan.completed event for scanId: {}", event.scanId());
+        databaseContext.useTenant(event.tenantId().value());
 
-        Scan scan = scanRepository.findById(event.scanId())
+        Scan scan = scanRepository.findByTenantIdAndId(event.tenantId().value(), event.scanId())
                 .orElseThrow(() -> new IllegalArgumentException("Scan not found: " + event.scanId()));
         validateEventTenant(scan, event.tenantId().value());
 
@@ -62,8 +68,9 @@ public class ScanEventConsumer {
     @Transactional
     public void onScanFailed(ScanFailedEvent event) {
         log.info("Received scan.failed event for scanId: {}", event.scanId());
+        databaseContext.useTenant(event.tenantId().value());
 
-        Scan scan = scanRepository.findById(event.scanId())
+        Scan scan = scanRepository.findByTenantIdAndId(event.tenantId().value(), event.scanId())
                 .orElseThrow(() -> new IllegalArgumentException("Scan not found: " + event.scanId()));
         validateEventTenant(scan, event.tenantId().value());
 
