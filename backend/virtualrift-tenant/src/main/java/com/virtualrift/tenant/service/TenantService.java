@@ -735,7 +735,7 @@ public class TenantService {
                         "Repository credentials can only be configured for repository targets"
                 );
             }
-            return RepositoryCredentialsService.PersistedRepositoryCredentials.none();
+            return RepositoryCredentialsService.PersistedRepositoryCredentials.notApplicable();
         }
         if (request == null) {
             return RepositoryCredentialsService.PersistedRepositoryCredentials.none();
