@@ -64,8 +64,17 @@ const translateApiError = (error: VirtualRiftApiError): string => {
       if (url.includes('/api/v1/tenants/') && url.includes('/invitations')) {
         return 'Já existe um convite pendente para esse e-mail nesta conta.';
       }
+      if (url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
+        if (detail.includes('target already exists')) {
+          return 'Esse site ou sistema já foi adicionado.';
+        }
+        return 'Esse item já existe ou foi alterado. Atualize a página e tente novamente.';
+      }
       return error.message;
     case 429:
+      if (url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {
+        return 'Você atingiu o limite de sites ou sistemas do seu plano.';
+      }
       return 'Você atingiu o limite do seu plano ou tentou novamente rápido demais.';
     default:
       if (error.status === 400 && url.includes('/api/v1/tenants/') && (url.includes('/scan-targets/') || url.endsWith('/scan-targets'))) {

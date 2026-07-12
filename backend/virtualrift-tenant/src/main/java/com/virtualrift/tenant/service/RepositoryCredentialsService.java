@@ -135,6 +135,10 @@ public class RepositoryCredentialsService {
             String headerName,
             String encryptedSecret
     ) {
+        static PersistedRepositoryCredentials notApplicable() {
+            return new PersistedRepositoryCredentials(null, null, null, null);
+        }
+
         static PersistedRepositoryCredentials none() {
             return new PersistedRepositoryCredentials(RepositoryAuthenticationMode.NONE, null, null, null);
         }

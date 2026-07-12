@@ -456,7 +456,8 @@ class TenantServiceTest {
             verify(scanTargetRepository).save(argThat(target ->
                     target.getTenantId().equals(tenantId) &&
                     target.getTarget().equals("https://acme.example") &&
-                    target.getVerificationStatus() == ScanTargetVerificationStatus.PENDING
+                    target.getVerificationStatus() == ScanTargetVerificationStatus.PENDING &&
+                    target.getRepositoryAuthMode() == null
             ));
         }
 

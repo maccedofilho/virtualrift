@@ -42,6 +42,39 @@ const verificationMethodLabel = (method: ScanTargetVerificationMethod): string =
   }
 };
 
+const verificationStatusLabel = (status: ScanTargetResponse['verificationStatus']): string => {
+  switch (status) {
+    case 'VERIFIED':
+      return 'Confirmado';
+    case 'FAILED':
+      return 'Não confirmado';
+    case 'PENDING':
+      return 'Aguardando confirmação';
+  }
+};
+
+const verificationFailureMessage = (reason: string): string => {
+  const normalizedReason = reason.toLowerCase();
+
+  if (normalizedReason.includes('token was not found')) {
+    return 'Encontramos o arquivo ou registro DNS, mas o código de confirmação não está nele.';
+  }
+  if (normalizedReason.includes('credentials were rejected')) {
+    return 'O acesso informado para o repositório foi recusado. Atualize a credencial e tente novamente.';
+  }
+  if (normalizedReason.includes('not reachable') || normalizedReason.includes('request failed')) {
+    return 'Não encontramos o arquivo ou registro DNS de confirmação. Publique o código indicado e tente novamente.';
+  }
+  if (normalizedReason.includes('not allowed') || normalizedReason.includes('url is invalid')) {
+    return 'O endereço usado para a confirmação é inválido ou não é permitido.';
+  }
+  if (normalizedReason.includes('manual review')) {
+    return 'Este endereço precisa ser confirmado manualmente antes da primeira verificação.';
+  }
+
+  return 'Não conseguimos confirmar este endereço. Revise as instruções e tente novamente.';
+};
+
 const targetPlaceholder = (type: TargetType): string => {
   switch (type) {
     case 'REPOSITORY':
@@ -313,7 +346,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (verifyError) {
       setStatus('ready');
-      setError(toErrorMessage(verifyError, 'Não foi possível verificar o ownership do alvo.'));
+      setError(toErrorMessage(verifyError, 'Não foi possível confirmar este endereço.'));
     }
   };
 
@@ -357,7 +390,7 @@ export function TenantTargetsPanel() {
       setStatus('ready');
     } catch (approveError) {
       setStatus('ready');
-      setError(toErrorMessage(approveError, 'Não foi possível aprovar manualmente o ownership do alvo.'));
+      setError(toErrorMessage(approveError, 'Não foi possível confirmar este endereço manualmente.'));
     }
   };
 
@@ -528,7 +561,7 @@ export function TenantTargetsPanel() {
             {createType === 'REPOSITORY' ? (
               <p className="form-help">
                 <strong>Acesso privado</strong>
-                Use essa credencial quando o repositório exigir autenticação no clone HTTPS ou no endpoint raw da prova de ownership. O painel só guarda um resumo mascarado; o segredo continua restrito ao backend.
+                Informe uma credencial apenas se o repositório for privado. O segredo fica protegido e não aparece novamente no painel.
               </p>
             ) : null}
             <div className="form-actions">
@@ -609,7 +642,7 @@ export function TenantTargetsPanel() {
               <div className="list-item-header">
                 <div>
                   <h4 className="list-item-title">{target.target}</h4>
-                  <div className="list-item-subtitle">Tipo: {target.type}</div>
+                  <div className="list-item-subtitle">Tipo: {targetTypeLabel(target.type)}</div>
                 </div>
                 <span
                   className={`badge ${
@@ -620,7 +653,7 @@ export function TenantTargetsPanel() {
                         : 'badge-warning'
                   }`}
                 >
-                  Status: {target.verificationStatus}
+                  Status: {verificationStatusLabel(target.verificationStatus)}
                 </span>
               </div>
 
@@ -681,7 +714,7 @@ export function TenantTargetsPanel() {
 
               {target.verificationFailureReason ? (
                 <p className="alert alert-danger" role="alert">
-                  Última falha de verificação: {target.verificationFailureReason}
+                  Não foi possível confirmar: {verificationFailureMessage(target.verificationFailureReason)}
                 </p>
               ) : null}
               {canManageTargets && editingTargetId === target.id ? (
@@ -730,7 +763,7 @@ export function TenantTargetsPanel() {
                   </div>
                   <p className="form-help">
                     <strong>Impacto da edição</strong>
-                    Alterar só a descrição preserva o status atual. Alterar o alvo reinicia o ownership para <strong>PENDING</strong> e exige nova verificação antes de liberar scans.
+                    Alterar só a descrição preserva a confirmação atual. Alterar o endereço exige uma nova confirmação antes de liberar verificações.
                   </p>
                   {target.type === 'REPOSITORY' ? (
                     <p className="form-help">
@@ -859,12 +892,12 @@ export function TenantTargetsPanel() {
               <div className="toolbar">
                 {canManageTargets && canVerifyTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleVerifyTarget(target.id)} disabled={status === 'submitting'}>
-                    Verificar ownership
+                    Confirmar endereço
                   </button>
                 ) : null}
                 {canManageTargets && canApproveTarget(target) ? (
                   <button className="button-secondary" type="button" onClick={() => void handleApproveTarget(target.id)} disabled={status === 'submitting'}>
-                    Aprovar ownership manualmente
+                    Confirmar manualmente
                   </button>
                 ) : null}
                 {canManageTargets && editingTargetId !== target.id ? (

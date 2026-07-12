@@ -915,7 +915,7 @@ describe('VirtualRift Dashboard App', () => {
       });
     });
     expect(await screen.findByText('https://app.example.com/login')).toBeInTheDocument();
-    expect(await screen.findByText('Status: PENDING')).toBeInTheDocument();
+    expect(await screen.findByText('Status: Aguardando confirmação')).toBeInTheDocument();
   });
 
   it('rotates repository credentials for an existing repository target without recreating it', async () => {
@@ -971,7 +971,7 @@ describe('VirtualRift Dashboard App', () => {
     expect(await screen.findByText('Header PRIVATE-TOKEN configurado')).toBeInTheDocument();
   });
 
-  it('verifies ownership for a pending target', async () => {
+  it('confirms a pending target', async () => {
     const storage = createStorage({
       [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
     });
@@ -984,10 +984,37 @@ describe('VirtualRift Dashboard App', () => {
     await screen.findByRole('heading', { name: 'Por onde você quer começar?' });
     goTo('targets');
     expect(await screen.findByText('https://app.example.com')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Verificar ownership' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar endereço' }));
 
-    expect(await screen.findByText('Status: VERIFIED')).toBeInTheDocument();
+    expect(await screen.findByText('Status: Confirmado')).toBeInTheDocument();
     expect(client.tenants.verifyScanTarget).toHaveBeenCalledWith('tenant-id', 'target-1');
+  });
+
+  it('explains a failed address confirmation without exposing backend terminology', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+
+    client.tenants.listScanTargets.mockResolvedValue([
+      createTarget({
+        verificationStatus: 'FAILED',
+        verificationCheckedAt: '2026-05-06T11:00:00.000Z',
+        verificationFailureReason:
+          'ownership proof was not reachable via the HTTP well-known file or DNS TXT record',
+      }),
+    ]);
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Por onde você quer começar?' });
+    goTo('targets');
+
+    expect(await screen.findByText('Status: Não confirmado')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Não encontramos o arquivo ou registro DNS de confirmação. Publique o código indicado e tente novamente.',
+    );
+    expect(screen.queryByText(/ownership proof/i)).not.toBeInTheDocument();
   });
 
   it('shows manual review guidance for IP range targets and allows manual approval', async () => {
@@ -1018,10 +1045,10 @@ describe('VirtualRift Dashboard App', () => {
     expect(screen.getByText('Revisão manual')).toBeInTheDocument();
     expect(screen.getByText('Fluxo operacional manual')).toBeInTheDocument();
     expect(screen.getByText(/revisão manual antes de poder ser usado em scans/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Verificar ownership' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Aprovar ownership manualmente' }));
+    expect(screen.queryByRole('button', { name: 'Confirmar endereço' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar manualmente' }));
 
-    expect(await screen.findByText('Status: VERIFIED')).toBeInTheDocument();
+    expect(await screen.findByText('Status: Confirmado')).toBeInTheDocument();
     expect(client.tenants.approveScanTarget).toHaveBeenCalledWith('tenant-id', 'target-ip-range');
   });
 
@@ -1062,8 +1089,8 @@ describe('VirtualRift Dashboard App', () => {
 
     expect(screen.getByText(/somente quem administra a conta/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Adicionar alvo' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Verificar ownership' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Aprovar ownership manualmente' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirmar endereço' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirmar manualmente' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover alvo' })).not.toBeInTheDocument();
     expect(screen.queryByText(/Token de verificação:/)).not.toBeInTheDocument();
   });
@@ -1127,6 +1154,78 @@ describe('VirtualRift Dashboard App', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Somente quem administra a conta pode adicionar, confirmar ou remover sites e sistemas.',
+    );
+  });
+
+  it('shows a friendly message when a target already exists', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+    const response = new Response(JSON.stringify({ detail: 'Target already exists: https://app.example.com' }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/problem+json' },
+    });
+
+    Object.defineProperty(response, 'url', {
+      value: `${DASHBOARD_API_BASE_URL}/api/v1/tenants/tenant-id/scan-targets`,
+      configurable: true,
+    });
+
+    client.tenants.addScanTarget.mockRejectedValue(
+      new VirtualRiftApiError(
+        'Tenant request conflicts with current state',
+        409,
+        { detail: 'Target already exists: https://app.example.com' },
+        response,
+      ),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Por onde você quer começar?' });
+    goTo('targets');
+    expect(await screen.findByRole('heading', { name: 'O que você quer proteger?' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Endereço'), { target: { value: 'https://app.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar e continuar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Esse site ou sistema já foi adicionado.');
+  });
+
+  it('explains when the plan target limit has been reached', async () => {
+    const storage = createStorage({
+      [SESSION_STORAGE_KEY]: JSON.stringify(createSession()),
+    });
+    const client = createClient();
+    const response = new Response(JSON.stringify({ detail: 'Scan target quota exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/problem+json' },
+    });
+
+    Object.defineProperty(response, 'url', {
+      value: `${DASHBOARD_API_BASE_URL}/api/v1/tenants/tenant-id/scan-targets`,
+      configurable: true,
+    });
+
+    client.tenants.addScanTarget.mockRejectedValue(
+      new VirtualRiftApiError(
+        'Tenant quota exceeded',
+        429,
+        { detail: 'Scan target quota exceeded' },
+        response,
+      ),
+    );
+
+    renderApp({ client, storage });
+
+    await screen.findByRole('heading', { name: 'Por onde você quer começar?' });
+    goTo('targets');
+    fireEvent.change(await screen.findByLabelText('Endereço'), { target: { value: 'https://second.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar e continuar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Você atingiu o limite de sites ou sistemas do seu plano.',
     );
   });
 
